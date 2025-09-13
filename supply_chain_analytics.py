@@ -1,775 +1,401 @@
-import dash
-from dash import dcc, html, dash_table, Input, Output, State
-import plotly.express as px
-import plotly.graph_objects as go
-import pandas as pd
+# app.py
+# ========================= PREMIUM SUPPLY CHAIN DASHBOARD =========================
+# Requirements:
+# pip install dash==2.17.1 dash-bootstrap-components==1.6.0 plotly==5.22.0
+# pip install pandas scikit-learn flask-caching numpy
+# pip install reportlab
+# Optional: pip install openai
+
+import os
+import re
+import io
+import json
+import base64
+import threading
+from pathlib import Path
+from datetime import datetime
 import numpy as np
-import requests
-from io import BytesIO, StringIO
-from datetime import datetime, timedelta
+import pandas as pd
+
+from flask_caching import Cache
+import dash
+from dash import Dash, html, dcc, Input, Output, State, dash_table, no_update
+import dash_bootstrap_components as dbc
+import plotly.express as px
 import warnings
-import traceback
-
-warnings.filterwarnings('ignore')
-
-
-class OptimizedSupplyChainAnalytics:
-    """
-    Classe optimisée pour l'analyse supply chain CORRIGÉE
-    Implémentation des 5 sheets + conditions d'optimalité exactes
-    """
-
-    def __init__(self, sales_url, suppliers_url):
-        self.sales_url = sales_url
-        self.suppliers_url = suppliers_url
-        self.sales_sheets = {}
-        self.suppliers_data = None
-
-        # Leadtime mapping EXACT selon vos données
-        self.leadtime_mapping = {
-            'Finamark': 4, 'CMGA': 4, 'Condak (Pinthon)': 17, 'Café Touba Bakhdad': 4,
-            'CSPE': 3, 'Patisen': 10, 'LSB': 4, 'EGNAB': 5, 'ARLA': 3, 'Sipa': 2,
-            'FSP': 9, 'SENAME': 4, 'DAP': 4, 'SENFI SARL': 6, 'Sencom': 8,
-            'NMA SANDERS': 29, 'GIE Palene Business': 3, 'Ets Meroueh': 2,
-            'H&D Industries': 12, 'SIAGRO': 7, 'SOSAGRIN': 3, 'SENICO': 32,
-            'ACCENT': 3, 'Sedipal': 3, 'Sogepal': 7, 'Novatis': 3, 'O\'Royal': 5,
-            'VITFE': 24, 'AGROLINE': 2, 'COSEDI': 6, 'Wadic': 2, 'SODECA': 23,
-            'Cayor': 3, 'SIAD': 24, 'NESTLE': 6, 'SODAGEM': 4, 'SOCADIS': 5,
-            'ECOS Afrique': 5, 'Kebe & Frères': 7, 'IBS': 3, 'SOBOBA': 3,
-            'Orange': 1, 'Maad': 7, 'MBD SUARL': 5
-        }
-
-        # CONDITIONS D'OPTIMALITÉ EXACTES selon votre tableau
-        self.optimization_matrix = {
-            'AX': {'buffer_days': 8, 'credit_optimization': 12},
-            'AY': {'buffer_days': 8, 'credit_optimization': 12},
-            'AZ': {'buffer_days': 10, 'credit_optimization': 14},
-            'BX': {'buffer_days': 6, 'credit_optimization': 8},
-            'BY': {'buffer_days': 6, 'credit_optimization': 8},
-            'BZ': {'buffer_days': 8, 'credit_optimization': 14},
-            'CX': {'buffer_days': 5, 'credit_optimization': 6},
-            'CY': {'buffer_days': 5, 'credit_optimization': 6},
-            'CZ': {'buffer_days': 5, 'credit_optimization': 10}
-        }
-
-    def load_all_data_sources(self):
-        """Chargement des 5 SHEETS + fournisseurs"""
-        try:
-            sales_loaded = self._load_sales_data()
-            suppliers_loaded = self._load_suppliers_data()
-            return sales_loaded, suppliers_loaded
-        except Exception as e:
-            print(f"Erreur chargement: {e}")
-            return False, False
-
-    def _load_sales_data(self):
-        """Charge TOUTES les données (5 sheets)"""
-        try:
-            response = requests.get(self.sales_url, timeout=45)
-            response.raise_for_status()
-
-            excel_file = BytesIO(response.content)
-            self.sales_sheets = pd.read_excel(excel_file, sheet_name=None, engine='openpyxl')
-
-            required_sheets = [
-                'last-30days-sales-2025', 'inventory-warehouse-2025',
-                'sales-warehouse', 'inventory-staging-2025', 'last-7days-sales-2025'
-            ]
-
-            missing_sheets = [sheet for sheet in required_sheets if sheet not in self.sales_sheets]
-            if missing_sheets:
-                print(f"Sheets manquantes: {missing_sheets}")
-
-            print(f"✅ {len(self.sales_sheets)} sheets chargées")
-            return True
-
-        except Exception as e:
-            print(f"❌ Erreur chargement ventes: {e}")
-            return False
-
-    def _load_suppliers_data(self):
-        """Charge données fournisseurs"""
-        try:
-            export_url = self._convert_google_sheets_url(self.suppliers_url)
-            headers = {'User-Agent': 'Mozilla/5.0 (compatible; SupplyChainBot/1.0)'}
-            response = requests.get(export_url, headers=headers, timeout=30)
-            response.raise_for_status()
-
-            self.suppliers_data = pd.read_csv(StringIO(response.text))
-            self.suppliers_data.columns = self.suppliers_data.columns.str.strip()
-
-            # Mapping colonnes
-            expected_columns = {
-                'id': ['Nom 1', '1', 'id', 'ID', 'product_id'],
-                'product_name': ['Nom 2', '2', 'product_name', 'Nom Produit'],
-                'brand': ['Nom 4', '4', 'brand', 'Marque'],
-                'supplier_name': ['Nom 6', '6', 'Supplier name', 'supplier_name', 'Fournisseur'],
-                'credit_days': ['Days Credit', 'Credit Days', 'credit_days', 'Crédit Jours'],
-                'purchase_price': ['Current Purchase Price', 'Purchase Price', 'Prix Achat']
-            }
-
-            for standard_col, possible_names in expected_columns.items():
-                for name in possible_names:
-                    if name in self.suppliers_data.columns:
-                        self.suppliers_data[standard_col] = self.suppliers_data[name]
-                        break
-
-            # S'assurer que les colonnes numériques sont bien des nombres
-            if 'credit_days' in self.suppliers_data.columns:
-                self.suppliers_data['credit_days'] = pd.to_numeric(self.suppliers_data['credit_days'], errors='coerce')
-            if 'purchase_price' in self.suppliers_data.columns:
-                self.suppliers_data['purchase_price'] = pd.to_numeric(self.suppliers_data['purchase_price'],
-                                                                      errors='coerce')
-
-            print(f"✅ {len(self.suppliers_data)} fournisseurs chargés")
-            return True
-
-        except Exception as e:
-            print(f"⚠️ Erreur fournisseurs: {e}")
-            return False
-
-    def _convert_google_sheets_url(self, url):
-        """Conversion URL Google Sheets"""
-        if '/edit' in url and '/d/' in url:
-            sheet_id = url.split('/d/')[1].split('/edit')[0]
-            if 'gid=' in url:
-                gid = url.split('gid=')[1].split('#')[0].split('&')[0]
-                return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
-            else:
-                return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
-        return url
-
-    def prepare_comprehensive_dataset_corrected(self):
-        """
-        Dataset complet CORRIGÉ utilisant les 5 sheets selon OOS%
-        """
-        try:
-            # 1. Extraction ventes avec logique OOS CORRIGÉE
-            sales_data = self._extract_sales_with_oos_logic()
-
-            # 2. Inventaire warehouse + staging
-            inventory_data = self._extract_complete_inventory()
-
-            # 3. Merge principal
-            master_df = sales_data.merge(
-                inventory_data,
-                left_on='id',
-                right_on='product_id',
-                how='left'
-            ).drop_duplicates(subset=['id'], keep='first')
-
-            # 4. Intégration fournisseurs
-            master_df = self._integrate_suppliers(master_df)
-
-            # 5. Calculs supply chain CORRIGÉS
-            master_df = self._calculate_corrected_metrics(master_df)
-
-            return master_df
-
-        except Exception as e:
-            print(f"❌ Erreur dataset: {e}")
-            traceback.print_exc()
-            return pd.DataFrame()
-
-    def _extract_sales_with_oos_logic(self):
-        """
-        LOGIQUE CORRIGÉE : Source selon % OOS
-        - OOS% < 20% → ventes 30j
-        - OOS% ≥ 20% → ventes 7j (plus récentes)
-        """
-        try:
-            sales_30d = self.sales_sheets['last-30days-sales-2025'].copy()
-            sales_7d = self.sales_sheets['last-7days-sales-2025'].copy()
-
-            # Nettoyage et standardisation des colonnes
-            for df in [sales_30d, sales_7d]:
-                # S'assurer que les colonnes essentielles existent
-                if 'avg_quantity_per_day' not in df.columns and 'avg_daily_quantity' in df.columns:
-                    df['avg_quantity_per_day'] = df['avg_daily_quantity']
-                if 'max_quantity_per_day' not in df.columns and 'max_daily_quantity' in df.columns:
-                    df['max_quantity_per_day'] = df['max_daily_quantity']
-
-                numeric_cols = ['avg_quantity_per_day', 'max_quantity_per_day', 'total_amount']
-                for col in numeric_cols:
-                    if col in df.columns:
-                        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-                    else:
-                        df[col] = 0
-
-                df['perc_oos_duration'] = pd.to_numeric(df.get('perc_oos_duration', 0), errors='coerce').fillna(0)
-
-                # S'assurer que les colonnes name/product_name existent
-                if 'name' not in df.columns and 'product_name' in df.columns:
-                    df['name'] = df['product_name']
-                elif 'name' not in df.columns:
-                    df['name'] = 'Produit Inconnu'
-
-            # LOGIQUE CONDITIONNELLE OOS
-            final_sales = []
-
-            for _, row in sales_30d.iterrows():
-                product_id = row['id']
-                oos_pct = row['perc_oos_duration']
-
-                if oos_pct >= 0.20:  # 20% ou plus → utiliser données 7j
-                    match_7d = sales_7d[sales_7d['id'] == product_id]
-                    if not match_7d.empty:
-                        # Extrapoler 7j vers 30j pour cohérence
-                        row_7d = match_7d.iloc[0].copy()
-                        row_7d['avg_quantity_per_day'] = row_7d['avg_quantity_per_day']  # Garde tel quel
-                        row_7d['max_quantity_per_day'] = row_7d['max_quantity_per_day']  # Garde tel quel
-                        row_7d['total_amount'] = row_7d['total_amount'] * (30 / 7)  # Extrapole CA
-                        row_7d['data_source'] = '7d_extrapolated'
-                        final_sales.append(row_7d)
-                    else:
-                        row['data_source'] = '30d_default'
-                        final_sales.append(row)
-                else:  # OOS < 20% → utiliser données 30j
-                    row['data_source'] = '30d_normal'
-                    final_sales.append(row)
-
-            result_df = pd.DataFrame(final_sales)
-            print(f"✅ Sales avec logique OOS: {len(result_df)} produits")
-            return result_df
-
-        except Exception as e:
-            print(f"❌ Erreur extraction ventes: {e}")
-            traceback.print_exc()
-            return self.sales_sheets.get('last-30days-sales-2025', pd.DataFrame())
-
-    def _extract_complete_inventory(self):
-        """Inventaire warehouse + staging combiné"""
-        try:
-            warehouse = self.sales_sheets['inventory-warehouse-2025'].copy()
-            staging = self.sales_sheets.get('inventory-staging-2025', pd.DataFrame())
-
-            # Nettoyage warehouse
-            warehouse = warehouse[['product_id', 'product_name', 'total_stock']].copy()
-            warehouse['warehouse_stock'] = pd.to_numeric(warehouse['total_stock'], errors='coerce').fillna(0)
-
-            # Si staging disponible, l'ajouter
-            if not staging.empty and 'product_id' in staging.columns:
-                staging_clean = staging[['product_id', 'total_stock']].copy()
-                staging_clean['staging_stock'] = pd.to_numeric(staging_clean['total_stock'], errors='coerce').fillna(0)
-
-                # Merge warehouse + staging
-                inventory_combined = warehouse.merge(
-                    staging_clean, on='product_id', how='left'
-                ).fillna(0)
-
-                inventory_combined['total_stock'] = (
-                        inventory_combined['warehouse_stock'] +
-                        inventory_combined['staging_stock']
-                )
-            else:
-                inventory_combined = warehouse.rename(columns={'total_stock': 'warehouse_stock'})
-                inventory_combined['staging_stock'] = 0
-                inventory_combined['total_stock'] = inventory_combined['warehouse_stock']
-
-            print(f"✅ Inventaire combiné: {len(inventory_combined)} produits")
-            return inventory_combined
-
-        except Exception as e:
-            print(f"❌ Erreur inventaire: {e}")
-            traceback.print_exc()
-            return pd.DataFrame()
-
-    def _integrate_suppliers(self, df):
-        """Intégration fournisseurs CORRIGÉE"""
-        if self.suppliers_data is not None and not self.suppliers_data.empty:
-            try:
-                supplier_clean = self.suppliers_data.copy()
-                supplier_clean['id'] = pd.to_numeric(supplier_clean['id'], errors='coerce')
-                df['id_numeric'] = pd.to_numeric(df['id'], errors='coerce')
-
-                merge_cols = ['id']
-                # Ajouter seulement les colonnes qui existent
-                available_supplier_cols = ['supplier_name', 'credit_days', 'purchase_price']
-                for col in available_supplier_cols:
-                    if col in supplier_clean.columns:
-                        merge_cols.append(col)
-
-                df_merged = df.merge(
-                    supplier_clean[merge_cols],
-                    left_on='id_numeric',
-                    right_on='id',
-                    how='left',
-                    suffixes=('', '_supplier')
-                )
-
-                # CORRECTION : Valeurs par défaut avec gestion pandas Series
-                # Supplier name
-                if 'supplier_name' not in df_merged.columns:
-                    df_merged['supplier_name'] = 'Fournisseur Inconnu'
-                else:
-                    df_merged['supplier_name'] = df_merged['supplier_name'].fillna('Fournisseur Inconnu')
-
-                # Credit days
-                if 'credit_days' not in df_merged.columns:
-                    df_merged['credit_days'] = 15
-                else:
-                    df_merged['credit_days'] = pd.to_numeric(df_merged['credit_days'], errors='coerce').fillna(15)
-
-                # Purchase price
-                if 'purchase_price' not in df_merged.columns:
-                    df_merged['purchase_price'] = 0
-                else:
-                    df_merged['purchase_price'] = pd.to_numeric(df_merged['purchase_price'], errors='coerce').fillna(0)
-
-                print(f"✅ Merge fournisseurs réussi: {len(df_merged)} lignes")
-                return df_merged
-
-            except Exception as e:
-                print(f"⚠️ Erreur merge fournisseurs: {e}")
-                traceback.print_exc()
-
-        # Fallback avec colonnes par défaut
-        df['supplier_name'] = 'Fournisseur Inconnu'
-        df['credit_days'] = 15
-        df['purchase_price'] = 0
-        return df
-
-    def _calculate_corrected_metrics(self, df):
-        """
-        Calculs CORRIGÉS selon vos spécifications exactes
-        """
-        try:
-            # === 1. MÉTRIQUES DE BASE D'ABORD ===
-            df['current_stock'] = pd.to_numeric(df['total_stock'], errors='coerce').fillna(0).clip(lower=0)
-            df['daily_demand_avg'] = pd.to_numeric(df['avg_quantity_per_day'], errors='coerce').fillna(0).clip(lower=0)
-            df['daily_demand_max'] = pd.to_numeric(df['max_quantity_per_day'], errors='coerce').fillna(0).clip(lower=0)
-
-            # === 2. CLASSIFICATION ABC-XYZ CORRIGÉE (après création des colonnes) ===
-            df = self._calculate_abc_xyz_corrected(df)
-
-            # === 3. LEADTIME MAPPING ===
-            df['leadtime_days'] = df['supplier_name'].map(self.leadtime_mapping).fillna(10)
-
-            # === 4. CONDITIONS D'OPTIMALITÉ APPLIQUÉES ===
-            df = self._apply_optimization_conditions(df)
-
-            # === 5. Coverage ===
-            df['stock_coverage_days'] = np.where(
-                df['daily_demand_avg'] > 0,
-                df['current_stock'] / df['daily_demand_avg'],
-                999
-            )
-
-            # === 6. CALCUL STOCK OPTIMAL CORRIGÉ ===
-            # "Si tu as un crédit de 20 jours, autant prendre 20 jours de stock"
-            df['stock_optimal'] = df['credit_days_optimized'] * df['daily_demand_avg']
-
-            # === 7. REORDER POINT ===
-            df['safety_stock'] = df['buffer_days'] * df['daily_demand_avg']
-            df['reorder_point'] = df['leadtime_days'] * df['daily_demand_avg'] + df['safety_stock']
-
-            # === 8. QUANTITÉ À COMMANDER ===
-            df['quantity_to_order'] = np.maximum(
-                df['stock_optimal'] - df['current_stock'], 0
-            ).round(0)
-
-            # === 9. STATUT ACHAT ===
-            conditions = [
-                df['current_stock'] <= (df['reorder_point'] * 0.5),
-                df['current_stock'] <= df['reorder_point'],
-                df['quantity_to_order'] > 0
-            ]
-
-            choices = ['CRITICAL', 'URGENT', 'RECOMMENDED']
-            df['purchase_status'] = np.select(conditions, choices, default='SUFFICIENT')
-
-            # === 10. PRIORITÉ BUSINESS ===
-            df = self._calculate_priority_score(df)
-
-            print(f"✅ Calculs métriques terminés: {len(df)} produits")
-            return df
-
-        except Exception as e:
-            print(f"❌ Erreur calculs: {e}")
-            traceback.print_exc()
-            return df
-
-    def _calculate_abc_xyz_corrected(self, df):
-        """Classification ABC-XYZ selon logique métier correcte"""
-        try:
-            # Vérifier que les colonnes nécessaires existent
-            if 'daily_demand_avg' not in df.columns or 'daily_demand_max' not in df.columns:
-                print("⚠️ Colonnes daily_demand manquantes pour ABC-XYZ")
-                df['ABC_Class'] = 'C'
-                df['XYZ_Class'] = 'Z'
-                df['ABC_XYZ_Combined'] = 'CZ'
-                df['coefficient_variation'] = 1.0
-                return df
-
-            # ABC - Pareto sur CA
-            df['total_amount'] = pd.to_numeric(df.get('total_amount', 0), errors='coerce').fillna(0)
-            total_revenue = df['total_amount'].sum()
-
-            if total_revenue > 0:
-                df_sorted = df.sort_values('total_amount', ascending=False).reset_index()
-                cumulative_pct = (df_sorted['total_amount'].cumsum() / total_revenue) * 100
-
-                abc_map = pd.Series('C', index=df.index)
-                abc_map.iloc[df_sorted[cumulative_pct <= 80].index] = 'A'
-                abc_map.iloc[df_sorted[(cumulative_pct > 80) & (cumulative_pct <= 95)].index] = 'B'
-            else:
-                abc_map = pd.Series('C', index=df.index)
-
-            # XYZ - Variabilité selon coefficient de variation
-            cv = np.where(
-                df['daily_demand_avg'] > 0,
-                (df['daily_demand_max'] - df['daily_demand_avg']) / df['daily_demand_avg'],
-                2.0
-            )
-            cv = np.clip(cv, 0, 5)  # Borner les valeurs aberrantes
-
-            xyz_map = pd.Series('Z', index=df.index)
-            xyz_map[cv <= 0.5] = 'X'  # Stable
-            xyz_map[(cv > 0.5) & (cv <= 1.0)] = 'Y'  # Variable
-            # Z reste pour cv > 1.0      # Très variable
-
-            df['ABC_Class'] = abc_map
-            df['XYZ_Class'] = xyz_map
-            df['ABC_XYZ_Combined'] = abc_map + xyz_map
-            df['coefficient_variation'] = cv
-
-            print(f"✅ Classification ABC-XYZ terminée")
-            return df
-
-        except Exception as e:
-            print(f"⚠️ Erreur ABC-XYZ: {e}")
-            traceback.print_exc()
-            df['ABC_Class'] = 'C'
-            df['XYZ_Class'] = 'Z'
-            df['ABC_XYZ_Combined'] = 'CZ'
-            df['coefficient_variation'] = 1.0
-            return df
-
-    def _apply_optimization_conditions(self, df):
-        """Application CONDITIONS D'OPTIMALITÉ exactes"""
-        try:
-            # S'assurer que la colonne ABC_XYZ_Combined existe
-            if 'ABC_XYZ_Combined' not in df.columns:
-                df['ABC_XYZ_Combined'] = 'CZ'
-
-            # Buffer selon classification
-            df['buffer_days'] = df['ABC_XYZ_Combined'].map(
-                lambda x: self.optimization_matrix.get(x, {'buffer_days': 7})['buffer_days']
-            ).fillna(7)
-
-            # Crédit optimisé selon classification
-            df['credit_days_optimized'] = df['ABC_XYZ_Combined'].map(
-                lambda x: self.optimization_matrix.get(x, {'credit_optimization': 15})['credit_optimization']
-            ).fillna(15)
-
-            # Utiliser crédit fournisseur si disponible, sinon optimisé
-            df['credit_days_final'] = np.maximum(
-                pd.to_numeric(df.get('credit_days', 15), errors='coerce').fillna(15),
-                df['credit_days_optimized']
-            )
-
-            return df
-
-        except Exception as e:
-            print(f"⚠️ Erreur conditions optimisation: {e}")
-            df['buffer_days'] = 7
-            df['credit_days_optimized'] = 15
-            df['credit_days_final'] = 15
-            return df
-
-    def _calculate_priority_score(self, df):
-        """Score priorité business (0-100)"""
-        try:
-            score = pd.Series(0.0, index=df.index)
-
-            # 40% Impact CA
-            if df['total_amount'].sum() > 0:
-                score += (df['total_amount'] / df['total_amount'].max()) * 40
-
-            # 30% Urgence
-            urgency_map = {'CRITICAL': 30, 'URGENT': 20, 'RECOMMENDED': 10, 'SUFFICIENT': 0}
-            score += df['purchase_status'].map(urgency_map).fillna(0)
-
-            # 20% Classification
-            class_map = {'A': 20, 'B': 12, 'C': 5}
-            score += df['ABC_Class'].map(class_map).fillna(5)
-
-            # 10% Risque OOS
-            score += np.clip(df.get('perc_oos_duration', 0) * 100, 0, 10)
-
-            df['priority_score'] = score.clip(upper=100).round(1)
-            return df
-
-        except Exception as e:
-            print(f"⚠️ Erreur priorité: {e}")
-            df['priority_score'] = 50
-            return df
-
-
-# === INTERFACE DASH avec prévention boucles infinies ===
-app = dash.Dash(__name__)
-
-app.layout = html.Div([
-    dcc.Store(id='dataset-store'),
-    dcc.Store(id='processing-state', data={'processing': False}),
-
-    # Header
-    html.Div([
-        html.H1("🚀 Supply Chain Analytics", className='main-title'),
-        html.P("Plateforme d'Intelligence Procurement & Optimisation Inventaire", className='subtitle')
-    ], className='header'),
-
-    # Configuration
-    html.Div([
-        html.Div([
-            html.Label("URL Données Ventes & Inventaire:"),
-            dcc.Input(
-                id='sales-url',
-                value="https://docs.google.com/spreadsheets/d/e/2PACX-1vQbJqHsr6Kifee7I91YD-7-sCZDWgM5GvxCeN0OqUvZhok0j-kDywguqe5I61y97b-uBhHbWraTIrux/pub?output=xlsx",
-                type='url',
-                style={'width': '100%'}
-            )
-        ], className='config-item'),
-
-        html.Div([
-            html.Label("URL Données Fournisseurs:"),
-            dcc.Input(
-                id='suppliers-url',
-                value="https://docs.google.com/spreadsheets/d/e/2PACX-1vRTyAxh6v8o0FXV0r7f6ALPDgmeJNkjTZITjrEoKBHo2gs_f3iyV8sFk8fOzcAsUSkJMXBJCpJnhQKi/pub?gid=990028336&single=true&output=csv",
-                type='url',
-                style={'width': '100%'}
-            )
-        ], className='config-item'),
-
-        html.Button("🔄 Analyser Supply Chain", id='analyze-btn', className='analyze-button')
-    ], className='config-section'),
-
-    # Résultats
-    html.Div(id='results-container'),
-    html.Div(id='loading-indicator')
-])
-
-
-@app.callback(
-    [Output('dataset-store', 'data'),
-     Output('results-container', 'children'),
-     Output('processing-state', 'data'),
-     Output('loading-indicator', 'children')],
-    [Input('analyze-btn', 'n_clicks')],
-    [State('sales-url', 'value'),
-     State('suppliers-url', 'value'),
-     State('processing-state', 'data')]
-)
-def analyze_supply_chain(n_clicks, sales_url, suppliers_url, processing_state):
-    if n_clicks is None:
-        return {}, html.Div("👆 Cliquez sur Analyser pour commencer"), {'processing': False}, ""
-
-    # Prévention boucle infinie
-    if processing_state.get('processing', False):
-        return dash.no_update, dash.no_update, dash.no_update, html.Div("⏳ Traitement en cours...", className='loading')
-
+warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
+
+# ------------- OpenAI client (clé hardcodée à ta demande) ----------------
+OPENAI_API_KEY_HARDCODED = "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"
+openai_client = None
+try:
+    from openai import OpenAI
+    api_key = OPENAI_API_KEY_HARDCODED or os.getenv("OPENAI_API_KEY")
+    if api_key:
+        openai_client = OpenAI(api_key=api_key)
+except Exception:
+    openai_client = None
+# -------------------------------------------------------------------------
+
+# ----------------------------- Brand & Meta --------------------------------------
+APP_TITLE = "Supply Chain Command Center"
+APP_BRAND = "Maad SaS"
+AUTHOR = "Tony SARRE"
+THEME = dbc.themes.CYBORG  # sobre & premium
+
+# ------------------------------ Company / Branding -------------------------------
+COMPANY_NAME = "Maad SaS"
+COMPANY_CAPITAL = os.getenv("COMPANY_CAPITAL", "")           # ex "100 000 000 XOF"
+COMPANY_RCS = os.getenv("COMPANY_RCS", "")                   # ex "RCS Dakar B 123 456"
+COMPANY_ADDRESS = os.getenv("COMPANY_ADDRESS", "")
+COMPANY_PHONE = os.getenv("COMPANY_PHONE", "")
+COMPANY_EMAIL = os.getenv("COMPANY_EMAIL", "")
+DEFAULT_TVA_RATE = float(os.getenv("COMPANY_TVA_RATE", "0.18"))  # 18% par défaut
+
+def _get_logo_data_uri():
+    """Charge le logo depuis /mnt/data/logo_maad.jpg si présent."""
     try:
-        # Marquer comme en cours de traitement
-        processing_state['processing'] = True
+        logo_path = Path("logo_maad.jpg")
+        if logo_path.exists():
+            b64 = base64.b64encode(logo_path.read_bytes()).decode("utf-8")
+            return f"data:image/jpeg;base64,{b64}"
+    except Exception:
+        pass
+    return None
 
-        # Initialisation
-        analytics = OptimizedSupplyChainAnalytics(sales_url, suppliers_url)
+LOGO_DATA_URI = _get_logo_data_uri()
 
-        # Chargement
-        sales_loaded, suppliers_loaded = analytics.load_all_data_sources()
+def get_logo_for_reportlab():
+    """
+    Retourne une source compatible ReportLab pour Image():
+    - chemin de fichier si logo_maad.jpg présent
+    - sinon, un ImageReader à partir du base64 de LOGO_DATA_URI
+    - sinon, None
+    """
+    try:
+        from reportlab.lib.utils import ImageReader
+        p = Path("logo_maad.jpg")
+        if p.exists():
+            return str(p)  # ReportLab accepte le chemin fichier
 
-        if not sales_loaded:
-            return {}, html.Div("❌ Erreur chargement données ventes", className='error'), {'processing': False}, ""
+        if LOGO_DATA_URI and "," in LOGO_DATA_URI:
+            # extraire la partie base64
+            b64 = LOGO_DATA_URI.split(",", 1)[1] if LOGO_DATA_URI.startswith("data:") else LOGO_DATA_URI
+            raw = base64.b64decode(b64)
+            return ImageReader(io.BytesIO(raw))  # compatible Image()
+    except Exception:
+        pass
+    return None
 
-        # Analyse
-        dashboard_data = analytics.prepare_comprehensive_dataset_corrected()
 
-        if dashboard_data.empty:
-            return {}, html.Div("❌ Aucune donnée exploitable", className='error'), {'processing': False}, ""
+# ------------------------------ PO Numbering (sequential) ------------------------
+PO_COUNTER_PATH = Path("./po_counter.json")  # changer le dossier si nécessaire
+PO_LOCK = threading.Lock()
 
-        # Store pour callbacks
-        dataset_dict = dashboard_data.to_dict('records')
+def _load_po_state():
+    try:
+        if PO_COUNTER_PATH.exists():
+            import json as _json
+            return _json.loads(PO_COUNTER_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {"date": None, "seq": 0}
 
-        # KPIs
-        total_products = len(dashboard_data)
-        critical_orders = len(dashboard_data[dashboard_data['purchase_status'] == 'CRITICAL'])
-        urgent_orders = len(dashboard_data[dashboard_data['purchase_status'] == 'URGENT'])
-        recommended_orders = len(dashboard_data[dashboard_data['purchase_status'] == 'RECOMMENDED'])
-        total_order_value = dashboard_data['quantity_to_order'].sum() * dashboard_data['purchase_price'].mean()
+def _save_po_state(state: dict):
+    try:
+        import json as _json
+        PO_COUNTER_PATH.write_text(_json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
 
-        # Dashboard components (le même code que précédemment pour la création des résultats)
-        results = html.Div([
-            # KPIs Executive
-            html.Div([
-                html.H2("📊 Executive Dashboard"),
-                html.Div([
-                    html.Div([
-                        html.H3(f"{total_products:,}"),
-                        html.P("Total SKUs")
-                    ], className='kpi-card'),
+def get_next_po_number() -> str:
+    """PO-YYYYMMDD-###, séquentiel, reset quotidien."""
+    today = datetime.now().strftime("%Y%m%d")
+    with PO_LOCK:
+        st = _load_po_state()
+        if st.get("date") != today:
+            st = {"date": today, "seq": 1}
+        else:
+            st["seq"] = int(st.get("seq", 0)) + 1
+        _save_po_state(st)
+        return f"PO-{today}-{st['seq']:03d}"
 
-                    html.Div([
-                        html.H3(f"{critical_orders}", style={'color': '#d32f2f'}),
-                        html.P("CRITICAL Orders")
-                    ], className='kpi-card critical'),
+# ------------------------------ Data loading -------------------------------------
 
-                    html.Div([
-                        html.H3(f"{urgent_orders}", style={'color': '#f57c00'}),
-                        html.P("URGENT Orders")
-                    ], className='kpi-card urgent'),
+def load_supply_data() -> pd.DataFrame:
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.preprocessing import OneHotEncoder
+    from sklearn.compose import ColumnTransformer
+    from sklearn.pipeline import Pipeline
+    from sklearn.impute import SimpleImputer
 
-                    html.Div([
-                        html.H3(f"{recommended_orders}", style={'color': '#388e3c'}),
-                        html.P("RECOMMENDED")
-                    ], className='kpi-card recommended'),
+    # URLs (inchangés + delisting)
+    SUPPLIERS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRTyAxh6v8o0FXV0r7f6ALPDgmeJNkjTZITjrEoKBHo2gs_f3iyV8sFk8fOzcAsUSkJMXBJCpJnhQKi/pub?gid=1015760114&single=true&output=csv"
+    url_leadtime = "https://data.heroku.com/dataclips/lgzfzobmggbjgowhffqskezhsxhq.csv"
+    BUFFER_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1011110883&single=true&output=csv"
+    inventory_pikine_staging = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1876150276&single=true&output=csv"
+    sales_pikine = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1493123930&single=true&output=csv"
+    Tbh_7dsales = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1080970598&single=true&output=csv"
+    Tbh_30dsales_products = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1655420642&single=true&output=csv"
+    Product_category = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbJqHsr6Kifee7I91YD-7-sCZDWgM5GvxCeN0OqUvZhok0j-kDywguqe5I61y97b-uBhHbWraTIrux/pub?gid=803048228&single=true&output=csv"
+    DELISTING_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSugb2blp3F6gZhyxjyRjExj8f4I6xpp8J2KFQCIfNW77VzG8WqFOw0PjEBrjzxf00mjEWaViFuhgMf/pub?gid=1681543945&single=true&output=csv"
 
-                    html.Div([
-                        html.H3(f"{total_order_value:,.0f} €"),
-                        html.P("Total Order Value")
-                    ], className='kpi-card')
-                ], className='kpi-row')
-            ], className='dashboard-section'),
+    # Load
+    suppliers_df = pd.read_csv(SUPPLIERS_URL)
+    df_leadtime = pd.read_csv(url_leadtime)
+    buffer_df = pd.read_csv(BUFFER_URL)
+    inventory_pikine_staging_df = pd.read_csv(inventory_pikine_staging, skiprows=1)
+    sales_pikine_df = pd.read_csv(sales_pikine, header=1, low_memory=False)
+    Tbh_7dsales_df = pd.read_csv(Tbh_7dsales)
+    Tbh_30dsales_products_df = pd.read_csv(Tbh_30dsales_products)
+    Product_category_df = pd.read_csv(Product_category)
 
-            # Table principale
-            html.Div([
-                html.H2("📋 Supply Chain Analytics Table"),
-                dash_table.DataTable(
-                    data=dashboard_data.head(200).to_dict('records'),
-                    columns=[
-                        {'name': 'Product ID', 'id': 'id'},
-                        {'name': 'Product Name', 'id': 'name'},
-                        {'name': 'Supplier', 'id': 'supplier_name'},
-                        {'name': 'Class', 'id': 'ABC_XYZ_Combined'},
-                        {'name': 'Current Stock', 'id': 'current_stock', 'type': 'numeric',
-                         'format': {'specifier': ',.0f'}},
-                        {'name': 'Daily Demand Avg', 'id': 'daily_demand_avg', 'type': 'numeric',
-                         'format': {'specifier': ',.2f'}},
-                        {'name': 'Coverage Days', 'id': 'stock_coverage_days', 'type': 'numeric',
-                         'format': {'specifier': ',.1f'}},
-                        {'name': 'Leadtime', 'id': 'leadtime_days', 'type': 'numeric', 'format': {'specifier': ',.0f'}},
-                        {'name': 'Buffer Days', 'id': 'buffer_days', 'type': 'numeric',
-                         'format': {'specifier': ',.0f'}},
-                        {'name': 'Credit Days', 'id': 'credit_days_final', 'type': 'numeric',
-                         'format': {'specifier': ',.0f'}},
-                        {'name': 'Stock Optimal', 'id': 'stock_optimal', 'type': 'numeric',
-                         'format': {'specifier': ',.0f'}},
-                        {'name': 'Reorder Point', 'id': 'reorder_point', 'type': 'numeric',
-                         'format': {'specifier': ',.0f'}},
-                        {'name': 'Qty to Order', 'id': 'quantity_to_order', 'type': 'numeric',
-                         'format': {'specifier': ',.0f'}},
-                        {'name': 'Purchase Status', 'id': 'purchase_status'},
-                        {'name': 'Priority Score', 'id': 'priority_score', 'type': 'numeric',
-                         'format': {'specifier': ',.1f'}}
-                    ],
-                    style_cell={'textAlign': 'left', 'padding': '10px'},
-                    style_header={'backgroundColor': '#1f77b4', 'color': 'white', 'fontWeight': 'bold'},
-                    style_data_conditional=[
-                        {
-                            'if': {'filter_query': '{purchase_status} = CRITICAL'},
-                            'backgroundColor': '#ffcdd2',
-                            'color': '#b71c1c',
-                            'fontWeight': 'bold'
-                        },
-                        {
-                            'if': {'filter_query': '{purchase_status} = URGENT'},
-                            'backgroundColor': '#ffe0b2',
-                            'color': '#e65100',
-                            'fontWeight': 'bold'
-                        },
-                        {
-                            'if': {'filter_query': '{purchase_status} = RECOMMENDED'},
-                            'backgroundColor': '#c8e6c9',
-                            'color': '#2e7d32'
-                        },
-                        {
-                            'if': {'filter_query': '{priority_score} >= 80'},
-                            'backgroundColor': '#9c27b0',
-                            'color': 'white'
-                        }
-                    ],
-                    sort_action="native",
-                    filter_action="native",
-                    page_size=50,
-                    style_table={'overflowX': 'auto'}
-                )
-            ], className='table-section'),
+    # Clean names
+    if 'product_name' in inventory_pikine_staging_df.columns:
+        inventory_pikine_staging_df['product_name'] = inventory_pikine_staging_df['product_name'].str.lower().str.strip()
+    if 'product_name' in Product_category_df.columns:
+        Product_category_df['product_name'] = Product_category_df['product_name'].str.lower().str.strip()
+    if '2' in Tbh_7dsales_df.columns:
+        Tbh_7dsales_df['2'] = Tbh_7dsales_df['2'].astype(str).str.lower().str.strip()
+    if '2' in Tbh_30dsales_products_df.columns:
+        Tbh_30dsales_products_df['2'] = Tbh_30dsales_products_df['2'].astype(str).str.lower().str.strip()
+    if 'product_name' in sales_pikine_df.columns:
+        sales_pikine_df['product_name'] = sales_pikine_df['product_name'].astype(str).str.lower().str.strip()
 
-            # Graphiques d'analyse (même code que précédemment)
-            html.Div([
-                html.H2("📈 Analytics & Insights"),
+    # ADS 7 & 30
+    if {'2','9'}.issubset(Tbh_7dsales_df.columns):
+        ads7 = Tbh_7dsales_df[['2','9']].copy().rename(columns={'2':'product_name','9':'Average Daily Sales (7d)'})
+        ads7['Average Daily Sales (7d)'] = pd.to_numeric(ads7['Average Daily Sales (7d)'], errors='coerce')
+    else:
+        ads7 = pd.DataFrame(columns=['product_name','Average Daily Sales (7d)'])
+    if {'2','9'}.issubset(Tbh_30dsales_products_df.columns):
+        ads30 = Tbh_30dsales_products_df[['2','9']].copy().rename(columns={'2':'product_name','9':'Average Daily Sales (30d)'})
+        ads30['Average Daily Sales (30d)'] = pd.to_numeric(ads30['Average Daily Sales (30d)'], errors='coerce')
+    else:
+        ads30 = pd.DataFrame(columns=['product_name','Average Daily Sales (30d)'])
 
-                html.Div([
-                    # Graphique 1: Distribution des statuts d'achat
-                    html.Div([
-                        dcc.Graph(
-                            figure=px.pie(
-                                values=dashboard_data['purchase_status'].value_counts().values,
-                                names=dashboard_data['purchase_status'].value_counts().index,
-                                title="Distribution des Statuts d'Achat",
-                                color_discrete_map={
-                                    'CRITICAL': '#d32f2f',
-                                    'URGENT': '#f57c00',
-                                    'RECOMMENDED': '#388e3c',
-                                    'SUFFICIENT': '#9e9e9e'
-                                }
-                            )
-                        )
-                    ], className='chart-half'),
+    # Stock total
+    if {'product_id','Supplier','total_stock','product_name'}.issubset(inventory_pikine_staging_df.columns):
+        total_stock_df = inventory_pikine_staging_df.groupby(['product_name','Supplier'])['total_stock'].sum().reset_index()
+    else:
+        total_stock_df = pd.DataFrame(columns=['product_name','Supplier','total_stock'])
 
-                    # Graphique 2: Classification ABC-XYZ
-                    html.Div([
-                        dcc.Graph(
-                            figure=px.bar(
-                                x=dashboard_data['ABC_XYZ_Combined'].value_counts().index,
-                                y=dashboard_data['ABC_XYZ_Combined'].value_counts().values,
-                                title="Distribution Classification ABC-XYZ",
-                                labels={'x': 'Classification', 'y': 'Nombre de Produits'}
-                            )
-                        )
-                    ], className='chart-half')
-                ], className='charts-row')
-            ], className='analytics-section'),
+    # Merge ventes
+    merged_sales_df = pd.merge(ads7, ads30, on='product_name', how='left')
+    if 'Average Daily Sales (7d)' in merged_sales_df.columns:
+        merged_sales_df['Average Daily Sales (7d)'] = merged_sales_df['Average Daily Sales (7d)'] + 0.1
+    if 'Average Daily Sales (30d)' in merged_sales_df.columns:
+        merged_sales_df['Average Daily Sales (30d)'] = merged_sales_df['Average Daily Sales (30d)'] + 0.1
+    final_stock_sales_df = pd.merge(total_stock_df, merged_sales_df, on='product_name', how='left')
 
-            # Insights Business (même code)
-            html.Div([
-                html.H2("💡 Business Insights & Recommandations"),
+    # Coverage (7/30)
+    final_stock_sales_df['Coverage Day (7d)'] = final_stock_sales_df['total_stock'] / final_stock_sales_df['Average Daily Sales (7d)'].replace(0, pd.NA)
+    final_stock_sales_df['Coverage Day (30d)'] = final_stock_sales_df['total_stock'] / final_stock_sales_df['Average Daily Sales (30d)'].replace(0, pd.NA)
 
-                html.Div([
-                    html.Div([
-                        html.H3("🚨 Alertes Critiques"),
-                        html.Ul([
-                                    html.Li(f"{critical_orders} commandes CRITIQUES nécessitent une action immédiate"),
-                                    html.Li(f"{urgent_orders} commandes URGENTES à traiter sous 24h"),
-                                    html.Li(f"Budget total requis: {total_order_value:,.0f} €")
-                                ] if critical_orders > 0 or urgent_orders > 0 else [
-                            html.Li("✅ Aucune alerte critique en cours", style={'color': '#4caf50'})
-                        ])
-                    ], className='insight-card'),
+    # Max Daily Sales Pikine
+    if {'product_name','sum'}.issubset(sales_pikine_df.columns):
+        max_sales_pikine = sales_pikine_df.groupby('product_name')['sum'].max().reset_index()
+        max_sales_pikine.rename(columns={'sum':'Max Daily Sales (Pikine)'}, inplace=True)
+        max_sales_pikine['Max Daily Sales (Pikine)'] = pd.to_numeric(max_sales_pikine['Max Daily Sales (Pikine)'], errors='coerce')
+    else:
+        max_sales_pikine = pd.DataFrame(columns=['product_name','Max Daily Sales (Pikine)'])
+    final_stock_sales_df = pd.merge(final_stock_sales_df, max_sales_pikine, on='product_name', how='left')
 
-                    html.Div([
-                        html.H3("📊 Optimisations Appliquées"),
-                        html.Ul([
-                            html.Li(f"✅ Logique OOS adaptative (5 sheets)"),
-                            html.Li(f"✅ Conditions d'optimalité par classification"),
-                            html.Li(f"✅ Leadtime mapping fournisseur"),
-                            html.Li(f"✅ Stock optimal = Crédit × Demande quotidienne")
-                        ])
-                    ], className='insight-card')
-                ], className='insights-row')
-            ], className='insights-section')
+    # Catégorie
+    if {'product_name','CATEGORY ABC-XYZ'}.issubset(Product_category_df.columns):
+        cat = Product_category_df[['product_name','CATEGORY ABC-XYZ']].copy().rename(columns={'CATEGORY ABC-XYZ':'Product Category'})
+        final_stock_sales_df = pd.merge(final_stock_sales_df, cat, on='product_name', how='left')
+        final_stock_sales_df['Product Category'] = final_stock_sales_df['Product Category'].fillna('CX')
+    else:
+        final_stock_sales_df['Product Category'] = 'CX'
+
+    # Buffer
+    buffer_df_subset = pd.read_csv(BUFFER_URL, usecols=[0,1,2])
+    if 'buffer In Stock' in buffer_df_subset.columns:
+        first_col = buffer_df_subset.columns[0]
+        buf = buffer_df_subset[[first_col,'buffer In Stock']].copy().rename(columns={first_col:'Product Category','buffer In Stock':'Buffer Value'})
+        buf['Buffer Value'] = pd.to_numeric(buf['Buffer Value'], errors='coerce').fillna(0)
+        final_stock_sales_df = pd.merge(final_stock_sales_df, buf, on='Product Category', how='left')
+    else:
+        final_stock_sales_df['Buffer Value'] = 0
+
+    # Optimal Stock (reorder point — inchangé)
+    if {'Max Daily Sales (Pikine)','Average Daily Sales (30d)','Buffer Value'}.issubset(final_stock_sales_df.columns):
+        final_stock_sales_df['Optimal Stock (Reorder Point)'] = final_stock_sales_df.apply(
+            lambda row: max(row['Max Daily Sales (Pikine)'],
+                            (row['Max Daily Sales (Pikine)']/2.0) + (row['Buffer Value'] * row['Average Daily Sales (30d)'])),
+            axis=1
+        )
+    else:
+        final_stock_sales_df['Optimal Stock (Reorder Point)'] = pd.NA
+
+    # Lead time
+    if {'supplier','max_leadtime'}.issubset(df_leadtime.columns):
+        ltd = df_leadtime[['supplier','max_leadtime']].copy().rename(columns={'supplier':'Supplier','max_leadtime':'Max Lead Time'})
+        final_stock_sales_df = pd.merge(final_stock_sales_df, ltd, on='Supplier', how='left')
+    else:
+        final_stock_sales_df['Max Lead Time'] = pd.NA
+
+    # OOS rate 30d
+    if {'2','28'}.issubset(Tbh_30dsales_products_df.columns):
+        oos = Tbh_30dsales_products_df[['2','28']].copy().rename(columns={'2':'product_name','28':'Daily OOS Rate (30d)'})
+        oos['Daily OOS Rate (30d)'] = oos['Daily OOS Rate (30d)'].astype(str).str.replace('%','',regex=False)
+        oos['Daily OOS Rate (30d)'] = pd.to_numeric(oos['Daily OOS Rate (30d)'], errors='coerce').fillna(0)/100.0
+        final_stock_sales_df = pd.merge(final_stock_sales_df, oos, on='product_name', how='left')
+    else:
+        final_stock_sales_df['Daily OOS Rate (30d)'] = pd.NA
+
+    # >>> Consolidation demandée
+    # Max Avg Daily Sales & Max Coverage Day
+    if {'Average Daily Sales (7d)','Average Daily Sales (30d)'}.issubset(final_stock_sales_df.columns):
+        final_stock_sales_df['Max Avg Daily Sales'] = final_stock_sales_df[['Average Daily Sales (7d)','Average Daily Sales (30d)']].max(axis=1)
+    else:
+        final_stock_sales_df['Max Avg Daily Sales'] = pd.NA
+    if {'Coverage Day (7d)','Coverage Day (30d)'}.issubset(final_stock_sales_df.columns):
+        final_stock_sales_df['Max Coverage Day'] = final_stock_sales_df[['Coverage Day (7d)','Coverage Day (30d)']].max(axis=1)
+    else:
+        final_stock_sales_df['Max Coverage Day'] = pd.NA
+
+    # Supprimer colonnes intermédiaires
+    for c in ['Average Daily Sales (7d)','Average Daily Sales (30d)','Coverage Day (7d)','Coverage Day (30d)']:
+        if c in final_stock_sales_df.columns:
+            final_stock_sales_df.drop(columns=[c], inplace=True)
+
+    # Delisting (nouvelle colonne)
+    try:
+        delisting_df = pd.read_csv(DELISTING_URL)
+        if delisting_df.shape[1] > 3:
+            dsub = delisting_df.iloc[:, [0,3]].copy()
+            dsub.columns = ['product_name','delisting']
+            dsub['product_name'] = dsub['product_name'].astype(str).str.lower().str.strip()
+            final_stock_sales_df = pd.merge(final_stock_sales_df, dsub, on='product_name', how='left')
+            final_stock_sales_df['delisting'] = final_stock_sales_df['delisting'].fillna('Not Delisted')
+        else:
+            final_stock_sales_df['delisting'] = 'Not Delisted'
+    except Exception:
+        final_stock_sales_df['delisting'] = 'Not Delisted'
+
+    # --------- Imputation ML (identique esprit)
+    missing_values_summary = final_stock_sales_df.isnull().sum()
+    imputation_candidates = missing_values_summary[missing_values_summary > 0].index.tolist()
+    features_for_imputation = {}
+    all_cols = final_stock_sales_df.columns.tolist()
+    for col in imputation_candidates:
+        features_for_imputation[col] = [f for f in all_cols if f != col and final_stock_sales_df[f].isnull().sum() < len(final_stock_sales_df)*0.5 and f in [
+            'product_name','Supplier','total_stock','Product Category','Buffer Value','Max Lead Time',
+            'Max Daily Sales (Pikine)','Max Avg Daily Sales','Max Coverage Day'
+        ]]
+    for target_col in imputation_candidates:
+        features = features_for_imputation.get(target_col, [])
+        if not features:
+            final_stock_sales_df[target_col] = final_stock_sales_df[target_col].fillna(0)
+            continue
+        valid_features = [f for f in features if f in final_stock_sales_df.columns]
+        if not valid_features:
+            final_stock_sales_df[target_col] = final_stock_sales_df[target_col].fillna(0)
+            continue
+        subset_df = final_stock_sales_df[valid_features + [target_col]].copy()
+        train_data = subset_df.dropna(subset=[target_col])
+        predict_data = subset_df[subset_df[target_col].isnull()]
+
+        from sklearn.preprocessing import OneHotEncoder
+        from sklearn.compose import ColumnTransformer
+        from sklearn.pipeline import Pipeline
+        from sklearn.impute import SimpleImputer
+        from sklearn.ensemble import RandomForestRegressor
+
+        X_train = train_data[valid_features]
+        y_train = train_data[target_col]
+        X_predict = predict_data[valid_features]
+
+        categorical_features = X_train.select_dtypes(include=['object','category']).columns
+        numerical_features = X_train.select_dtypes(include=['number']).columns
+
+        numerical_pipeline = Pipeline([('imputer', SimpleImputer(strategy='mean'))])
+        categorical_pipeline = Pipeline([
+            ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
+            ('onehot', OneHotEncoder(handle_unknown='ignore'))
         ])
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ('num', numerical_pipeline, numerical_features),
+                ('cat', categorical_pipeline, categorical_features)
+            ],
+            remainder='passthrough'
+        )
+        model_pipeline = Pipeline([
+            ('preprocessor', preprocessor),
+            ('regressor', RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1))
+        ])
+        try:
+            model_pipeline.fit(X_train, y_train)
+            predicted = model_pipeline.predict(X_predict)
+            missing_idx = final_stock_sales_df[final_stock_sales_df[target_col].isnull()].index
+            if len(predicted) == len(missing_idx):
+                final_stock_sales_df.loc[missing_idx, target_col] = predicted
+            else:
+                final_stock_sales_df[target_col] = final_stock_sales_df[target_col].fillna(0)
+        except Exception:
+            final_stock_sales_df[target_col] = final_stock_sales_df[target_col].fillna(0)
 
-        return dataset_dict, results, {'processing': False}, ""
+    # Flags & outputs (inchangés)
+    if {'total_stock','Optimal Stock (Reorder Point)'}.issubset(final_stock_sales_df.columns):
+        final_stock_sales_df['Predicted Stockout'] = final_stock_sales_df['total_stock'] <= final_stock_sales_df['Optimal Stock (Reorder Point)']
+    else:
+        final_stock_sales_df['Predicted Stockout'] = False
 
-    except Exception as e:
-        error_msg = f"❌ Erreur analyse: {str(e)}"
-        print(error_msg)
-        traceback.print_exc()
-        return {}, html.Div(error_msg, className='error'), {'processing': False}, ""
+    def get_stock_status(row):
+        stock = pd.to_numeric(row.get('total_stock', 0), errors='coerce')
+        reorder_point = pd.to_numeric(row.get('Optimal Stock (Reorder Point)', 0), errors='coerce')
+        max_lead_time = pd.to_numeric(row.get('Max Lead Time', 0), errors='coerce')
+        max_avg_daily_sales = pd.to_numeric(row.get('Max Avg Daily Sales', 0), errors='coerce')
+        if pd.isna(stock) or stock <= 0:
+            return 'Out of Stock'
+        elif pd.isna(reorder_point) or stock <= reorder_point:
+            return 'Predicted Stockout Soon'
+        elif pd.isna(max_lead_time) or pd.isna(max_avg_daily_sales) or stock <= reorder_point + (max_lead_time * max_avg_daily_sales):
+            return 'Order Soon'
+        else:
+            return 'Stock OK'
+    final_stock_sales_df['Stock Status'] = final_stock_sales_df.apply(get_stock_status, axis=1)
 
+    if {'total_stock','Optimal Stock (Reorder Point)'}.issubset(final_stock_sales_df.columns):
+        final_stock_sales_df['Predicted Order Quantity'] = final_stock_sales_df.apply(
+            lambda row: max(0, (row['Optimal Stock (Reorder Point)'] or 0) - (row['total_stock'] or 0)), axis=1
+        )
+    else:
+        final_stock_sales_df['Predicted Order Quantity'] = pd.NA
 
-# CSS (même que précédemment)
-app.index_string = '''
+    if 'Daily OOS Rate (30d)' in final_stock_sales_df.columns:
+        final_stock_sales_df['Daily OOS Rate (30d)'] = pd.to_numeric(final_stock_sales_df['Daily OOS Rate (30d)'], errors='coerce')
+
+    # Order d’affichage — ajoute delisting
+    preferred_order = [
+        'product_name','Supplier','Product Category','delisting',
+        'total_stock','Optimal Stock (Reorder Point)',
+        'Max Daily Sales (Pikine)','Max Lead Time','Max Avg Daily Sales','Max Coverage Day',
+        'Daily OOS Rate (30d)','Predicted Stockout','Stock Status','Predicted Order Quantity',
+        'Unit Price HT','Discount'
+    ]
+    cols = [c for c in preferred_order if c in final_stock_sales_df.columns] + \
+           [c for c in final_stock_sales_df.columns if c not in preferred_order]
+    final_stock_sales_df = final_stock_sales_df[cols]
+    return final_stock_sales_df
+
+# Utility: add Actions columns
+def add_action_cols(df: pd.DataFrame) -> pd.DataFrame:
+    df2 = df.copy()
+    df2["✏️ Edit"] = "✏️"
+    df2["🗑️ Delete"] = "🗑️"
+    return df2
+
+# ----------------------------- App & Cache ---------------------------------------
+app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True)
+server = app.server
+cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
+
+# ------------------------------ Custom CSS & JS ----------------------------------
+app.index_string = """
 <!DOCTYPE html>
 <html>
     <head>
@@ -778,189 +404,97 @@ app.index_string = '''
         {%favicon%}
         {%css%}
         <style>
-            body { 
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                margin: 0; 
-                padding: 20px; 
-                background-color: #f5f5f5;
+            :root {
+                --brand-accent:#22d3ee;
+                --badge-danger:#ef4444; --badge-warning:#f59e0b; --badge-ok:#10b981;
             }
+            .sidebar { position: fixed; top:0; bottom:0; left:0; width: 320px;
+                padding: 16px 14px; background: #0b1220; border-right:1px solid #1f2937; overflow-y:auto; }
+            .content { margin-left: 320px; padding: 18px 18px 120px 18px; }
+            .brand { font-weight:800; font-size:20px; letter-spacing:.6px; color:#fff; }
+            .muted { color:#9ca3af; font-size:13px; }
+            .pill { border:1px solid #243244; padding:10px 12px; border-radius:12px; background:#0f1828; }
+            .kpi { border-radius:16px; padding:18px; border:1px solid #1f2937; background:linear-gradient(180deg,#0b1220,#0f1625);
+                   box-shadow:0 10px 24px rgba(0,0,0,.25); }
+            .banner-risk { border-left:4px solid var(--badge-danger); background: rgba(239,68,68,.08);
+                padding:10px 14px; border-radius:10px; margin-bottom:10px; }
+            .badge{ padding:2px 8px; border-radius:10px; font-size:11px; border:1px solid #374151 }
+            .badge-danger{ background:rgba(239,68,68,.15); color:#fecaca; border-color:#7f1d1d; }
+            .badge-warn{ background:rgba(245,158,11,.15); color:#fde68a; border-color:#78350f; }
+            .badge-ok{ background:rgba(16,185,129,.15); color:#a7f3d0; border-color:#064e3b; }
+            .btn-primary { background: var(--brand-accent); color:#001018; font-weight:700; border:none; }
+            .search-input input { background:#0a1320; color:#e5e7eb; border:1px solid #1f2937; border-radius:10px; }
+            .section-title { font-weight:700; font-size:18px; margin-bottom:10px; }
+            .soft-card { border:1px solid #1f2937; border-radius:16px; padding:14px; background:#0b1220; }
 
-            .header {
-                text-align: center;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                padding: 2rem;
-                border-radius: 10px;
-                margin-bottom: 2rem;
+            /* --- Floating chat bubble (LIGHT THEME) --- */
+            .chat-fab {
+                position: fixed; right: 24px; bottom: 24px; z-index: 10000;
+                border-radius: 9999px; padding: 12px 16px; border:none;
+                background: var(--brand-accent); color:#001018; font-weight:800;
+                box-shadow: 0 12px 24px rgba(0,0,0,.35);
+                display:flex; align-items:center; gap:8px; cursor:pointer;
             }
-
-            .main-title {
-                font-size: 2.5rem;
-                margin: 0;
-                font-weight: bold;
+            .chat-window {
+                position: fixed; right: 24px; bottom: 92px; width: 520px; max-width: 96vw;
+                background: #ffffff; border:1px solid #e5e7eb; border-radius:16px;
+                z-index: 10000; box-shadow: 0 24px 48px rgba(0,0,0,.15);
+                display:flex; flex-direction:column; overflow:hidden; color:#111827;
             }
-
-            .subtitle {
-                font-size: 1.1rem;
-                margin: 0.5rem 0 0 0;
-                opacity: 0.9;
+            .chat-header {
+                padding:10px 12px; display:flex; align-items:center; justify-content:space-between;
+                background:#f3f4f6; border-bottom:1px solid #e5e7eb; color:#111827;
             }
-
-            .config-section {
-                background: white;
-                padding: 1.5rem;
-                border-radius: 10px;
-                margin-bottom: 2rem;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            .chat-body {
+                padding:12px; max-height:56vh; overflow:auto; display:flex; flex-direction:column; gap:10px;
+                background:#fafafa;
             }
-
-            .config-item {
-                margin-bottom: 1rem;
+            .chat-input-wrap {
+                padding:10px; background:#f9fafb; border-top:1px solid #e5e7eb; display:grid;
+                grid-template-columns: 1fr auto; gap:10px;
             }
-
-            .config-item label {
-                display: block;
-                margin-bottom: 0.5rem;
-                font-weight: bold;
-                color: #333;
+            .chat-textarea { background:#ffffff; color:#111827; border:1px solid #d1d5db; border-radius:10px; }
+            .chat-avatar {
+                min-width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+                font-size:16px; color:#fff; background:#6366f1; box-shadow:0 2px 6px rgba(0,0,0,.1);
             }
-
-            .analyze-button {
-                background: linear-gradient(135deg, #1f77b4 0%, #ff7f0e 100%);
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                font-size: 1.1rem;
-                border-radius: 5px;
-                cursor: pointer;
-                font-weight: bold;
-                width: 100%;
-                margin-top: 1rem;
-            }
-
-            .analyze-button:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            }
-
-            .dashboard-section, .table-section, .analytics-section, .insights-section {
-                background: white;
-                padding: 1.5rem;
-                border-radius: 10px;
-                margin-bottom: 2rem;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            }
-
-            .kpi-row {
-                display: flex;
-                gap: 1rem;
-                flex-wrap: wrap;
-                margin-top: 1rem;
-            }
-
-            .kpi-card {
-                flex: 1;
-                min-width: 150px;
-                background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-                padding: 1rem;
-                border-radius: 8px;
-                text-align: center;
-                border-left: 4px solid #1976d2;
-            }
-
-            .kpi-card.critical {
-                background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
-                border-left-color: #d32f2f;
-            }
-
-            .kpi-card.urgent {
-                background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
-                border-left-color: #f57c00;
-            }
-
-            .kpi-card.recommended {
-                background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
-                border-left-color: #388e3c;
-            }
-
-            .kpi-card h3 {
-                margin: 0 0 0.5rem 0;
-                font-size: 2rem;
-                font-weight: bold;
-            }
-
-            .kpi-card p {
-                margin: 0;
-                font-size: 0.9rem;
-                opacity: 0.8;
-            }
-
-            .charts-row {
-                display: flex;
-                gap: 1rem;
-                margin-top: 1rem;
-            }
-
-            .chart-half {
-                flex: 1;
-            }
-
-            .insights-row {
-                display: flex;
-                gap: 1rem;
-                flex-wrap: wrap;
-                margin-top: 1rem;
-            }
-
-            .insight-card {
-                flex: 1;
-                min-width: 300px;
-                background: #f8f9fa;
-                padding: 1rem;
-                border-radius: 8px;
-                border-left: 4px solid #17a2b8;
-            }
-
-            .insight-card h3 {
-                margin: 0 0 1rem 0;
-                color: #495057;
-            }
-
-            .insight-card ul {
-                margin: 0;
-                padding-left: 1.5rem;
-            }
-
-            .insight-card li {
-                margin-bottom: 0.5rem;
-                line-height: 1.4;
-            }
-
-            .error {
-                background: #ffebee;
-                color: #c62828;
-                padding: 1rem;
-                border-radius: 5px;
-                border-left: 4px solid #d32f2f;
-                font-weight: bold;
-            }
-
-            .loading {
-                background: #e3f2fd;
-                color: #1976d2;
-                padding: 1rem;
-                border-radius: 5px;
-                border-left: 4px solid #1976d2;
-                font-weight: bold;
-                text-align: center;
-            }
-
-            h2 {
-                color: #1976d2;
-                border-bottom: 2px solid #e3f2fd;
-                padding-bottom: 0.5rem;
+            .chat-avatar.user { background:#3b82f6; }
+            .chat-bubble { display:flex; gap:10px; }
+            .chat-bubble.user { flex-direction: row; }
+            .chat-bubble.bot { flex-direction: row-reverse; }
+            .chat-msg { background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; padding:10px 12px; max-width: 90%; }
+            .upload-box {
+                border: 2px dashed #9ca3af; border-radius: 10px; padding: 10px; text-align:center; color:#6b7280; background:#ffffff;
             }
         </style>
+        <script>
+            // Enter to send / Shift+Enter newline
+            const attachEnterSend = () => {
+                const ta = document.getElementById('chat-input');
+                const btn = document.getElementById('chat-send');
+                if(!ta || !btn) return;
+                if(ta._boundEnter) return; // avoid double bind
+                ta._boundEnter = true;
+                ta.addEventListener('keydown', (e) => {
+                    if(e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        btn.click();
+                    }
+                });
+            };
+            const mo = new MutationObserver(() => attachEnterSend());
+            window.addEventListener('load', () => {
+                attachEnterSend();
+                const app = document.getElementById('_dash-app-content');
+                if(app) mo.observe(app, {childList: true, subtree: true});
+            });
+
+            // Simple debounce available if needed
+            window.debounce = (func, wait=280) => {
+                let timeout; 
+                return (...args) => { clearTimeout(timeout); timeout = setTimeout(()=>func.apply(this,args), wait); }
+            };
+        </script>
     </head>
     <body>
         {%app_entry%}
@@ -971,21 +505,933 @@ app.index_string = '''
         </footer>
     </body>
 </html>
-'''
+"""
 
-#if __name__ == '__main__':
-#    app.run(debug=True, port=8050)
-# Votre code existant...
+# ------------------------------ Data cache layer ---------------------------------
+@cache.memoize()
+def get_df_cached():
+    return load_supply_data()
 
-# À LA FIN, modifier cette partie :
-server = app.server  # Important pour Render
+# ------------------------------ Sidebar ------------------------------------------
+def make_sidebar():
+    df = get_df_cached()
+    suppliers = sorted([s for s in df['Supplier'].dropna().unique().tolist() if s != '']) if 'Supplier' in df.columns else []
+    cats = sorted([c for c in df['Product Category'].dropna().unique().tolist() if c != '']) if 'Product Category' in df.columns else []
+    status_vals = df['Stock Status'].dropna().unique().tolist() if 'Stock Status' in df.columns else []
 
-if __name__ == '__main__':
-    import os
-    port = int(os.environ.get('PORT', 8050))
-    app.run(
-        debug=False,
-        host='0.0.0.0',
-        port=port
+    return html.Div(className="sidebar", children=[
+        html.Div([
+            html.Div([
+                html.Img(src=LOGO_DATA_URI, style={"height": "42px", "marginRight": "8px"}) if LOGO_DATA_URI else html.Div(),
+                html.Div(APP_BRAND, className="brand"),
+            ], style={"display": "flex", "alignItems": "center", "gap": "10px"}),
+            html.Div("Supply Chain Command Center", className="muted")
+        ]),
+        html.Hr(),
+        html.Div(className="banner-risk", id="risk-banner", children="Chargement..."),
+        html.Div(className="section-title", children="Recherche"),
+        dbc.InputGroup(className="search-input", children=[
+            dbc.Input(id="search-input", placeholder="Rechercher un produit...", type="text", debounce=True)
+        ]),
+        html.Br(),
+        html.Div(className="section-title", children="Filtres"),
+        html.Div(className="pill", children=[
+            html.Small("Supplier"),
+            dcc.Dropdown(id="filter-supplier", options=[{"label": s, "value": s} for s in suppliers],
+                         multi=True, placeholder="Tous", persistence=True),
+            html.Br(),
+            html.Small("Statut"),
+            dcc.Dropdown(id="filter-status", options=[{"label": s, "value": s} for s in status_vals],
+                         multi=True, placeholder="Tous", persistence=True),
+            html.Br(),
+            html.Small("Catégorie"),
+            dcc.Dropdown(id="filter-category", options=[{"label": c, "value": c} for c in cats],
+                         multi=True, placeholder="Toutes", persistence=True),
+            html.Br(),
+            dbc.Checklist(
+                options=[{"label": "Afficher uniquement risques de rupture", "value": "risk"}],
+                value=[], id="toggle-risk-only", switch=True
+            )
+        ]),
+        html.Br(),
+        html.Div([
+            dbc.Button("Exporter CSV (filtré)", id="btn-export", className="btn-primary", size="sm"),
+            html.Span(" "),
+            dbc.Button("Bon de commande PDF", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True),
+            dcc.Download(id="download-data"),
+            dcc.Download(id="download-po"),
+        ]),
+        html.Br(),
+        html.Div([
+            dbc.Nav([
+                dbc.NavLink("Overview", href="/", id="nav-overview", active="exact"),
+                dbc.NavLink("Analyses", href="/analytics", id="nav-analytics", active="exact"),
+                dbc.NavLink("Prédictions", href="/predictions", id="nav-pred", active="exact"),
+                dbc.NavLink("About", href="/about", id="nav-about", active="exact"),
+            ], vertical=True, pills=True)
+        ]),
+        html.Br(),
+        html.Small(f"© {datetime.now().year} • {AUTHOR}")
+    ])
+
+# ------------------------------ Pages --------------------------------------------
+def make_kpis(df: pd.DataFrame):
+    def fmt(n):
+        if pd.isna(n): return "-"
+        if isinstance(n, (int, float)):
+            try:
+                if abs(n) >= 1000: return f"{n:,.0f}".replace(",", " ")
+                return f"{n:,.0f}"
+            except Exception:
+                return str(n)
+        return str(n)
+
+    total_skus = df['product_name'].nunique() if 'product_name' in df.columns else len(df)
+    at_risk = int((df['Stock Status'].isin(['Out of Stock', 'Predicted Stockout Soon']).sum())) if 'Stock Status' in df.columns else 0
+    order_sum = df['Predicted Order Quantity'].sum() if 'Predicted Order Quantity' in df.columns else 0
+    suppliers = df['Supplier'].nunique() if 'Supplier' in df.columns else 0
+
+    cards = dbc.Row([
+        dbc.Col(html.Div(className="kpi", children=[html.Small("SKUs"), html.H3(fmt(total_skus))]), md=3),
+        dbc.Col(html.Div(className="kpi", children=[html.Small("À risque de rupture"),
+            html.H3([fmt(at_risk), html.Span("  ", className="mx-1"), html.Span("•", className="badge badge-danger")])]), md=3),
+        dbc.Col(html.Div(className="kpi", children=[html.Small("Qté réassort prédite (somme)"), html.H3(fmt(order_sum))]), md=3),
+        dbc.Col(html.Div(className="kpi", children=[html.Small("Fournisseurs actifs"), html.H3(fmt(suppliers))]), md=3),
+    ], className="gy-3")
+    return cards
+
+def page_overview(master_df: pd.DataFrame = None):
+    df = master_df if master_df is not None else get_df_cached()
+    df = add_action_cols(df)
+    kpi_cards = make_kpis(df)
+
+    table = dash_table.DataTable(
+        id="main-table",
+        columns=[{"name": c, "id": c, "deletable": False} for c in df.columns] +
+                [{"name": "Actions", "id": "✏️ Edit"}, {"name": " ", "id": "🗑️ Delete"}],
+        data=df.to_dict("records"),
+        page_size=15,
+        filter_action="native",
+        sort_action="native", sort_mode="multi",
+        column_selectable="single",
+        editable=True,
+        row_selectable="single",
+        selected_rows=[],
+        style_table={"overflowX": "auto"},
+        style_header={"backgroundColor": "#0f1625", "border": "1px solid #1f2937", "fontWeight": "700"},
+        style_cell={"backgroundColor": "#0b1220", "color": "#e5e7eb", "border": "1px solid #1f2937", "fontSize": 12},
+        style_data_conditional=[
+            {"if": {"filter_query": "{Stock Status} = 'Out of Stock'"}, "backgroundColor": "rgba(239,68,68,.15)", "color": "#fecaca"},
+            {"if": {"filter_query": "{Stock Status} = 'Predicted Stockout Soon'"}, "backgroundColor": "rgba(245,158,11,.15)", "color": "#fde68a"},
+            {"if": {"filter_query": "{Stock Status} = 'Order Soon'"}, "backgroundColor": "rgba(59,130,246,.12)", "color": "#bfdbfe"},
+            {"if": {"filter_query": "{Stock Status} = 'Stock OK'"}, "backgroundColor": "rgba(16,185,129,.1)", "color": "#a7f3d0"},
+        ],
+        export_format="none",
+        persistence=True,
+        persisted_props=["filter_query", "sort_by", "page_current", "selected_rows", "selected_columns", "hidden_columns"],
     )
 
+    add_btn = dbc.Button("➕ Ajouter", id="btn-add-row", className="btn-primary", size="sm")
+
+    modal = dbc.Modal([
+        dbc.ModalHeader(dbc.ModalTitle("Éditer / Ajouter un produit")),
+        dbc.ModalBody([
+            dbc.Row([
+                dbc.Col([html.Small("Nom produit"), dbc.Input(id="edit-product", type="text")], md=6),
+                dbc.Col([html.Small("Fournisseur"), dbc.Input(id="edit-supplier", type="text")], md=6),
+            ]),
+            html.Br(),
+            dbc.Row([
+                dbc.Col([html.Small("Catégorie"), dbc.Input(id="edit-category", type="text")], md=6),
+                dbc.Col([html.Small("Stock total"), dbc.Input(id="edit-stock", type="number")], md=6),
+            ]),
+        ]),
+        dbc.ModalFooter([
+            dbc.Button("Annuler", id="edit-cancel", className="btn-secondary", n_clicks=0),
+            dbc.Button("Enregistrer", id="edit-save", className="btn-primary", n_clicks=0),
+        ]),
+    ], id="edit-modal", is_open=False, backdrop="static")
+
+    return html.Div(className="content", children=[
+        html.H2("Overview"),
+        html.Div(kpi_cards),
+        html.Br(),
+        html.Div(className="soft-card", children=[
+            html.Div(dbc.Row([dbc.Col(html.Div("Détails Produits (non modifié : calculs d’origine)", className="section-title"), md=9),
+                              dbc.Col(html.Div(add_btn, style={"textAlign":"right"}), md=3)])),
+            table
+        ]),
+        modal
+    ])
+
+def page_analytics():
+    df = get_df_cached()
+    top_po = df.sort_values("Predicted Order Quantity", ascending=False).head(20) if 'Predicted Order Quantity' in df.columns else df.head(20)
+    fig_po = px.bar(top_po, x="product_name", y="Predicted Order Quantity", color="Supplier",
+                    title="Top 20 — Besoin de réappro (Predicted Order Quantity)") if 'Predicted Order Quantity' in top_po.columns else px.bar()
+    if not fig_po.data: fig_po.update_layout(title="Top 20 — Besoin de réappro (Données indisponibles)")
+
+    cat_share = df.groupby("Product Category", dropna=False)['total_stock'].sum().reset_index() if {'Product Category','total_stock'}.issubset(df.columns) else pd.DataFrame(columns=['Product Category','total_stock'])
+    fig_cat = px.pie(cat_share, names="Product Category", values="total_stock", title="Répartition du stock par catégorie") if not cat_share.empty else px.pie()
+
+    status_count = df['Stock Status'].value_counts(dropna=False).reset_index() if 'Stock Status' in df.columns else pd.DataFrame(columns=['Stock Status','count'])
+    if not status_count.empty: status_count.columns = ['Stock Status','count']
+    fig_status = px.bar(status_count, x="Stock Status", y="count", title="Distribution des statuts") if not status_count.empty else px.bar()
+
+    sup_map = df.groupby(['Supplier','Product Category'], dropna=False)['Predicted Order Quantity'].sum().reset_index() \
+        if {'Supplier','Product Category','Predicted Order Quantity'}.issubset(df.columns) else pd.DataFrame(columns=['Supplier','Product Category','Predicted Order Quantity'])
+    fig_treemap = px.treemap(sup_map, path=['Supplier','Product Category'], values='Predicted Order Quantity',
+                             title="Carte réassort — Supplier > Category") if not sup_map.empty else px.treemap()
+
+    for fig in [fig_po, fig_cat, fig_status, fig_treemap]:
+        fig.update_layout(template="plotly_dark")
+
+    return html.Div(className="content", children=[
+        html.H2("Analyses"),
+        dbc.Row([dbc.Col(dcc.Graph(figure=fig_po), md=12)], className="gy-3"),
+        html.Br(),
+        dbc.Row([dbc.Col(dcc.Graph(figure=fig_cat), md=6), dbc.Col(dcc.Graph(figure=fig_status), md=6)], className="gy-3"),
+        html.Br(),
+        dbc.Row([dbc.Col(dcc.Graph(figure=fig_treemap), md=12)], className="gy-3"),
+    ])
+
+def page_predictions():
+    table = dash_table.DataTable(
+        id="pred-table",
+        columns=[{"name": c, "id": c} for c in ["product_name","Supplier","total_stock",
+                                                "Optimal Stock (Reorder Point)","Max Lead Time",
+                                                "Max Avg Daily Sales","Buffer Value","Suggested Order Qty"]],
+        data=[], page_size=15, sort_action="native",
+        style_table={"overflowX": "auto"},
+        style_header={"backgroundColor":"#0f1625","border":"1px solid #1f2937","fontWeight":"700"},
+        style_cell={"backgroundColor":"#0b1220","color":"#e5e7eb","border":"1px solid #1f2937","fontSize":12},
+    )
+    controls = html.Div(className="soft-card", children=[
+        html.Div("Scénarios What-If (non intrusif)", className="section-title"),
+        dbc.Row([
+            dbc.Col([html.Small("Multiplicateur Buffer (x)"), dcc.Slider(0.5, 2.0, 0.1, value=1.0, id="buffer-mult")], md=6),
+            dbc.Col([html.Small("Multiplicateur Lead Time (x)"), dcc.Slider(0.5, 2.0, 0.1, value=1.0, id="lead-mult")], md=6),
+        ]),
+        html.Br(), html.Small("La suggestion ci-dessous est recalculée à la volée pour l’exploration, sans changer les résultats source.")
+    ])
+    return html.Div(className="content", children=[
+        html.H2("Prédictions"), controls, html.Br(),
+        html.Div(className="soft-card", children=[html.Div("Plan de Réassort — Suggestions", className="section-title"), table])
+    ])
+
+def page_about():
+    return html.Div(className="content", children=[
+        html.H2("About"),
+        html.Div(className="soft-card", children=[
+            html.H4(APP_BRAND),
+            html.P("Plateforme premium de pilotage Supply Chain : visibilité temps quasi-réel des stocks, risques de rupture, analyses graphiques, et recommandations d’approvisionnement."),
+            html.Hr(),
+            html.H5("Auteur"),
+            html.P(f"{AUTHOR} — Data Scientist / Ph.D / Supply Chain — Dashboard construit avec Dash/Plotly, stylé via Bootstrap (thème {THEME.rsplit('.',1)[-1]}) et CSS custom."),
+        ])
+    ])
+
+# ------------------------------ Chatbot helpers ----------------------------------
+def _detect_lang(text: str) -> str:
+    if not text: return "fr"
+    t = text.lower()
+    fr_markers = ["bonjour","salut","stock","commande","fournisseur","rupture","couverture","jours","crédit","delisting"]
+    if any(w in t for w in fr_markers) or re.search(r"[àâçéèêëîïôùûüœ]", t): return "fr"
+    return "en"
+
+def _clean_df_for_advice(df: pd.DataFrame) -> pd.DataFrame:
+    if not isinstance(df, pd.DataFrame) or df.empty: return pd.DataFrame()
+    d = pd.DataFrame()
+    d["product_name_display"] = df.get("product_name","")
+    d["supplier_name"] = df.get("Supplier","")
+    d["abc_class"] = df.get("Product Category","")
+    d["xyz_class"] = ""
+    d["current_stock"] = pd.to_numeric(df.get("total_stock",0), errors="coerce").fillna(0).clip(lower=0)
+    d["avg_daily_sales"] = pd.to_numeric(df.get("Max Avg Daily Sales",0), errors="coerce").fillna(0).clip(lower=0)
+    cov = np.where(d["avg_daily_sales"]>0, d["current_stock"]/d["avg_daily_sales"], np.nan)
+    d["coverage_days"] = pd.to_numeric(df.get("Max Coverage Day", cov), errors="coerce")
+    d["coverage_days"] = pd.Series(d["coverage_days"]).fillna(0).clip(lower=0, upper=365)
+    d["leadtime_days"] = pd.to_numeric(df.get("Max Lead Time",7), errors="coerce").fillna(7).clip(lower=0, upper=180)
+    d["credit_days"] = 14
+    if "Predicted Stockout" in df.columns:
+        d["rupture_ml"] = np.where(df["Predicted Stockout"], "OUI", "NON")
+    else:
+        st = df.get("Stock Status","").astype(str)
+        d["rupture_ml"] = np.where(st.isin(["Out of Stock","Predicted Stockout Soon"]), "OUI", "NON")
+    d["delisting_product"] = "NON"
+    bad = d["product_name_display"].astype(str).str.contains(r'\b(CFA|CASH|CFA\s*-\s*CASH|ESPECES|CAISSE)\b', case=False, na=False)
+    d = d[~bad]
+    d["risk"] = (d["rupture_ml"].astype(str).str.upper()=="OUI").astype(int)
+    return d
+
+def _bubble(role: str, text: str):
+    is_user = (role == "user")
+    return html.Div(className=f"chat-bubble {'user' if is_user else 'bot'}", children=[
+        html.Div("🧑" if is_user else "🤖", className=f"chat-avatar {'user' if is_user else ''}"),
+        html.Div(dcc.Markdown(text or "", link_target="_blank", style={"whiteSpace":"pre-wrap","wordBreak":"break-word"}), className="chat-msg")
+    ])
+
+def _render_messages(msgs: list):
+    return [_bubble(m.get("role","assistant"), m.get("text","")) for m in msgs or []]
+
+def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> str:
+    try:
+        if not user_text or not str(user_text).strip():
+            return "Je peux analyser tes stocks, les risques de rupture et suggérer des quantités à commander."
+        lang = _detect_lang(user_text)
+        sample = _clean_df_for_advice(df if isinstance(df, pd.DataFrame) else pd.DataFrame())
+        fields = ['product_name_display','supplier_name','abc_class','xyz_class','current_stock','avg_daily_sales',
+                  'coverage_days','leadtime_days','credit_days','rupture_ml','delisting_product']
+        view = sample[[c for c in fields if c in sample.columns]].copy() if not sample.empty else pd.DataFrame()
+
+        cov_med = None; rows_digest = []
+        try:
+            if not view.empty:
+                cov_med = float(pd.to_numeric(view.get('coverage_days', pd.Series(dtype=float)), errors='coerce').median())
+                at_risk = view[view.get('rupture_ml','NON').astype(str).str.upper().eq('OUI')] if not view.empty else pd.DataFrame()
+                top_list = at_risk.sort_values('coverage_days', ascending=True).head(6) if not at_risk.empty else view.sort_values('coverage_days', ascending=True).head(6)
+                for _, r in (top_list if isinstance(top_list, pd.DataFrame) else pd.DataFrame()).iterrows():
+                    rows_digest.append({
+                        "name": str(r.get('product_name_display','')),
+                        "sup": str(r.get('supplier_name','')),
+                        "cov": float(pd.to_numeric(r.get('coverage_days',0), errors='coerce') or 0),
+                        "lt": int(pd.to_numeric(r.get('leadtime_days',0), errors='coerce') or 0),
+                        "abc": str(r.get('abc_class','')), "xyz": str(r.get('xyz_class','')),
+                        "cred": int(pd.to_numeric(r.get('credit_days',0), errors='coerce') or 0),
+                    })
+        except Exception:
+            pass
+
+        table_json = []
+        try: table_json = view.head(80).to_dict(orient="records")
+        except Exception: pass
+
+        if openai_client is None:
+            return _chatbot_fallback(user_text, view)
+
+        if lang == "fr":
+            system_msg = (
+                "Tu es Tony, assistant Supply Chain senior. Réponds brièvement et orienté action. "
+                "Appuie tes recommandations sur le tableau fourni (produits). Cite des SKU si pertinent. "
+                "Propose des quantités, priorités fournisseurs, et leviers (crédit, promo déstockage, ABC/XYZ)."
+            )
+            ctx = (f"Contexte (JSON extrait <=80 lignes): {json.dumps(table_json, ensure_ascii=False)[:12000]}\n" +
+                   (f"KPI: couverture médiane ≈ {cov_med:.1f} j\n" if cov_med is not None else ""))
+            if rows_digest:
+                ctx += "Priorités (extrait): " + "; ".join(
+                    [f"{d['name']} (sup {d['sup']}) cov {d['cov']:.1f}j, LT {d['lt']}j, crédit {d['cred']}j, {d['abc']}{d['xyz']}" for d in rows_digest]
+                ) + "\n"
+            user_q = f"Question: {user_text.strip()}"
+        else:
+            system_msg = (
+                "You are Tony, a senior Supply Chain assistant. Be concise and action-oriented. "
+                "Ground recommendations in the provided product table. Mention concrete SKUs when helpful."
+            )
+            ctx = (f"Context (JSON excerpt <=80 rows): {json.dumps(table_json, ensure_ascii=False)[:12000]}\n" +
+                   (f"KPI: median coverage ≈ {cov_med:.1f} d\n" if cov_med is not None else ""))
+            if rows_digest:
+                ctx += "Priorities (excerpt): " + "; ".join(
+                    [f"{d['name']} (sup {d['sup']}) cov {d['cov']:.1f}d, LT {d['lt']}d, credit {d['cred']}d, {d['abc']}{d['xyz']}" for d in rows_digest]
+                ) + "\n"
+            user_q = f"User question: {user_text.strip()}"
+
+        hist = [{"role": "assistant" if m.get("role")=="assistant" else "user", "content": m.get("text","")} for m in (history_messages or [])]
+        messages = [{"role":"system","content":system_msg}] + hist + [{"role":"user","content": ctx + "\n" + user_q}]
+        try:
+            resp = openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages, temperature=0.4, max_tokens=600
+            )
+            out = (resp.choices[0].message.content or "").strip()
+            return out if out else _chatbot_fallback(user_text, view)
+        except Exception as api_err:
+            return _chatbot_fallback(user_text, view, prefix=f"⚠️ IA: {type(api_err).__name__} ")
+    except Exception as e:
+        return f"⚠️ Erreur inattendue: {type(e).__name__}: {e}"
+
+def _chatbot_fallback(user_text: str, df: pd.DataFrame, prefix: str = "") -> str:
+    lang = _detect_lang(user_text)
+    d = _clean_df_for_advice(df)
+    if d.empty:
+        return prefix + ("Données insuffisantes. Recharge les sources." if lang=="fr" else "Insufficient data. Please reload sources.")
+    try:
+        top_risk = d.sort_values(['risk','coverage_days'], ascending=[False, True]).head(5)
+        cnt_risk = int(d['risk'].sum())
+        cov_med = float(pd.to_numeric(d['coverage_days'], errors='coerce').median())
+        lines = [f"{prefix}" + (f"Risque: {cnt_risk} prod. • Couverture médiane ~ {cov_med:.1f} j." if lang=="fr"
+                                else f"Risk: {cnt_risk} SKUs • Median coverage ~ {cov_med:.1f}d.")]
+        for _, r in top_risk.iterrows():
+            if lang=="fr":
+                lines.append(f"- {r.get('product_name_display','?')} · cov {float(r.get('coverage_days',0)):.1f}j · LT {int(r.get('leadtime_days',0))}j · crédit {int(r.get('credit_days',0))}j")
+            else:
+                lines.append(f"- {r.get('product_name_display','?')} · cov {float(r.get('coverage_days',0)):.1f}d · LT {int(r.get('leadtime_days',0))}d · credit {int(r.get('credit_days',0))}d")
+        lines += [("Cibles: A/AX en Y/Z <7j; crédit>14j si LT>20j; promos classe C." if lang=="fr"
+                   else "Focus A/A+ in Y/Z <7d; credit>14d if LT>20d; promo bundles for class C.")]
+        return "\n".join(lines)
+    except Exception:
+        return prefix + ("Recommandation impossible avec les données disponibles." if lang=="fr" else "Unable to compute recommendation with available data.")
+
+# ------------------------------ Layout root (with floating chat) ------------------
+initial_df = get_df_cached()
+app.layout = html.Div([
+    dcc.Location(id="url"),
+    dcc.Store(id="master-data", data=initial_df.to_json(orient="records")),
+    dcc.Store(id="filtered-data"),
+    dcc.Store(id="uploaded-csv"),
+    dcc.Store(id="chat-store", data=[]),
+    dcc.Store(id="chat-open", data=False),
+
+    make_sidebar(),
+    html.Div(id="page-container", children=page_overview(initial_df)),
+
+    html.Button(id="chat-fab", className="chat-fab", children=[html.Span("Assistant"), html.Span("💬")]),
+    html.Div(id="chat-window", className="chat-window", style={"display":"none"}, children=[
+        html.Div(className="chat-header", children=[
+            html.Strong("Assistant "),
+            html.Div([dbc.Button("Minimiser", id="chat-close", size="sm", className="btn-primary")])
+        ]),
+        html.Div(id="chat-messages", className="chat-body"),
+        html.Div(style={"padding":"10px"}, children=[
+            dcc.Upload(id="chat-upload",
+                       children=html.Div(["📤 Glisser-déposer un CSV ici ou ", html.B("cliquer pour sélectionner")]),
+                       multiple=False, className="upload-box"),
+            html.Small(id="upload-status", style={"color":"#6b7280"})
+        ]),
+        html.Div(className="chat-input-wrap", children=[
+            dbc.Textarea(id="chat-input", className="chat-textarea",
+                         placeholder="Écrire une question… (Enter = envoyer, Shift+Enter = nouvelle ligne)", rows=2),
+            dbc.Button("Envoyer", id="chat-send", className="btn-primary", n_clicks=0)
+        ])
+    ]),
+])
+
+# Validation layout
+app.validation_layout = html.Div([
+    dcc.Location(id="url"),
+    dcc.Store(id="master-data"),
+    dcc.Store(id="filtered-data"),
+    dcc.Store(id="uploaded-csv"),
+    dcc.Store(id="chat-store"),
+    dcc.Store(id="chat-open"),
+    make_sidebar(),
+    page_overview(initial_df),
+    page_analytics(),
+    page_predictions(),
+    page_about(),
+    html.Div(id="page-container"),
+    html.Button(id="chat-fab"),
+    html.Div(id="chat-window"),
+    html.Div(id="chat-messages"),
+    dbc.Textarea(id="chat-input"),
+    dcc.Upload(id="chat-upload"),
+    html.Small(id="upload-status"),
+    dbc.Button(id="chat-send"),
+    dbc.Button(id="chat-close"),
+    dcc.Download(id="download-data"),
+    dcc.Download(id="download-po"),
+    dbc.Button(id="btn-add-row"),
+    dbc.Modal(id="edit-modal"),
+    dbc.Input(id="edit-product"),
+    dbc.Input(id="edit-supplier"),
+    dbc.Input(id="edit-category"),
+    dbc.Input(id="edit-stock"),
+])
+
+# ------------------------------ Routing ------------------------------------------
+@app.callback(
+    Output("page-container", "children"),
+    Input("url", "pathname"),
+    State("master-data","data"),
+    prevent_initial_call=False
+)
+def render_page(path, master_json):
+    base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+    if path == "/analytics":
+        return page_analytics()
+    elif path == "/predictions":
+        return page_predictions()
+    elif path == "/about":
+        return page_about()
+    return page_overview(base)
+
+# ------------------------------ Filtering logic ----------------------------------
+def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: list, cats: list, risk_only: bool):
+    out = df.copy()
+    if query:
+        q = str(query).strip().lower()
+        if 'product_name' in out.columns:
+            out = out[out['product_name'].astype(str).str.contains(q, na=False)]
+    if suppliers:
+        out = out[out['Supplier'].isin(suppliers)] if 'Supplier' in out.columns else out
+    if statuses:
+        out = out[out['Stock Status'].isin(statuses)] if 'Stock Status' in out.columns else out
+    if cats:
+        out = out[out['Product Category'].isin(cats)] if 'Product Category' in out.columns else out
+    if risk_only and 'Stock Status' in out.columns:
+        out = out[out['Stock Status'].isin(['Out of Stock','Predicted Stockout Soon'])]
+    return out
+
+@app.callback(
+    [Output("filtered-data","data"), Output("main-table","data"), Output("risk-banner","children")],
+    [Input("search-input","value"), Input("filter-supplier","value"), Input("filter-status","value"),
+     Input("filter-category","value"), Input("toggle-risk-only","value")],
+    State("master-data","data"),
+    prevent_initial_call=False
+)
+def apply_filters(search, sup, stat, cat, risk_toggle, master_json):
+    base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+    sup = sup or []; stat = stat or []; cat = cat or []
+    risk_only = ('risk' in (risk_toggle or []))
+    fdf = filter_dataframe(base, search, sup, stat, cat, risk_only)
+    risk_count = int((fdf['Stock Status'].isin(['Out of Stock','Predicted Stockout Soon']).sum())) if 'Stock Status' in fdf.columns else 0
+    banner = [html.B("Alerte Rupture : "), f"{risk_count} SKU(s) à risque dans la vue filtrée — ",
+              html.Span("OOS", className="badge badge-danger"), " / ", html.Span("Rupture imminente", className="badge-warn")]
+    fdf_actions = add_action_cols(fdf)
+    return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
+
+# ------------------------------ Export CSV ---------------------------------------
+@app.callback(
+    Output("download-data","data"),
+    Input("btn-export","n_clicks"),
+    State("filtered-data","data"),
+    prevent_initial_call=True
+)
+def export_csv(n, data_json):
+    if not n or not data_json: return no_update
+    df = pd.DataFrame(json.loads(data_json))
+    for c in ["✏️ Edit","🗑️ Delete"]:
+        if c in df.columns: df.drop(columns=[c], inplace=True)
+    return dcc.send_data_frame(df.to_csv, f"supply_filtered_{datetime.now().strftime('%Y%m%d_%H%M')}.csv", index=False)
+
+# ------------------------------ Export Purchase Order PDF (1 produit sélectionné) -----
+@app.callback(
+    Output("download-po", "data"),
+    Input("btn-po-pdf", "n_clicks"),
+    State("main-table", "active_cell"),
+    State("main-table", "selected_rows"),
+    State("main-table", "data"),
+    prevent_initial_call=True
+)
+def export_po_pdf(n, active_cell, selected_rows, table_data):
+    if not n or not table_data:
+        return no_update
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.platypus import (SimpleDocTemplate, Paragraph, Table,
+                                        TableStyle, Spacer, Image)
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.units import mm
+
+        # 1) Déterminer la ligne choisie (active_cell ou sélection de ligne)
+        row_idx = None
+        if active_cell and isinstance(active_cell, dict):
+            row_idx = active_cell.get("row")
+        if (row_idx is None) and selected_rows:
+            row_idx = selected_rows[0]
+        if row_idx is None or row_idx < 0 or row_idx >= len(table_data):
+            return no_update
+
+        r = table_data[row_idx]
+
+        # Champs attendus
+        prod_name = str(r.get("product_name", "")).strip()
+        supplier  = str(r.get("Supplier", "")).strip()
+        qty       = r.get("Predicted Order Quantity", 0)
+        unit_ht   = r.get("Unit Price HT", 0.0)
+        remise    = r.get("Discount", 0.0)
+
+        if not prod_name or not supplier:
+            return no_update
+
+        # Normalisations numériques
+        try: qty = int(pd.to_numeric(qty, errors="coerce") or 0)
+        except Exception: qty = 0
+        try: unit_ht = float(pd.to_numeric(unit_ht, errors="coerce") or 0.0)
+        except Exception: unit_ht = 0.0
+        try: remise = float(pd.to_numeric(remise, errors="coerce") or 0.0)
+        except Exception: remise = 0.0
+        if qty <= 0:
+            qty = 1  # on force 1 pour éviter un BC vide
+
+        # 2) Calculs
+        taux_tva  = DEFAULT_TVA_RATE
+        total_ht  = (qty * unit_ht) * (1 - remise/100.0)
+        total_ttc = total_ht * (1 + taux_tva)
+
+        # ref code simple depuis le nom
+        def ref_from_name(name: str) -> str:
+            if not name: return ""
+            parts = [p for p in str(name).split() if p]
+            if not parts: return str(name)[:6].upper()
+            left = (parts[0][:3] if len(parts[0])>=3 else parts[0]).upper()
+            right = (parts[1][:3] if len(parts)>1 and len(parts[1])>=3 else (parts[0][3:6] if len(parts[0])>3 else "")).upper()
+            return "-".join([left, right]) if right else left
+
+        ref_code = ref_from_name(prod_name)
+
+        # 3) PDF
+        buf = io.BytesIO()
+        po_number = get_next_po_number()
+        fname = f"{po_number}_{ref_code}.pdf"
+
+        doc = SimpleDocTemplate(buf, pagesize=A4, title="Bon de commande")
+        styles = getSampleStyleSheet()
+        story = []
+
+        # Header : logo + entreprise
+        header_row = []
+        logo_src = get_logo_for_reportlab()
+        if logo_src:
+            logo_img = Image(logo_src)
+            logo_img.drawHeight = 18 * mm
+            logo_img.drawWidth = 18 * mm
+            header_row.append(logo_img)
+        else:
+            header_row.append(Paragraph("", styles["Normal"]))
+
+        company_lines = [f"<b>{COMPANY_NAME}</b>"]
+        if COMPANY_CAPITAL: company_lines.append(f"Montant du capital social : {COMPANY_CAPITAL}")
+        if COMPANY_RCS:     company_lines.append(f"N° et lieu RCS : {COMPANY_RCS}")
+        if COMPANY_ADDRESS: company_lines.append(f"Adresse du siège : {COMPANY_ADDRESS}")
+        if COMPANY_PHONE:   company_lines.append(f"Téléphone : {COMPANY_PHONE}")
+        if COMPANY_EMAIL:   company_lines.append(f"Email : {COMPANY_EMAIL}")
+        header_row.append(Paragraph("<br/>".join(company_lines), styles["Normal"]))
+
+        header_tbl = Table([header_row], colWidths=[25*mm, 150*mm])
+        header_tbl.setStyle(TableStyle([
+            ("VALIGN", (0,0), (-1,-1), "TOP"),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+        ]))
+        story.append(header_tbl)
+        story.append(Spacer(1, 8))
+
+        # Titre + méta
+        story.append(Paragraph("<b>BON DE COMMANDE</b>", styles["Title"]))
+        story.append(Spacer(1, 6))
+        meta_left = [
+            f"Bon de commande N° : <b>{po_number}</b>",
+            f"Date : {datetime.now().strftime('%d/%m/%Y')}",
+        ]
+        meta_right = ["Fournisseur :", f"<b>{supplier}</b>"] if supplier else []
+        meta_tbl = Table([[Paragraph("<br/>".join(meta_left), styles["Normal"]),
+                           Paragraph("<br/>".join(meta_right), styles["Normal"])]],
+                         colWidths=[100*mm, 75*mm])
+        meta_tbl.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "TOP")]))
+        story.append(meta_tbl)
+        story.append(Spacer(1, 10))
+
+        # Tableau lignes
+        headers = ["REF","DESCRIPTION","QUANTITÉ","PU HT","REMISE","TOTAL HT","TAUX TVA","TOTAL TTC"]
+        data_tbl = [headers, [
+            ref_code, prod_name, qty, f"{unit_ht:.2f}", f"{remise:.1f}%",
+            f"{total_ht:.2f}", f"{int(taux_tva*100)}%", f"{total_ttc:.2f}"
+        ], ["","TOTAL", qty, "", "", f"{total_ht:.2f}", "", f"{total_ttc:.2f}"]]
+
+        tbl = Table(data_tbl, hAlign="LEFT",
+                    colWidths=[25*mm,65*mm,20*mm,20*mm,20*mm,25*mm,20*mm,25*mm])
+        tbl.setStyle(TableStyle([
+            ("GRID", (0,0), (-1,-1), 0.25, colors.grey),
+            ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
+            ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+            ("ALIGN", (2,1), (2,-1), "RIGHT"),
+            ("ALIGN", (3,1), (-1,-1), "RIGHT"),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("BOTTOMPADDING", (0,0), (-1,0), 6),
+        ]))
+        story.append(tbl)
+        story.append(Spacer(1, 12))
+
+        # Conditions
+        for title, content in [
+            ("Conditions de livraison :", "À préciser (lieu, délai, incoterm)."),
+            ("Conditions de règlement :", "À préciser (échéance, mode, pénalités)."),
+            ("Délai de rétractation :", "Selon conditions générales applicables."),
+        ]:
+            story.append(Paragraph(f"<b>{title}</b>", styles["Normal"]))
+            story.append(Paragraph(content, styles["Normal"]))
+            story.append(Spacer(1, 6))
+
+        doc.build(story)
+        buf.seek(0)
+        return dcc.send_bytes(lambda b: b.write(buf.getvalue()), filename=fname)
+
+    except ModuleNotFoundError:
+        print("ReportLab non installé: pip install reportlab")
+        return no_update
+    except Exception as e:
+        print("PDF error:", repr(e))
+        return no_update
+
+# Activer le bouton PO si une cellule OU une ligne est sélectionnée et contient product_name + Supplier
+@app.callback(
+    Output("btn-po-pdf", "disabled"),
+    [Input("main-table", "active_cell"),
+     Input("main-table", "selected_rows"),
+     Input("main-table", "data")],
+    prevent_initial_call=False
+)
+def toggle_po_button(active_cell, selected_rows, data):
+    if not data:
+        return True
+
+    # déterminer la ligne sélectionnée
+    row_idx = None
+    if active_cell and isinstance(active_cell, dict):
+        row_idx = active_cell.get("row")
+    if (row_idx is None) and selected_rows:
+        row_idx = selected_rows[0]
+
+    if row_idx is None or row_idx < 0 or row_idx >= len(data):
+        return True
+
+    r = data[row_idx] or {}
+    prod = str(r.get("product_name", "")).strip()
+    sup  = str(r.get("Supplier", "")).strip()
+    return not (prod and sup)
+
+# ------------------------------ Predictions What-If -------------------------------
+@app.callback(
+    Output("pred-table","data"),
+    [Input("buffer-mult","value"), Input("lead-mult","value"), State("filtered-data","data")],
+    prevent_initial_call=False
+)
+def recompute_suggestions(buffer_mult, lead_mult, filtered_json):
+    df = get_df_cached()
+    base = pd.DataFrame(json.loads(filtered_json)) if filtered_json else add_action_cols(df)
+    out = base.copy()
+    for c in ["✏️ Edit","🗑️ Delete"]:
+        if c in out.columns: out.drop(columns=[c], inplace=True)
+    for col in ['Max Daily Sales (Pikine)','Buffer Value','Max Avg Daily Sales','total_stock','Optimal Stock (Reorder Point)','Max Lead Time']:
+        if col not in out.columns: out[col] = 0
+    new_reorder = np.maximum(
+        out['Max Daily Sales (Pikine)'].fillna(0),
+        (out['Max Daily Sales (Pikine)'].fillna(0)/2.0) + (out['Buffer Value'].fillna(0) * float(buffer_mult)) * out.get('Max Avg Daily Sales',0).fillna(0)
+    )
+    anticip = (out['Max Lead Time'].fillna(0) * out['Max Avg Daily Sales'].fillna(0)) * (float(lead_mult) - 1.0)
+    suggested = (new_reorder - out['total_stock'].fillna(0) + anticip).clip(lower=0)
+    res = out[['product_name','Supplier','total_stock','Optimal Stock (Reorder Point)','Max Lead Time','Max Avg Daily Sales','Buffer Value']].copy()
+    res['Suggested Order Qty'] = suggested.round(0).astype(int)
+    return res.to_dict("records")
+
+# ------------------------------ Table Actions (Edit/Delete/Add) -------------------
+@app.callback(
+    Output("edit-modal","is_open"),
+    Output("edit-product","value"),
+    Output("edit-supplier","value"),
+    Output("edit-category","value"),
+    Output("edit-stock","value"),
+    Output("main-table","active_cell"),
+    Input("btn-add-row","n_clicks"),
+    Input("main-table","active_cell"),
+    State("main-table","data"),
+    prevent_initial_call=True
+)
+def open_edit_modal(n_add, active_cell, data):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return False, None, None, None, None, None
+    trig = ctx.triggered[0]["prop_id"].split(".")[0]
+    if trig == "btn-add-row":
+        return True, "", "", "", 0, None
+    if trig == "main-table" and active_cell:
+        col = active_cell.get("column_id")
+        row = active_cell.get("row")
+        if col == "✏️ Edit" and data and 0 <= row < len(data):
+            r = data[row]
+            return True, r.get("product_name",""), r.get("Supplier",""), r.get("Product Category",""), r.get("total_stock",0), None
+    return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+
+@app.callback(
+    Output("master-data","data", allow_duplicate=True),
+    Output("filtered-data","data", allow_duplicate=True),
+    Output("main-table","data", allow_duplicate=True),
+    Output("risk-banner","children", allow_duplicate=True),
+    Output("edit-modal","is_open", allow_duplicate=True),
+    Input("edit-save","n_clicks"),
+    State("edit-product","value"),
+    State("edit-supplier","value"),
+    State("edit-category","value"),
+    State("edit-stock","value"),
+    State("main-table","active_cell"),
+    State("main-table","data"),
+    State("search-input","value"),
+    State("filter-supplier","value"),
+    State("filter-status","value"),
+    State("filter-category","value"),
+    State("toggle-risk-only","value"),
+    State("master-data","data"),
+    prevent_initial_call=True
+)
+def save_edit(n, prod, sup, cat, stock, active_cell, table_data, q, fs, fst, fc, rt, master_json):
+    base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+    df = base.copy()
+
+    if active_cell and active_cell.get("column_id") == "✏️ Edit" and active_cell.get("row") is not None and table_data:
+        row = active_cell["row"]
+        r = table_data[row]
+        key_p = r.get("product_name")
+        key_s = r.get("Supplier")
+        idx = df[(df["product_name"].astype(str)==str(key_p)) & (df["Supplier"].astype(str)==str(key_s))].index
+        if len(idx)>0:
+            i = idx[0]
+            if prod is not None: df.at[i,"product_name"] = prod
+            if sup is not None: df.at[i,"Supplier"] = sup
+            if cat is not None: df.at[i,"Product Category"] = cat
+            if stock is not None:
+                try: df.at[i,"total_stock"] = float(stock)
+                except: pass
+    else:
+        new_row = {c: np.nan for c in df.columns}  # np.nan au lieu de None
+        new_row["product_name"] = prod or ""
+        new_row["Supplier"] = sup or ""
+        new_row["Product Category"] = cat or ""
+        try:
+            new_row["total_stock"] = float(stock or 0)
+        except:
+            new_row["total_stock"] = 0.0
+        # initialise proprement quelques colonnes numériques si elles existent
+        for c in ["Optimal Stock (Reorder Point)", "Max Lead Time", "Max Avg Daily Sales", "Max Coverage Day",
+                  "Daily OOS Rate (30d)", "Predicted Order Quantity"]:
+            if c in df.columns and pd.isna(new_row.get(c)):
+                new_row[c] = 0.0
+        if "Predicted Stockout" in df.columns and pd.isna(new_row.get("Predicted Stockout")):
+            new_row["Predicted Stockout"] = False
+        if "Stock Status" in df.columns and pd.isna(new_row.get("Stock Status")):
+            new_row["Stock Status"] = "Order Soon" if new_row["total_stock"] else "Out of Stock"
+
+        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+    # Refiltrer et renvoyer
+    sup_list = fs or []; stat_list = fst or []; cat_list = fc or []
+    risk_only = ('risk' in (rt or []))
+    fdf = filter_dataframe(df, q, sup_list, stat_list, cat_list, risk_only)
+    risk_count = int((fdf['Stock Status'].isin(['Out of Stock','Predicted Stockout Soon']).sum())) if 'Stock Status' in fdf.columns else 0
+    banner = [html.B("Alerte Rupture : "), f"{risk_count} SKU(s) à risque dans la vue filtrée — ",
+              html.Span("OOS", className="badge badge-danger"), " / ", html.Span("Rupture imminente", className="badge-warn")]
+    fdf_actions = add_action_cols(fdf)
+    return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner, False
+
+@app.callback(
+    Output("master-data","data", allow_duplicate=True),
+    Output("filtered-data","data", allow_duplicate=True),
+    Output("main-table","data", allow_duplicate=True),
+    Output("risk-banner","children", allow_duplicate=True),
+    Input("main-table","active_cell"),
+    State("main-table","data"),
+    State("search-input","value"),
+    State("filter-supplier","value"),
+    State("filter-status","value"),
+    State("filter-category","value"),
+    State("toggle-risk-only","value"),
+    State("master-data","data"),
+    prevent_initial_call=True
+)
+def delete_row(active_cell, table_data, q, fs, fst, fc, rt, master_json):
+    if not active_cell or active_cell.get("column_id") != "🗑️ Delete" or not table_data:
+        raise dash.exceptions.PreventUpdate
+    base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+    row = active_cell["row"]
+    r = table_data[row]
+    key_p = r.get("product_name")
+    key_s = r.get("Supplier")
+    df = base[~((base["product_name"].astype(str)==str(key_p)) & (base["Supplier"].astype(str)==str(key_s)))].copy()
+
+    sup_list = fs or []; stat_list = fst or []; cat_list = fc or []
+    risk_only = ('risk' in (rt or []))
+    fdf = filter_dataframe(df, q, sup_list, stat_list, cat_list, risk_only)
+    risk_count = int((fdf['Stock Status'].isin(['Out of Stock','Predicted Stockout Soon']).sum())) if 'Stock Status' in fdf.columns else 0
+    banner = [html.B("Alerte Rupture : "), f"{risk_count} SKU(s) à risque dans la vue filtrée — ",
+              html.Span("OOS", className="badge badge-danger"), " / ", html.Span("Rupture imminente", className="badge-warn")]
+    fdf_actions = add_action_cols(fdf)
+    return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
+
+# ------------------------------ Floating Chat callbacks ---------------------------
+@app.callback(
+    Output("chat-open","data"),
+    [Input("chat-fab","n_clicks"), Input("chat-close","n_clicks")],
+    State("chat-open","data"),
+    prevent_initial_call=False
+)
+def toggle_chat(n_fab, n_close, is_open):
+    is_open = bool(is_open)
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return is_open
+    trig = ctx.triggered[0]["prop_id"].split(".")[0]
+    if trig == "chat-close": return False
+    if trig == "chat-fab": return not is_open
+    return is_open
+
+@app.callback(
+    Output("chat-window","style"),
+    Input("chat-open","data")
+)
+def show_hide_chat(is_open):
+    return {"display": "flex" if is_open else "none"}
+
+def parse_contents(content):
+    import base64
+    content_type, content_string = content.split(',')
+    decoded = base64.b64decode(content_string)
+    try:
+        df = pd.read_csv(io.BytesIO(decoded)); return df
+    except Exception:
+        try:
+            df = pd.read_excel(io.BytesIO(decoded)); return df
+        except Exception:
+            return pd.DataFrame()
+
+@app.callback(
+    Output("uploaded-csv","data"),
+    Output("upload-status","children"),
+    Output("chat-messages","children", allow_duplicate=True),
+    Output("chat-store","data", allow_duplicate=True),
+    Input("chat-upload","contents"),
+    State("chat-upload","filename"),
+    State("chat-store","data"),
+    State("chat-messages","children"),
+    prevent_initial_call=True
+)
+def on_upload(contents, filename, history, rendered):
+    if not contents:
+        raise dash.exceptions.PreventUpdate
+    df_u = parse_contents(contents)
+    if df_u.empty:
+        status = f"⚠️ Échec de lecture du fichier {filename or ''}."
+        return no_update, status, rendered, history
+    history = history or []
+    msg = f"📥 Fichier chargé : **{filename}** — {len(df_u)} lignes détectées. L’assistant l’utilisera pour ses conseils."
+    history.append({"role":"assistant","text":msg,"ts":datetime.now().isoformat()})
+    return df_u.to_json(orient="records"), f"✅ {filename} importé.", _render_messages(history), history
+
+@app.callback(
+    Output("chat-messages","children", allow_duplicate=True),
+    Output("chat-store","data", allow_duplicate=True),
+    Input("chat-send","n_clicks"),
+    State("chat-input","value"),
+    State("chat-store","data"),
+    State("uploaded-csv","data"),
+    State("master-data","data"),
+    prevent_initial_call=True
+)
+def on_chat(n_clicks, user_text, history, uploaded_json, master_json):
+    history = history or []
+    user_text = (user_text or "").strip()
+    if not user_text:
+        return _render_messages(history), history
+    df_up = pd.DataFrame(json.loads(uploaded_json)) if uploaded_json else pd.DataFrame()
+    use_uploaded = ('product_name' in df_up.columns) and len(df_up)>0
+    df_base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+    df = df_up if use_uploaded else df_base
+
+    history.append({"role":"user","text":user_text,"ts":datetime.now().isoformat()})
+    reply = _chatbot_reply(user_text, df, history)
+    history.append({"role":"assistant","text":reply,"ts":datetime.now().isoformat()})
+    return _render_messages(history), history
+
+# ------------------------------ Run ----------------------------------------------
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8050))
+    app.run(debug=True, host="0.0.0.0", port=port)

@@ -23,16 +23,17 @@ from dash.dependencies import Input, Output, State, ALL
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import warnings
+
+from openai import OpenAI
+
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
 # ------------- OpenAI client (clé hardcodée à ta demande) ----------------
-OPENAI_API_KEY_HARDCODED = "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"
-api_key = os.getenv("OPENAI_API_KEY")
+#OPENAI_API_KEY_HARDCODED = "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"
+api_key = os.getenv("OPENAI_API_KEY_HARDCODED")
 
 openai_client = None
 try:
-    from openai import OpenAI
-    api_key = OPENAI_API_KEY_HARDCODED or os.getenv("OPENAI_API_KEY")
     if api_key:
         openai_client = OpenAI(api_key=api_key)
 except Exception:

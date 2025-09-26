@@ -24,6 +24,12 @@ import dash_bootstrap_components as dbc
 import plotly.express as px
 import warnings
 
+# Crée ton app Dash
+app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
+
+# Flask server pour Gunicorn
+server = app.server
+
 from openai import OpenAI
 
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)

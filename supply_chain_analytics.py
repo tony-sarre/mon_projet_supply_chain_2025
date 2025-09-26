@@ -4,8 +4,14 @@
 # pip install pandas scikit-learn flask-caching numpy
 # pip install reportlab
 # Optional: pip install openai
-
+from dash import Dash
+import dash_bootstrap_components as dbc
 import os
+
+app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP])
+
+# ⚠️ Très important pour Render/Gunicorn
+server = app.server
 import re
 import io
 import json
@@ -24,11 +30,7 @@ import dash_bootstrap_components as dbc
 import plotly.express as px
 import warnings
 
-# Crée ton app Dash
-app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
 
-# Flask server pour Gunicorn
-server = app.server
 
 from openai import OpenAI
 

@@ -1,4 +1,3 @@
-# app.py
 # ========================= PREMIUM SUPPLY CHAIN DASHBOARD =========================
 # Requirements:
 # pip install dash==2.17.1 dash-bootstrap-components==1.6.0 plotly==5.22.0
@@ -20,6 +19,7 @@ import pandas as pd
 from flask_caching import Cache
 import dash
 from dash import Dash, html, dcc, Input, Output, State, dash_table, no_update
+from dash.dependencies import Input, Output, State, ALL
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import warnings
@@ -27,6 +27,8 @@ warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=D
 
 # ------------- OpenAI client (clé hardcodée à ta demande) ----------------
 OPENAI_API_KEY_HARDCODED = "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"
+api_key = os.getenv("OPENAI_API_KEY")
+
 openai_client = None
 try:
     from openai import OpenAI
@@ -45,15 +47,13 @@ THEME = dbc.themes.CYBORG  # sobre & premium
 
 # ------------------------------ Company / Branding -------------------------------
 COMPANY_NAME = "Maad SaS"
-COMPANY_CAPITAL = os.getenv("COMPANY_CAPITAL", "")           # ex "100 000 000 XOF"
-COMPANY_RCS = os.getenv("COMPANY_RCS", "")                   # ex "RCS Dakar B 123 456"
+COMPANY_CAPITAL = os.getenv("COMPANY_CAPITAL", "")
+COMPANY_RCS = os.getenv("COMPANY_RCS", "")
 COMPANY_ADDRESS = os.getenv("COMPANY_ADDRESS", "")
 COMPANY_PHONE = os.getenv("COMPANY_PHONE", "")
 COMPANY_EMAIL = os.getenv("COMPANY_EMAIL", "")
 DEFAULT_TVA_RATE = float(os.getenv("COMPANY_TVA_RATE", "0.18"))  # 18% par défaut
-
 def _get_logo_data_uri():
-    """Charge le logo depuis /mnt/data/logo_maad.jpg si présent."""
     try:
         logo_path = Path("logo_maad.jpg")
         if logo_path.exists():
@@ -66,30 +66,21 @@ def _get_logo_data_uri():
 LOGO_DATA_URI = _get_logo_data_uri()
 
 def get_logo_for_reportlab():
-    """
-    Retourne une source compatible ReportLab pour Image():
-    - chemin de fichier si logo_maad.jpg présent
-    - sinon, un ImageReader à partir du base64 de LOGO_DATA_URI
-    - sinon, None
-    """
     try:
         from reportlab.lib.utils import ImageReader
         p = Path("logo_maad.jpg")
         if p.exists():
-            return str(p)  # ReportLab accepte le chemin fichier
-
+            return str(p)
         if LOGO_DATA_URI and "," in LOGO_DATA_URI:
-            # extraire la partie base64
             b64 = LOGO_DATA_URI.split(",", 1)[1] if LOGO_DATA_URI.startswith("data:") else LOGO_DATA_URI
             raw = base64.b64decode(b64)
-            return ImageReader(io.BytesIO(raw))  # compatible Image()
+            return ImageReader(io.BytesIO(raw))
     except Exception:
         pass
     return None
 
-
-# ------------------------------ PO Numbering (sequential) ------------------------
-PO_COUNTER_PATH = Path("./po_counter.json")  # changer le dossier si nécessaire
+# ------------------------------ PO Numbering -------------------------------------
+PO_COUNTER_PATH = Path("./po_counter.json")
 PO_LOCK = threading.Lock()
 
 def _load_po_state():
@@ -109,7 +100,6 @@ def _save_po_state(state: dict):
         pass
 
 def get_next_po_number() -> str:
-    """PO-YYYYMMDD-###, séquentiel, reset quotidien."""
     today = datetime.now().strftime("%Y%m%d")
     with PO_LOCK:
         st = _load_po_state()
@@ -119,28 +109,132 @@ def get_next_po_number() -> str:
             st["seq"] = int(st.get("seq", 0)) + 1
         _save_po_state(st)
         return f"PO-{today}-{st['seq']:03d}"
-
-# ------------------------------ Data loading -------------------------------------
-
-def load_supply_data() -> pd.DataFrame:
-    from sklearn.ensemble import RandomForestRegressor
+def train_stockout_model_for_df(df_in: pd.DataFrame, threshold: float = 0.5):
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import roc_auc_score
     from sklearn.preprocessing import OneHotEncoder
     from sklearn.compose import ColumnTransformer
     from sklearn.pipeline import Pipeline
     from sklearn.impute import SimpleImputer
 
-    # URLs (inchangés + delisting)
+    df = df_in.copy()
+    if 'Stock Status' not in df.columns:
+        df['Stockout Probability'] = np.nan
+        return df, None
+
+    y = (df['Stock Status'].astype(str) == "Out of Stock").astype(int)
+
+    num_features = ['total_stock', 'Avg Daily Sales', 'Max Lead Time',
+                    'Max Coverage Day', 'credit_days', 'Daily OOS Rate (7d)', 'Daily OOS Rate (30d)']
+    cat_features = ['Supplier', 'Product Category']
+    for c in num_features:
+        if c not in df.columns: df[c] = 0
+    for c in cat_features:
+        if c not in df.columns: df[c] = ""
+
+    X = df[num_features + cat_features].copy()
+    if y.nunique() < 2 or len(df) < 40:
+        if 'Optimal Stock (Reorder Point)' in df.columns:
+            prob = (df['total_stock'] <= df['Optimal Stock (Reorder Point)']).astype(float)
+        else:
+            prob = pd.Series(0.0, index=df.index)
+        df['Stockout Probability'] = prob
+        df['Predicted Stockout'] = (df['Stockout Probability'] > threshold).astype(bool)
+        return df, None
+
+    preproc = ColumnTransformer([
+        ("num", SimpleImputer(strategy="median"), num_features),
+        ("cat", OneHotEncoder(handle_unknown="ignore"), cat_features)
+    ])
+    clf = RandomForestClassifier(
+        n_estimators=600, max_depth=10, min_samples_leaf=2,
+        class_weight="balanced", random_state=42, n_jobs=-1
+    )
+    model = Pipeline([("prep", preproc), ("clf", clf)])
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, stratify=y, test_size=0.2, random_state=42
+    )
+    try:
+        model.fit(X_train, y_train)
+        proba_test = model.predict_proba(X_test)[:, 1]
+        try:
+            auc = roc_auc_score(y_test, proba_test)
+            print(f"[Stockout RF] AUC hold-out = {auc:.3f} (seuil={threshold})")
+        except Exception:
+            pass
+        df['Stockout Probability'] = model.predict_proba(X)[:, 1]
+        df['Predicted Stockout'] = (df['Stockout Probability'] > threshold).astype(bool)
+        return df, model
+    except Exception as e:
+        print("[Stockout RF] Train error:", repr(e))
+        if 'Optimal Stock (Reorder Point)' in df.columns:
+            prob = (df['total_stock'] <= df['Optimal Stock (Reorder Point)']).astype(float)
+        else:
+            prob = pd.Series(0.0, index=df.index)
+        df['Stockout Probability'] = prob
+        df['Predicted Stockout'] = (df['Stockout Probability'] > threshold).astype(bool)
+        return df, None
+
+
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+import warnings
+
+warnings.filterwarnings('ignore')
+
+
+def load_supply_data() -> pd.DataFrame:
+    import numpy as np
+    import pandas as pd
+    from sklearn.pipeline import Pipeline
+    from sklearn.compose import ColumnTransformer
+    from sklearn.preprocessing import OneHotEncoder
+    from sklearn.impute import SimpleImputer
+    from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import precision_score
+
+    # =========================
+    # Helpers
+    # =========================
+    def clean_text_column(df, colname):
+        if colname in df.columns:
+            df[colname] = (
+                df[colname]
+                .astype(str)
+                .fillna("")
+                .str.lower()
+                .str.strip()
+            )
+        return df
+
+    def safe_numeric(s, default=0):
+        return pd.to_numeric(s, errors="coerce").fillna(default)
+
+    # =========================
+    # URLs
+    # =========================
     SUPPLIERS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRTyAxh6v8o0FXV0r7f6ALPDgmeJNkjTZITjrEoKBHo2gs_f3iyV8sFk8fOzcAsUSkJMXBJCpJnhQKi/pub?gid=1015760114&single=true&output=csv"
-    url_leadtime = "https://data.heroku.com/dataclips/lgzfzobmggbjgowhffqskezhsxhq.csv"
+    url_leadtime = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0FO0s7-V6uloIHLDB8Nm5TiH-W7q7zJOaA_jnzQtTgMUp-WOOX6CQP33__djc4shJym4r0PSAQF6t/pub?gid=1347877260&single=true&output=csv"
     BUFFER_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1011110883&single=true&output=csv"
     inventory_pikine_staging = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1876150276&single=true&output=csv"
     sales_pikine = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1493123930&single=true&output=csv"
     Tbh_7dsales = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1080970598&single=true&output=csv"
     Tbh_30dsales_products = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1655420642&single=true&output=csv"
     Product_category = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbJqHsr6Kifee7I91YD-7-sCZDWgM5GvxCeN0OqUvZhok0j-kDywguqe5I61y97b-uBhHbWraTIrux/pub?gid=803048228&single=true&output=csv"
-    DELISTING_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSugb2blp3F6gZhyxjyRjExj8f4I6xpp8J2KFQCIfNW77VzG8WqFOw0PjEBrjzxf00mjEWaViFuhgMf/pub?gid=1681543945&single=true&output=csv"
+    DELISTING_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQax3ZQW2QhDLE-waDewtdD8x_Q5tpn2FWzVJftr9egik4_JF3s2ytSYJmXh55aUnp79vmF-XtkaTmN/pub?gid=1681543945&single=true&output=csv"
+    PARAMETRES_REPLENISH_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRxM2QokFGadTdTRDE2pInLKP57QkwMdSDQS8L5nXoYL0YRu9HSHoFvsnQs_MHjcwXUVUm5puexguy8/pub?gid=1011110883&single=true&output=csv"
 
-    # Load
+    # =========================
+    # Load CSV
+    # =========================
     suppliers_df = pd.read_csv(SUPPLIERS_URL)
     df_leadtime = pd.read_csv(url_leadtime)
     buffer_df = pd.read_csv(BUFFER_URL)
@@ -150,237 +244,522 @@ def load_supply_data() -> pd.DataFrame:
     Tbh_30dsales_products_df = pd.read_csv(Tbh_30dsales_products)
     Product_category_df = pd.read_csv(Product_category)
 
-    # Clean names
-    if 'product_name' in inventory_pikine_staging_df.columns:
-        inventory_pikine_staging_df['product_name'] = inventory_pikine_staging_df['product_name'].str.lower().str.strip()
-    if 'product_name' in Product_category_df.columns:
-        Product_category_df['product_name'] = Product_category_df['product_name'].str.lower().str.strip()
-    if '2' in Tbh_7dsales_df.columns:
-        Tbh_7dsales_df['2'] = Tbh_7dsales_df['2'].astype(str).str.lower().str.strip()
-    if '2' in Tbh_30dsales_products_df.columns:
-        Tbh_30dsales_products_df['2'] = Tbh_30dsales_products_df['2'].astype(str).str.lower().str.strip()
-    if 'product_name' in sales_pikine_df.columns:
-        sales_pikine_df['product_name'] = sales_pikine_df['product_name'].astype(str).str.lower().str.strip()
-
-    # ADS 7 & 30
-    if {'2','9'}.issubset(Tbh_7dsales_df.columns):
-        ads7 = Tbh_7dsales_df[['2','9']].copy().rename(columns={'2':'product_name','9':'Average Daily Sales (7d)'})
-        ads7['Average Daily Sales (7d)'] = pd.to_numeric(ads7['Average Daily Sales (7d)'], errors='coerce')
-    else:
-        ads7 = pd.DataFrame(columns=['product_name','Average Daily Sales (7d)'])
-    if {'2','9'}.issubset(Tbh_30dsales_products_df.columns):
-        ads30 = Tbh_30dsales_products_df[['2','9']].copy().rename(columns={'2':'product_name','9':'Average Daily Sales (30d)'})
-        ads30['Average Daily Sales (30d)'] = pd.to_numeric(ads30['Average Daily Sales (30d)'], errors='coerce')
-    else:
-        ads30 = pd.DataFrame(columns=['product_name','Average Daily Sales (30d)'])
-
-    # Stock total
-    if {'product_id','Supplier','total_stock','product_name'}.issubset(inventory_pikine_staging_df.columns):
-        total_stock_df = inventory_pikine_staging_df.groupby(['product_name','Supplier'])['total_stock'].sum().reset_index()
-    else:
-        total_stock_df = pd.DataFrame(columns=['product_name','Supplier','total_stock'])
-
-    # Merge ventes
-    merged_sales_df = pd.merge(ads7, ads30, on='product_name', how='left')
-    if 'Average Daily Sales (7d)' in merged_sales_df.columns:
-        merged_sales_df['Average Daily Sales (7d)'] = merged_sales_df['Average Daily Sales (7d)'] + 0.1
-    if 'Average Daily Sales (30d)' in merged_sales_df.columns:
-        merged_sales_df['Average Daily Sales (30d)'] = merged_sales_df['Average Daily Sales (30d)'] + 0.1
-    final_stock_sales_df = pd.merge(total_stock_df, merged_sales_df, on='product_name', how='left')
-
-    # Coverage (7/30)
-    final_stock_sales_df['Coverage Day (7d)'] = final_stock_sales_df['total_stock'] / final_stock_sales_df['Average Daily Sales (7d)'].replace(0, pd.NA)
-    final_stock_sales_df['Coverage Day (30d)'] = final_stock_sales_df['total_stock'] / final_stock_sales_df['Average Daily Sales (30d)'].replace(0, pd.NA)
-
-    # Max Daily Sales Pikine
-    if {'product_name','sum'}.issubset(sales_pikine_df.columns):
-        max_sales_pikine = sales_pikine_df.groupby('product_name')['sum'].max().reset_index()
-        max_sales_pikine.rename(columns={'sum':'Max Daily Sales (Pikine)'}, inplace=True)
-        max_sales_pikine['Max Daily Sales (Pikine)'] = pd.to_numeric(max_sales_pikine['Max Daily Sales (Pikine)'], errors='coerce')
-    else:
-        max_sales_pikine = pd.DataFrame(columns=['product_name','Max Daily Sales (Pikine)'])
-    final_stock_sales_df = pd.merge(final_stock_sales_df, max_sales_pikine, on='product_name', how='left')
-
-    # Catégorie
-    if {'product_name','CATEGORY ABC-XYZ'}.issubset(Product_category_df.columns):
-        cat = Product_category_df[['product_name','CATEGORY ABC-XYZ']].copy().rename(columns={'CATEGORY ABC-XYZ':'Product Category'})
-        final_stock_sales_df = pd.merge(final_stock_sales_df, cat, on='product_name', how='left')
-        final_stock_sales_df['Product Category'] = final_stock_sales_df['Product Category'].fillna('CX')
-    else:
-        final_stock_sales_df['Product Category'] = 'CX'
-
-    # Buffer
-    buffer_df_subset = pd.read_csv(BUFFER_URL, usecols=[0,1,2])
-    if 'buffer In Stock' in buffer_df_subset.columns:
-        first_col = buffer_df_subset.columns[0]
-        buf = buffer_df_subset[[first_col,'buffer In Stock']].copy().rename(columns={first_col:'Product Category','buffer In Stock':'Buffer Value'})
-        buf['Buffer Value'] = pd.to_numeric(buf['Buffer Value'], errors='coerce').fillna(0)
-        final_stock_sales_df = pd.merge(final_stock_sales_df, buf, on='Product Category', how='left')
-    else:
-        final_stock_sales_df['Buffer Value'] = 0
-
-    # Optimal Stock (reorder point — inchangé)
-    if {'Max Daily Sales (Pikine)','Average Daily Sales (30d)','Buffer Value'}.issubset(final_stock_sales_df.columns):
-        final_stock_sales_df['Optimal Stock (Reorder Point)'] = final_stock_sales_df.apply(
-            lambda row: max(row['Max Daily Sales (Pikine)'],
-                            (row['Max Daily Sales (Pikine)']/2.0) + (row['Buffer Value'] * row['Average Daily Sales (30d)'])),
-            axis=1
-        )
-    else:
-        final_stock_sales_df['Optimal Stock (Reorder Point)'] = pd.NA
-
-    # Lead time
-    if {'supplier','max_leadtime'}.issubset(df_leadtime.columns):
-        ltd = df_leadtime[['supplier','max_leadtime']].copy().rename(columns={'supplier':'Supplier','max_leadtime':'Max Lead Time'})
-        final_stock_sales_df = pd.merge(final_stock_sales_df, ltd, on='Supplier', how='left')
-    else:
-        final_stock_sales_df['Max Lead Time'] = pd.NA
-
-    # OOS rate 30d
-    if {'2','28'}.issubset(Tbh_30dsales_products_df.columns):
-        oos = Tbh_30dsales_products_df[['2','28']].copy().rename(columns={'2':'product_name','28':'Daily OOS Rate (30d)'})
-        oos['Daily OOS Rate (30d)'] = oos['Daily OOS Rate (30d)'].astype(str).str.replace('%','',regex=False)
-        oos['Daily OOS Rate (30d)'] = pd.to_numeric(oos['Daily OOS Rate (30d)'], errors='coerce').fillna(0)/100.0
-        final_stock_sales_df = pd.merge(final_stock_sales_df, oos, on='product_name', how='left')
-    else:
-        final_stock_sales_df['Daily OOS Rate (30d)'] = pd.NA
-
-    # >>> Consolidation demandée
-    # Max Avg Daily Sales & Max Coverage Day
-    if {'Average Daily Sales (7d)','Average Daily Sales (30d)'}.issubset(final_stock_sales_df.columns):
-        final_stock_sales_df['Max Avg Daily Sales'] = final_stock_sales_df[['Average Daily Sales (7d)','Average Daily Sales (30d)']].max(axis=1)
-    else:
-        final_stock_sales_df['Max Avg Daily Sales'] = pd.NA
-    if {'Coverage Day (7d)','Coverage Day (30d)'}.issubset(final_stock_sales_df.columns):
-        final_stock_sales_df['Max Coverage Day'] = final_stock_sales_df[['Coverage Day (7d)','Coverage Day (30d)']].max(axis=1)
-    else:
-        final_stock_sales_df['Max Coverage Day'] = pd.NA
-
-    # Supprimer colonnes intermédiaires
-    for c in ['Average Daily Sales (7d)','Average Daily Sales (30d)','Coverage Day (7d)','Coverage Day (30d)']:
-        if c in final_stock_sales_df.columns:
-            final_stock_sales_df.drop(columns=[c], inplace=True)
-
-    # Delisting (nouvelle colonne)
     try:
-        delisting_df = pd.read_csv(DELISTING_URL)
-        if delisting_df.shape[1] > 3:
-            dsub = delisting_df.iloc[:, [0,3]].copy()
-            dsub.columns = ['product_name','delisting']
-            dsub['product_name'] = dsub['product_name'].astype(str).str.lower().str.strip()
-            final_stock_sales_df = pd.merge(final_stock_sales_df, dsub, on='product_name', how='left')
-            final_stock_sales_df['delisting'] = final_stock_sales_df['delisting'].fillna('Not Delisted')
-        else:
-            final_stock_sales_df['delisting'] = 'Not Delisted'
-    except Exception:
-        final_stock_sales_df['delisting'] = 'Not Delisted'
+        delisting_df = pd.read_csv(DELISTING_URL, skiprows=3, usecols=[1, 3])
+        delisting_df.columns = ["product_name", "delisting_status"]
+    except:
+        delisting_df = pd.DataFrame(columns=["product_name", "delisting_status"])
 
-    # --------- Imputation ML (identique esprit)
-    missing_values_summary = final_stock_sales_df.isnull().sum()
-    imputation_candidates = missing_values_summary[missing_values_summary > 0].index.tolist()
-    features_for_imputation = {}
-    all_cols = final_stock_sales_df.columns.tolist()
-    for col in imputation_candidates:
-        features_for_imputation[col] = [f for f in all_cols if f != col and final_stock_sales_df[f].isnull().sum() < len(final_stock_sales_df)*0.5 and f in [
-            'product_name','Supplier','total_stock','Product Category','Buffer Value','Max Lead Time',
-            'Max Daily Sales (Pikine)','Max Avg Daily Sales','Max Coverage Day'
-        ]]
-    for target_col in imputation_candidates:
-        features = features_for_imputation.get(target_col, [])
-        if not features:
-            final_stock_sales_df[target_col] = final_stock_sales_df[target_col].fillna(0)
-            continue
-        valid_features = [f for f in features if f in final_stock_sales_df.columns]
-        if not valid_features:
-            final_stock_sales_df[target_col] = final_stock_sales_df[target_col].fillna(0)
-            continue
-        subset_df = final_stock_sales_df[valid_features + [target_col]].copy()
-        train_data = subset_df.dropna(subset=[target_col])
-        predict_data = subset_df[subset_df[target_col].isnull()]
+    try:
+        parametres_replenish_df = pd.read_csv(PARAMETRES_REPLENISH_URL)
+        print("'Parametres Replenish' data loaded successfully.")
+    except:
+        parametres_replenish_df = pd.DataFrame()
 
-        from sklearn.preprocessing import OneHotEncoder
-        from sklearn.compose import ColumnTransformer
-        from sklearn.pipeline import Pipeline
-        from sklearn.impute import SimpleImputer
-        from sklearn.ensemble import RandomForestRegressor
+    # =========================
+    # Harmonisation inventaire
+    # =========================
+    inv = inventory_pikine_staging_df.copy()
+    inv.columns = (
+        inv.columns.astype(str)
+        .str.strip()
+        .str.lower()
+        .str.replace(" ", "_")
+        .str.replace("-", "_")
+    )
+    # mapping souple
+    col_map = {
+        "product_name": ["product_name", "produit", "nom_produit", "name"],
+        "Supplier": ["supplier", "supplier.1", "fournisseur", "vendor"],
+        "total_stock": ["total_stock", "stock_total", "qte_stock", "current_stock"],
+    }
+    for target, aliases in col_map.items():
+        if target not in inv.columns:
+            for alias in aliases:
+                if alias in inv.columns:
+                    inv.rename(columns={alias: target}, inplace=True)
+                    break
+        if target not in inv.columns:
+            inv[target] = 0
 
-        X_train = train_data[valid_features]
-        y_train = train_data[target_col]
-        X_predict = predict_data[valid_features]
+    if "supplier" in inv.columns and "Supplier" not in inv.columns:
+        inv.rename(columns={"supplier": "Supplier"}, inplace=True)
 
-        categorical_features = X_train.select_dtypes(include=['object','category']).columns
-        numerical_features = X_train.select_dtypes(include=['number']).columns
+    inventory_pikine_staging_df = inv
+    print("Colonnes inventaire après harmonisation:", inventory_pikine_staging_df.columns.tolist())
 
-        numerical_pipeline = Pipeline([('imputer', SimpleImputer(strategy='mean'))])
-        categorical_pipeline = Pipeline([
-            ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
-            ('onehot', OneHotEncoder(handle_unknown='ignore'))
-        ])
-        preprocessor = ColumnTransformer(
-            transformers=[
-                ('num', numerical_pipeline, numerical_features),
-                ('cat', categorical_pipeline, categorical_features)
-            ],
-            remainder='passthrough'
-        )
-        model_pipeline = Pipeline([
-            ('preprocessor', preprocessor),
-            ('regressor', RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1))
-        ])
-        try:
-            model_pipeline.fit(X_train, y_train)
-            predicted = model_pipeline.predict(X_predict)
-            missing_idx = final_stock_sales_df[final_stock_sales_df[target_col].isnull()].index
-            if len(predicted) == len(missing_idx):
-                final_stock_sales_df.loc[missing_idx, target_col] = predicted
-            else:
-                final_stock_sales_df[target_col] = final_stock_sales_df[target_col].fillna(0)
-        except Exception:
-            final_stock_sales_df[target_col] = final_stock_sales_df[target_col].fillna(0)
+    # =========================
+    # Clean text
+    # =========================
+    inventory_pikine_staging_df = clean_text_column(inventory_pikine_staging_df, "product_name")
+    inventory_pikine_staging_df = clean_text_column(inventory_pikine_staging_df, "Supplier")
+    Product_category_df = clean_text_column(Product_category_df, "product_name")
+    sales_pikine_df = clean_text_column(sales_pikine_df, "product_name")
+    delisting_df = clean_text_column(delisting_df, "product_name")
+    if "2" in Tbh_7dsales_df.columns:
+        Tbh_7dsales_df["2"] = Tbh_7dsales_df["2"].astype(str).str.lower().str.strip()
+    if "2" in Tbh_30dsales_products_df.columns:
+        Tbh_30dsales_products_df["2"] = Tbh_30dsales_products_df["2"].astype(str).str.lower().str.strip()
 
-    # Flags & outputs (inchangés)
-    if {'total_stock','Optimal Stock (Reorder Point)'}.issubset(final_stock_sales_df.columns):
-        final_stock_sales_df['Predicted Stockout'] = final_stock_sales_df['total_stock'] <= final_stock_sales_df['Optimal Stock (Reorder Point)']
-    else:
-        final_stock_sales_df['Predicted Stockout'] = False
+    # =========================
+    # Total stock
+    # =========================
+    total_stock_df = (
+        inventory_pikine_staging_df.groupby(["product_name", "Supplier"])["total_stock"]
+        .sum()
+        .reset_index()
+    )
+    print(f"Shape of total_stock_df before merge: {total_stock_df.shape}")
 
-    def get_stock_status(row):
-        stock = pd.to_numeric(row.get('total_stock', 0), errors='coerce')
-        reorder_point = pd.to_numeric(row.get('Optimal Stock (Reorder Point)', 0), errors='coerce')
-        max_lead_time = pd.to_numeric(row.get('Max Lead Time', 0), errors='coerce')
-        max_avg_daily_sales = pd.to_numeric(row.get('Max Avg Daily Sales', 0), errors='coerce')
-        if pd.isna(stock) or stock <= 0:
-            return 'Out of Stock'
-        elif pd.isna(reorder_point) or stock <= reorder_point:
-            return 'Predicted Stockout Soon'
-        elif pd.isna(max_lead_time) or pd.isna(max_avg_daily_sales) or stock <= reorder_point + (max_lead_time * max_avg_daily_sales):
-            return 'Order Soon'
-        else:
-            return 'Stock OK'
-    final_stock_sales_df['Stock Status'] = final_stock_sales_df.apply(get_stock_status, axis=1)
-
-    if {'total_stock','Optimal Stock (Reorder Point)'}.issubset(final_stock_sales_df.columns):
-        final_stock_sales_df['Predicted Order Quantity'] = final_stock_sales_df.apply(
-            lambda row: max(0, (row['Optimal Stock (Reorder Point)'] or 0) - (row['total_stock'] or 0)), axis=1
+    # =========================
+    # Max sales (unique par produit)
+    # =========================
+    if "product_name" in sales_pikine_df.columns and "sum" in sales_pikine_df.columns:
+        max_sales_pikine = (
+            sales_pikine_df.groupby("product_name", as_index=False)["sum"].max()
+            .rename(columns={"sum": "Max Daily Sales (Pikine)"})
+            .drop_duplicates(subset=["product_name"])
         )
     else:
-        final_stock_sales_df['Predicted Order Quantity'] = pd.NA
+        max_sales_pikine = pd.DataFrame(columns=["product_name", "Max Daily Sales (Pikine)"])
 
-    if 'Daily OOS Rate (30d)' in final_stock_sales_df.columns:
-        final_stock_sales_df['Daily OOS Rate (30d)'] = pd.to_numeric(final_stock_sales_df['Daily OOS Rate (30d)'], errors='coerce')
+    final_stock_sales_df = total_stock_df.merge(
+        max_sales_pikine, on="product_name", how="left", validate="m:1"
+    )
+    print(f"Shape of final_stock_sales_df after merging max sales: {final_stock_sales_df.shape}")
 
-    # Order d’affichage — ajoute delisting
-    preferred_order = [
-        'product_name','Supplier','Product Category','delisting',
-        'total_stock','Optimal Stock (Reorder Point)',
-        'Max Daily Sales (Pikine)','Max Lead Time','Max Avg Daily Sales','Max Coverage Day',
-        'Daily OOS Rate (30d)','Predicted Stockout','Stock Status','Predicted Order Quantity',
-        'Unit Price HT','Discount'
+    # =========================
+    # Product Category (unique par produit)
+    # =========================
+    if "product_name" in Product_category_df.columns and "CATEGORY ABC-XYZ" in Product_category_df.columns:
+        product_category_subset = (
+            Product_category_df[["product_name", "CATEGORY ABC-XYZ"]]
+            .dropna(subset=["product_name"])
+            .drop_duplicates(subset=["product_name"])
+            .rename(columns={"CATEGORY ABC-XYZ": "Product Category"})
+        )
+        final_stock_sales_df = final_stock_sales_df.merge(
+            product_category_subset, on="product_name", how="left", validate="m:1"
+        )
+        final_stock_sales_df["Product Category"] = final_stock_sales_df["Product Category"].fillna("CX")
+    else:
+        final_stock_sales_df["Product Category"] = "CX"
+    print(f"Shape of final_stock_sales_df after merging product category: {final_stock_sales_df.shape}")
+
+    # =========================
+    # ADS 7d / ADS 30d + OOS 7d / OOS 30d
+    # =========================
+    ads7 = pd.DataFrame(columns=["product_name", "Average Daily Sales (7d)"])
+    ads30 = pd.DataFrame(columns=["product_name", "Average Daily Sales (30d)"])
+    oos7 = pd.DataFrame(columns=["product_name", "Daily OOS Rate (7d)"])
+    oos30 = pd.DataFrame(columns=["product_name", "Daily OOS Rate (30d)"])
+
+    if {"2", "9"}.issubset(Tbh_7dsales_df.columns):
+        ads7 = (
+            Tbh_7dsales_df[["2", "9"]]
+            .rename(columns={"2": "product_name", "9": "Average Daily Sales (7d)"})
+            .drop_duplicates(subset=["product_name"])
+        )
+        ads7["Average Daily Sales (7d)"] = safe_numeric(ads7["Average Daily Sales (7d)"], 0)
+
+    if {"2", "12"}.issubset(Tbh_7dsales_df.columns):
+        oos7 = (
+            Tbh_7dsales_df[["2", "12"]]
+            .rename(columns={"2": "product_name", "12": "Daily OOS Rate (7d)"})
+            .drop_duplicates(subset=["product_name"])
+        )
+        oos7["Daily OOS Rate (7d)"] = safe_numeric(
+            oos7["Daily OOS Rate (7d)"].astype(str).str.replace("%", "", regex=False), 100
+        ) / 100.0
+
+    if {"2", "9"}.issubset(Tbh_30dsales_products_df.columns):
+        ads30 = (
+            Tbh_30dsales_products_df[["2", "9"]]
+            .rename(columns={"2": "product_name", "9": "Average Daily Sales (30d)"})
+            .drop_duplicates(subset=["product_name"])
+        )
+        ads30["Average Daily Sales (30d)"] = safe_numeric(ads30["Average Daily Sales (30d)"], 0)
+
+    if {"2", "28"}.issubset(Tbh_30dsales_products_df.columns):
+        oos30 = (
+            Tbh_30dsales_products_df[["2", "28"]]
+            .rename(columns={"2": "product_name", "28": "Daily OOS Rate (30d)"})
+            .drop_duplicates(subset=["product_name"])
+        )
+        oos30["Daily OOS Rate (30d)"] = safe_numeric(
+            oos30["Daily OOS Rate (30d)"].astype(str).str.replace("%", "", regex=False), 0
+        ) / 100.0
+
+    # Merge avec final_stock_sales_df
+    final_stock_sales_df = final_stock_sales_df.merge(ads7, on="product_name", how="left", validate="m:1")
+    final_stock_sales_df = final_stock_sales_df.merge(ads30, on="product_name", how="left", validate="m:1")
+    final_stock_sales_df = final_stock_sales_df.merge(oos7, on="product_name", how="left", validate="m:1")
+    final_stock_sales_df = final_stock_sales_df.merge(oos30, on="product_name", how="left", validate="m:1")
+
+    # Correction +0.1 comme dans ta logique
+    final_stock_sales_df["Average Daily Sales (7d)"] = safe_numeric(
+        final_stock_sales_df.get("Average Daily Sales (7d)", 0), 0) + 0.1
+    final_stock_sales_df["Average Daily Sales (30d)"] = safe_numeric(
+        final_stock_sales_df.get("Average Daily Sales (30d)", 0), 0) + 0.1
+
+    # ✅ Nettoyage : suppression colonnes parasites après merge
+    cols_to_drop = [
+        "Average Daily Sales (7d)_x", "Average Daily Sales (30d)_x",
+        "Daily OOS Rate (7d)_x", "Daily OOS Rate (30d)_x",
+        "Average Daily Sales (7d)_y", "Average Daily Sales (30d)_y",
+        "Daily OOS Rate (7d)_y", "Daily OOS Rate (30d)_y"
     ]
-    cols = [c for c in preferred_order if c in final_stock_sales_df.columns] + \
-           [c for c in final_stock_sales_df.columns if c not in preferred_order]
-    final_stock_sales_df = final_stock_sales_df[cols]
+    final_stock_sales_df.drop(
+        columns=[c for c in cols_to_drop if c in final_stock_sales_df.columns],
+        inplace=True, errors="ignore"
+    )
+
+    if "Average Daily Sales (7d)" not in final_stock_sales_df.columns:
+        final_stock_sales_df["Average Daily Sales (7d)"] = 0.0
+    if "Average Daily Sales (30d)" not in final_stock_sales_df.columns:
+        final_stock_sales_df["Average Daily Sales (30d)"] = 0.0
+
+    final_stock_sales_df["Average Daily Sales (7d)"] = safe_numeric(final_stock_sales_df["Average Daily Sales (7d)"],
+                                                                    0) + 0.1
+    final_stock_sales_df["Average Daily Sales (30d)"] = safe_numeric(final_stock_sales_df["Average Daily Sales (30d)"],
+                                                                     0) + 0.1
+
+    # Coverage Days
+    final_stock_sales_df["Coverage Day (7d)"] = final_stock_sales_df["total_stock"] / final_stock_sales_df["Average Daily Sales (7d)"].replace(0, np.nan)
+    final_stock_sales_df["Coverage Day (30d)"] = final_stock_sales_df["total_stock"] / final_stock_sales_df["Average Daily Sales (30d)"].replace(0, np.nan)
+
+    # Recalculated ADS (cond. OOS)
+    def calc_ads_cond(row):
+        oos = row.get("Daily OOS Rate (7d)", np.nan)
+        s7 = row.get("Average Daily Sales (7d)", np.nan)
+        s30 = row.get("Average Daily Sales (30d)", np.nan)
+        if pd.isna(oos) or (oos >= 0.6) or pd.isna(s7):
+            return s30 if pd.notna(s30) else 0.1
+        return s7 if pd.notna(s7) else 0.1
+
+    final_stock_sales_df["Recalculated Average Daily Sales"] = final_stock_sales_df.apply(calc_ads_cond, axis=1) + 0.1
+
+    # =========================
+    # Lead time (Supplier unique)
+    # =========================
+    if {"supplier", "avg_leadtime"}.issubset(df_leadtime.columns):
+        lt = (
+            df_leadtime[["supplier", "avg_leadtime"]]
+            .rename(columns={"supplier": "Supplier", "avg_leadtime": "Avg Lead Time"})
+        )
+        lt["Supplier"] = lt["Supplier"].astype(str).str.lower().str.strip()
+        lt = lt.drop_duplicates(subset=["Supplier"])
+        final_stock_sales_df = final_stock_sales_df.merge(
+            lt, on="Supplier", how="left", validate="m:1"
+        )
+    else:
+        final_stock_sales_df["Avg Lead Time"] = np.nan
+
+    # OOS 30d
+    if {"2", "28"}.issubset(Tbh_30dsales_products_df.columns):
+        oos30 = (
+            Tbh_30dsales_products_df[["2", "28"]]
+            .rename(columns={"2": "product_name", "28": "Daily OOS Rate (30d)"})
+        )
+        oos30["Daily OOS Rate (30d)"] = safe_numeric(
+            oos30["Daily OOS Rate (30d)"].astype(str).str.replace("%", "", regex=False), 0
+        ) / 100.0
+        oos30 = oos30.drop_duplicates(subset=["product_name"])
+        final_stock_sales_df = final_stock_sales_df.merge(
+            oos30, on="product_name", how="left", validate="m:1"
+        )
+    else:
+        final_stock_sales_df["Daily OOS Rate (30d)"] = np.nan
+
+    # =========================
+    # Parametres Replenish (Buffer lookup)
+    # =========================
+    if not parametres_replenish_df.empty and parametres_replenish_df.shape[1] > 1:
+        pr_buf = parametres_replenish_df.iloc[:, [0, 1]].copy()
+        pr_buf.columns = ["Param_Product_Category", "Param_Buffer_Value_Lookup"]
+        pr_buf["Param_Product_Category"] = pr_buf["Param_Product_Category"].astype(str).str.lower().str.strip()
+        pr_buf["Param_Buffer_Value_Lookup"] = safe_numeric(pr_buf["Param_Buffer_Value_Lookup"], 0)
+        final_stock_sales_df["Product Category"] = final_stock_sales_df["Product Category"].astype(str).str.lower().str.strip()
+        final_stock_sales_df = final_stock_sales_df.merge(
+            pr_buf.drop_duplicates(subset=["Param_Product_Category"]),
+            left_on="Product Category",
+            right_on="Param_Product_Category",
+            how="left",
+            validate="m:1",
+        )
+        if "Param_Product_Category" in final_stock_sales_df.columns:
+            final_stock_sales_df.drop(columns=["Param_Product_Category"], inplace=True)
+        final_stock_sales_df["Param_Buffer_Value_Lookup"] = final_stock_sales_df["Param_Buffer_Value_Lookup"].fillna(0)
+        print("'Param_Buffer_Value_Lookup' merged for Optimal Stock calculation.")
+    else:
+        final_stock_sales_df["Param_Buffer_Value_Lookup"] = 0.0
+
+    # Optimal Stock (formule exacte)
+    final_stock_sales_df["Max Daily Sales (Pikine)"] = safe_numeric(final_stock_sales_df["Max Daily Sales (Pikine)"], 0)
+    final_stock_sales_df["Recalculated Average Daily Sales"] = safe_numeric(final_stock_sales_df["Recalculated Average Daily Sales"], 0.1)
+    final_stock_sales_df["Param_Buffer_Value_Lookup"] = safe_numeric(final_stock_sales_df["Param_Buffer_Value_Lookup"], 0)
+    final_stock_sales_df["Optimal Stock (Reorder Point)"] = final_stock_sales_df.apply(
+        lambda r: max(
+            r["Max Daily Sales (Pikine)"],
+            (r["Max Daily Sales (Pikine)"] / 2.0) + (r["Param_Buffer_Value_Lookup"] * r["Recalculated Average Daily Sales"]),
+        ),
+        axis=1,
+    )
+    print("'Optimal Stock (Reorder Point)' calculated successfully.")
+
+    # =========================
+    # Supplier credit info
+    # =========================
+    if {"Supplier name", "credit_days", "Credit_cumulable"}.issubset(suppliers_df.columns):
+        sc = suppliers_df[["Supplier name", "credit_days", "Credit_cumulable"]].copy()
+        sc = sc.rename(columns={"Supplier name": "Supplier"})
+        sc["Supplier"] = sc["Supplier"].astype(str).str.lower().str.strip()
+        sc["credit_days"] = safe_numeric(sc["credit_days"], 0)
+        sc["Credit_cumulable"] = sc["Credit_cumulable"].fillna("Non")
+        sc = sc.drop_duplicates(subset=["Supplier"])
+        final_stock_sales_df = final_stock_sales_df.merge(sc, on="Supplier", how="left", validate="m:1")
+        final_stock_sales_df["credit_days"] = final_stock_sales_df["credit_days"].fillna(0)
+        final_stock_sales_df["Credit_cumulable"] = final_stock_sales_df["Credit_cumulable"].fillna("Non")
+        print("'credit_days' and 'Credit_cumulable' columns merged.")
+    else:
+        final_stock_sales_df["credit_days"] = 0
+        final_stock_sales_df["Credit_cumulable"] = "Non"
+
+    # =========================
+    # Delisting
+    # =========================
+    if {"product_name", "delisting_status"}.issubset(delisting_df.columns):
+        delis = delisting_df[["product_name", "delisting_status"]].drop_duplicates(subset=["product_name"])
+        final_stock_sales_df = final_stock_sales_df.merge(
+            delis, on="product_name", how="left", validate="m:1"
+        )
+        final_stock_sales_df["delisting_status"] = final_stock_sales_df["delisting_status"].fillna("Not Delisted")
+        print("'delisting_status' column merged.")
+    else:
+        final_stock_sales_df["delisting_status"] = "Not Delisted"
+
+    # =========================
+    # Dédupes de sécurité
+    # =========================
+    final_stock_sales_df = final_stock_sales_df.drop_duplicates(subset=["product_name"], keep="first")
+    print("DataFrame after removing duplicate product entries.")
+    print(f"Shape after removing duplicates: {final_stock_sales_df.shape}")
+
+    # =========================
+    # Métriques métier
+    # =========================
+    # ADJUSTED_LEADTIME
+    final_stock_sales_df["Avg Lead Time"] = safe_numeric(final_stock_sales_df.get("Avg Lead Time", 0), 0)
+    final_stock_sales_df["Credit_cumulable"] = final_stock_sales_df.get("Credit_cumulable", "Non").fillna("Non")
+    def calc_adjusted_leadtime(row):
+        return row["Avg Lead Time"] if str(row.get("Credit_cumulable", "")).lower() == "oui" else row["Avg Lead Time"] + 3
+    final_stock_sales_df["ADJUSTED_LEADTIME"] = final_stock_sales_df.apply(calc_adjusted_leadtime, axis=1)
+
+    # MAX_CREDIT_BUFFER
+    final_stock_sales_df["credit_days"] = safe_numeric(final_stock_sales_df["credit_days"], 0)
+    def calc_max_credit_buffer(row):
+        cd = row["credit_days"]
+        cc = str(row.get("Credit_cumulable", "")).lower()
+        return min(cd, 20) if cc == "oui" else cd
+    final_stock_sales_df["MAX_CREDIT_BUFFER"] = final_stock_sales_df.apply(calc_max_credit_buffer, axis=1)
+
+    # AJUSTER_BUFFER (max buffer vs crédit)
+    final_stock_sales_df["AJUSTER_BUFFER"] = np.maximum(
+        safe_numeric(final_stock_sales_df["Param_Buffer_Value_Lookup"], 0),
+        safe_numeric(final_stock_sales_df["MAX_CREDIT_BUFFER"], 0),
+    )
+
+    # MOQ MAAD
+    final_stock_sales_df["MOQ MAAD"] = (safe_numeric(final_stock_sales_df["ADJUSTED_LEADTIME"], 0) + 3) * safe_numeric(final_stock_sales_df["Recalculated Average Daily Sales"], 0.1)
+
+    # Param_Supplier_Factor par défaut si absent
+    if "Param_Supplier_Factor" not in final_stock_sales_df.columns:
+        final_stock_sales_df["Param_Supplier_Factor"] = 0.0
+
+    # Purchase Need
+    req_cols = ["total_stock","Max Daily Sales (Pikine)","Recalculated Average Daily Sales","Optimal Stock (Reorder Point)","Param_Buffer_Value_Lookup","Param_Supplier_Factor"]
+    if all(c in final_stock_sales_df.columns for c in req_cols):
+        for c in req_cols:
+            final_stock_sales_df[c] = safe_numeric(final_stock_sales_df[c], 0)
+        def calculate_purchase_need(row):
+            total_stock = row["total_stock"]
+            max_daily_sales = row["Max Daily Sales (Pikine)"]
+            avg_daily_sales = row["Recalculated Average Daily Sales"]
+            optimal_stock = row["Optimal Stock (Reorder Point)"]
+            param_buffer_value = row["Param_Buffer_Value_Lookup"]
+            param_supplier_factor = row["Param_Supplier_Factor"]
+            if total_stock <= 0:
+                return max_daily_sales + (param_buffer_value * avg_daily_sales)
+            elif total_stock < optimal_stock + (param_supplier_factor * avg_daily_sales):
+                return (optimal_stock - total_stock) + (param_supplier_factor * avg_daily_sales)
+            else:
+                return 0
+        final_stock_sales_df["purchase_need"] = final_stock_sales_df.apply(calculate_purchase_need, axis=1)
+        print("'purchase_need' calculated successfully.")
+    else:
+        final_stock_sales_df["purchase_need"] = np.nan
+        print("Warning: 'purchase_need' set to NA due to missing columns.")
+
+    # QAC
+    final_stock_sales_df["QAC"] = np.maximum(
+        safe_numeric(final_stock_sales_df["MOQ MAAD"], 0),
+        safe_numeric(final_stock_sales_df["purchase_need"], 0),
+    )
+
+    # Predicted Order Quantity (avec ADJUSTED_LEADTIME)
+    need_cols = ["total_stock","Optimal Stock (Reorder Point)","Recalculated Average Daily Sales","credit_days","ADJUSTED_LEADTIME"]
+    if all(c in final_stock_sales_df.columns for c in need_cols):
+        for c in need_cols:
+            final_stock_sales_df[c] = safe_numeric(final_stock_sales_df[c], 0)
+        def calc_poq(row):
+            stock = row["total_stock"]
+            rp = row["Optimal Stock (Reorder Point)"]
+            ads = row["Recalculated Average Daily Sales"]
+            credit_days = row["credit_days"]
+            alt = row["ADJUSTED_LEADTIME"]
+            demand_period = alt + credit_days
+            demand_during_period = ads * demand_period
+            return max(0.0, (rp + demand_during_period) - stock)
+        final_stock_sales_df["Predicted Order Quantity"] = final_stock_sales_df.apply(calc_poq, axis=1)
+        print("'Predicted Order Quantity' calculated successfully.")
+    else:
+        final_stock_sales_df["Predicted Order Quantity"] = np.nan
+
+    # Ajusted_total_need
+    def calc_adjusted_total_need(row):
+        if str(row.get("delisting_status", "")).lower() == "delisted":
+            return "NO NEED"
+        mcd = float(row.get("Max Coverage Day", 0))
+        alt = float(row.get("ADJUSTED_LEADTIME", 0))
+        opt = float(row.get("Optimal Stock (Reorder Point)", 0))
+        ads = float(row.get("Recalculated Average Daily Sales", 0.1))
+        optimal_days = (opt / ads) if ads > 0 else 0
+        if mcd <= alt + 3:
+            return "ORDER NOW"
+        elif mcd < alt + optimal_days:
+            return "ORDER NOT URGENT"
+        else:
+            return "NO NEED"
+    # Max Coverage Day
+    final_stock_sales_df["Max Coverage Day"] = np.minimum(
+        safe_numeric(final_stock_sales_df["total_stock"], 0) / np.maximum(safe_numeric(final_stock_sales_df["Recalculated Average Daily Sales"], 0.01), 0.01),
+        365,
+    )
+    final_stock_sales_df["Ajusted_total_need"] = final_stock_sales_df.apply(calc_adjusted_total_need, axis=1)
+
+    # Predicted Stockout (lecture simple)
+    final_stock_sales_df["Predicted Stockout"] = safe_numeric(final_stock_sales_df["total_stock"], 0) <= safe_numeric(final_stock_sales_df["Optimal Stock (Reorder Point)"], 0)
+
+    # Stock Status (indicatif pour l’interne; pas besoin au KPI)
+    def get_stock_status(row):
+        stock = float(row.get("total_stock", 0))
+        reorder_point = float(row.get("Optimal Stock (Reorder Point)", 0))
+        alt = float(row.get("ADJUSTED_LEADTIME", 0))
+        ads = float(row.get("Recalculated Average Daily Sales", 0))
+        if stock <= 0:
+            return "Out of Stock"
+        elif stock <= reorder_point:
+            return "Predicted Stockout Soon"
+        elif stock <= reorder_point + (alt * ads):
+            return "Order Soon"
+        else:
+            return "Stock OK"
+    final_stock_sales_df["Stock Status"] = final_stock_sales_df.apply(get_stock_status, axis=1)
+
+    # Credit Adequacy
+    for c in ["total_stock","Recalculated Average Daily Sales","ADJUSTED_LEADTIME","credit_days","Predicted Order Quantity"]:
+        if c not in final_stock_sales_df.columns:
+            final_stock_sales_df[c] = 0.0
+        final_stock_sales_df[c] = safe_numeric(final_stock_sales_df[c], 0)
+
+    cds = final_stock_sales_df["credit_days"].clip(lower=0)
+    ads = final_stock_sales_df["Recalculated Average Daily Sales"].clip(lower=0)
+    alt = final_stock_sales_df["ADJUSTED_LEADTIME"].clip(lower=0)
+    s0  = final_stock_sales_df["total_stock"].clip(lower=0)
+    q   = final_stock_sales_df["Predicted Order Quantity"].clip(lower=0)
+
+    target_low  = ads * cds
+    target_high = ads * (cds + alt)
+    s_post = s0 + q
+    gap_low = (target_low - s_post).clip(lower=0)
+    excess  = (s_post - target_high).clip(lower=0)
+    denom = target_low.where(target_low > 0, 1.0)
+    err = (gap_low + excess) / denom
+    credit_score = np.exp(-1.5 * err)
+
+    final_stock_sales_df["Credit Adequacy Score"] = credit_score
+    final_stock_sales_df["Credit Adequacy Risk"] = (err > 0)
+
+    # Neutralisation si pas de crédit ou delisted
+    no_credit_mask = (final_stock_sales_df["credit_days"] <= 0)
+    final_stock_sales_df.loc[no_credit_mask, "Credit Adequacy Risk"] = False
+    final_stock_sales_df.loc[no_credit_mask, "Credit Adequacy Score"] = np.where(
+        ads.loc[no_credit_mask] > 0, 1.0, 0.0
+    )
+    dmask = final_stock_sales_df["delisting_status"].astype(str).str.lower().eq("delisted")
+    final_stock_sales_df.loc[dmask, ["Predicted Order Quantity","Predicted Stockout","purchase_need","QAC","MOQ MAAD"]] = [0, False, 0, 0, 0]
+    final_stock_sales_df.loc[dmask, "Ajusted_total_need"] = "NO NEED"
+    final_stock_sales_df.loc[dmask, "Credit Adequacy Risk"] = False
+    final_stock_sales_df.loc[dmask, "Credit Adequacy Score"] = 1.0
+
+    # =========================
+    # Nettoyage final
+    # =========================
+    for cdrop in ["Max Lead Time", "Buffer Value", "Param_Supplier_Factor", "Param_Buffer_Value_Lookup"]:
+        if cdrop in final_stock_sales_df.columns:
+            final_stock_sales_df.drop(columns=[cdrop], inplace=True, errors="ignore")
+
+    print("Final Stock and Sales Analysis with all calculated columns:")
+    print(f"NaNs total: {int(final_stock_sales_df.isnull().sum().sum())}")
+    print("\nSTATISTIQUES DE CONTRÔLE:")
+    print(f"• Total produits analysés: {len(final_stock_sales_df)}")
+    print(f"• Produits avec stock > 0: {(final_stock_sales_df['total_stock'] > 0).sum()}")
+    print(f"• Produits Out of Stock: {(final_stock_sales_df['total_stock'] <= 0).sum()}")
+    print(f"• Predicted Stockouts: {int(final_stock_sales_df['Predicted Stockout'].sum())}")
+    print(f"• Besoin d'achat total: {final_stock_sales_df['purchase_need'].sum():,.0f} unités")
+    print(f"• Couverture moyenne: {final_stock_sales_df['Max Coverage Day'].mean():.1f} jours")
+    print(f"• Produits delisted: {(final_stock_sales_df['delisting_status'].str.lower() == 'delisted').sum()}")
+
+    # =========================
+    # ML: Stockout Probability
+    # =========================
+    try:
+        feature_cols = [
+            "total_stock", "Recalculated Average Daily Sales",
+            "Max Daily Sales (Pikine)", "Optimal Stock (Reorder Point)",
+            "ADJUSTED_LEADTIME", "MAX_CREDIT_BUFFER", "AJUSTER_BUFFER"
+        ]
+        feature_cols = [c for c in feature_cols if c in final_stock_sales_df.columns]
+        if feature_cols and "Predicted Stockout" in final_stock_sales_df.columns:
+            df_train = final_stock_sales_df.dropna(subset=feature_cols + ["Predicted Stockout"]).copy()
+            X = df_train[feature_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
+            y = df_train["Predicted Stockout"].astype(int)
+            if len(df_train) > 50 and y.nunique() > 1:
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=0.2, random_state=42, stratify=y
+                )
+                model = RandomForestClassifier(
+                    n_estimators=200, max_depth=8, class_weight="balanced", random_state=42, n_jobs=-1
+                )
+                model.fit(X_train, y_train)
+                y_pred = model.predict(X_test)
+                prec = precision_score(y_test, y_pred)
+                print(f"[ML Stockout] Modèle entraîné, précision test = {prec:.2f}")
+                X_all = final_stock_sales_df[feature_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
+                probs = model.predict_proba(X_all)[:, 1]
+                final_stock_sales_df["Stockout Probability"] = probs
+            else:
+                final_stock_sales_df["Stockout Probability"] = 0.0
+                print("[ML Stockout] Pas assez de données variées pour entraîner le modèle.")
+        else:
+            final_stock_sales_df["Stockout Probability"] = 0.0
+            print("[ML Stockout] Colonnes nécessaires absentes ou Predicted Stockout manquant.")
+    except Exception as e:
+        print(f"[ML Stockout] Erreur lors du calcul ML: {e}")
+        final_stock_sales_df["Stockout Probability"] = 0.0
+
     return final_stock_sales_df
+
 
 # Utility: add Actions columns
 def add_action_cols(df: pd.DataFrame) -> pd.DataFrame:
@@ -468,12 +847,11 @@ app.index_string = """
             }
         </style>
         <script>
-            // Enter to send / Shift+Enter newline
             const attachEnterSend = () => {
                 const ta = document.getElementById('chat-input');
                 const btn = document.getElementById('chat-send');
                 if(!ta || !btn) return;
-                if(ta._boundEnter) return; // avoid double bind
+                if(ta._boundEnter) return;
                 ta._boundEnter = true;
                 ta.addEventListener('keydown', (e) => {
                     if(e.key === 'Enter' && !e.shiftKey) {
@@ -488,12 +866,7 @@ app.index_string = """
                 const app = document.getElementById('_dash-app-content');
                 if(app) mo.observe(app, {childList: true, subtree: true});
             });
-
-            // Simple debounce available if needed
-            window.debounce = (func, wait=280) => {
-                let timeout; 
-                return (...args) => { clearTimeout(timeout); timeout = setTimeout(()=>func.apply(this,args), wait); }
-            };
+            window.debounce = (func, wait=280) => { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>func.apply(this,a), wait);} };
         </script>
     </head>
     <body>
@@ -515,6 +888,10 @@ def get_df_cached():
 # ------------------------------ Sidebar ------------------------------------------
 def make_sidebar():
     df = get_df_cached()
+    ps = df['Predicted Stockout'] if 'Predicted Stockout' in df.columns else pd.Series(False, index=df.index)
+    mask_stockout = pd.Series(ps, index=df.index).fillna(False).astype(bool)
+    risk_by_sup = df.loc[mask_stockout].groupby('Supplier', dropna=False)['product_name'].nunique().reset_index()
+
     suppliers = sorted([s for s in df['Supplier'].dropna().unique().tolist() if s != '']) if 'Supplier' in df.columns else []
     cats = sorted([c for c in df['Product Category'].dropna().unique().tolist() if c != '']) if 'Product Category' in df.columns else []
     status_vals = df['Stock Status'].dropna().unique().tolist() if 'Stock Status' in df.columns else []
@@ -549,13 +926,17 @@ def make_sidebar():
                          multi=True, placeholder="Toutes", persistence=True),
             html.Br(),
             dbc.Checklist(
-                options=[{"label": "Afficher uniquement risques de rupture", "value": "risk"}],
-                value=[], id="toggle-risk-only", switch=True
+                options=[
+                    {"label": "Afficher uniquement risques de rupture", "value": "risk"},
+                    {"label": "Regrouper par produit (dé-dup)", "value": "by_product"},
+                ],
+                value=["by_product"], id="toggle-options", switch=True
             )
         ]),
+
         html.Br(),
         html.Div([
-            dbc.Button("Exporter CSV (filtré)", id="btn-export", className="btn-primary", size="sm"),
+            #dbc.Button("Exporter CSV (filtré)", id="btn-export", className="btn-primary", size="sm"),
             html.Span(" "),
             dbc.Button("Bon de commande PDF", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True),
             dcc.Download(id="download-data"),
@@ -574,42 +955,244 @@ def make_sidebar():
         html.Small(f"© {datetime.now().year} • {AUTHOR}")
     ])
 
+# ------------------------------ Aggregation helpers ------------------------------
+def _first_non_null(series):
+    for v in series:
+        if pd.notna(v) and v != "":
+            return v
+    return np.nan
+
+def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
+    """Vue dé-dupliquée : 1 ligne par product_name, en conservant toutes les colonnes clés."""
+    if df.empty or 'product_name' not in df.columns:
+        return df
+
+    tmp = df.copy()
+
+    # ✅ Harmoniser les noms attendus par l'UI
+    if 'product_category' in tmp.columns and 'Product Category' not in tmp.columns:
+        tmp['Product Category'] = tmp['product_category']
+    if 'credit_cumulable' in tmp.columns and 'Credit_cumulable' not in tmp.columns:
+        tmp['Credit_cumulable'] = tmp['credit_cumulable']
+
+    # Sécuriser types numériques courants
+    numeric_like = [
+        'total_stock', 'Predicted Order Quantity', 'purchase_need', 'MOQ MAAD', 'QAC',
+        'Optimal Stock (Reorder Point)', 'Max Lead Time', 'Avg Daily Sales', 'Buffer Value',
+        'Max Daily Sales (Pikine)', 'Max Coverage Day', 'Daily OOS Rate (7d)',
+        'Daily OOS Rate (30d)', 'ADJUSTED_LEADTIME', 'MAX_CREDIT_BUFFER', 'AJUSTER_BUFFER',
+        'credit_days'
+    ]
+    for c in numeric_like:
+        if c in tmp.columns:
+            tmp[c] = pd.to_numeric(tmp[c], errors='coerce')
+
+    if 'Supplier' not in tmp.columns:
+        tmp['Supplier'] = ""
+
+    # Fournisseur principal = plus grand stock
+    if {'product_name','Supplier','total_stock'}.issubset(tmp.columns):
+        idx_max = tmp.groupby('product_name')['total_stock'].idxmax()
+        main_sup = tmp.loc[idx_max, ['product_name','Supplier']].rename(columns={'Supplier':'Main Supplier'})
+    else:
+        main_sup = pd.DataFrame(columns=['product_name','Main Supplier'])
+
+    # Priorités pour quelques colonnes catégorielles
+    status_priority = {'Out of Stock': 3, 'Predicted Stockout Soon': 2, 'Order Soon': 1, 'Stock OK': 0}
+    def pick_status(series):
+        s = series.dropna().astype(str)
+        if s.empty: return np.nan
+        return s.iloc[s.map(lambda v: status_priority.get(v, 0)).argmax()]
+
+    need_priority = {'ORDER NOW': 2, 'ORDER NOT URGENT': 1, 'NO NEED': 0}
+    def pick_need(series):
+        s = series.dropna().astype(str)
+        if s.empty: return np.nan
+        return s.iloc[s.map(lambda v: need_priority.get(v, 0)).argmax()]
+
+    def first_non_null(series):
+        for v in series:
+            if pd.notna(v) and str(v).strip() != "":
+                return v
+        return np.nan
+
+    def join_suppliers(s):
+        return ", ".join(sorted({str(x).strip() for x in s if pd.notna(x) and str(x).strip() != ""}))
+
+    def pick_credit_cumulable(series):
+        s = series.dropna().astype(str).str.lower()
+        if (s == 'oui').any(): return 'Oui'
+        if (s == 'non').any(): return 'Non'
+        return first_non_null(series)
+
+    # 🔧 Plan d’agrégation
+    agg_map = {}
+
+    # Sommes (conservatives pour des besoins agrégés)
+    for c in ['total_stock','Predicted Order Quantity','purchase_need','MOQ MAAD','QAC']:
+        if c in tmp.columns: agg_map[c] = 'sum'
+
+    # Max (couverture, LT, OOS, buffers…)
+    for c in [
+        'Optimal Stock (Reorder Point)', 'Max Lead Time', 'Avg Daily Sales', 'Buffer Value',
+        'Max Daily Sales (Pikine)', 'Max Coverage Day', 'Daily OOS Rate (7d)', 'Daily OOS Rate (30d)',
+        'ADJUSTED_LEADTIME', 'MAX_CREDIT_BUFFER', 'AJUSTER_BUFFER', 'credit_days'
+    ]:
+        if c in tmp.columns: agg_map[c] = 'max'
+
+    # Bool -> OR
+    if 'Predicted Stockout' in tmp.columns:
+        tmp['Predicted Stockout'] = tmp['Predicted Stockout'].astype(bool)
+        agg_map['Predicted Stockout'] = 'max'
+
+    # Catégorielles importantes
+    if 'Ajusted_total_need' in tmp.columns:
+        agg_map['Ajusted_total_need'] = pick_need
+    if 'Stock Status' in tmp.columns:
+        agg_map['Stock Status'] = pick_status
+    if 'Product Category' in tmp.columns:
+        agg_map['Product Category'] = first_non_null
+    if 'delisting_status' in tmp.columns:
+        agg_map['delisting_status'] = first_non_null
+    if 'Credit_cumulable' in tmp.columns:
+        agg_map['Credit_cumulable'] = pick_credit_cumulable
+
+    # Liste des fournisseurs
+    agg_map['Supplier'] = join_suppliers
+
+    grouped = tmp.groupby('product_name', dropna=False).agg(agg_map).reset_index()
+
+    # Rejoindre le fournisseur principal (selon stock)
+    if not main_sup.empty:
+        grouped = grouped.merge(main_sup, on='product_name', how='left')
+        # Renommer la colonne Supplier -> Suppliers (all)
+        if 'Supplier' in grouped.columns:
+            grouped.rename(columns={'Supplier': 'Suppliers (all)'}, inplace=True)
+
+    return grouped
+
+
 # ------------------------------ Pages --------------------------------------------
 def make_kpis(df: pd.DataFrame):
+    # Helper pour format
     def fmt(n):
         if pd.isna(n): return "-"
         if isinstance(n, (int, float)):
-            try:
-                if abs(n) >= 1000: return f"{n:,.0f}".replace(",", " ")
-                return f"{n:,.0f}"
-            except Exception:
-                return str(n)
+            try: return f"{n:,.0f}".replace(",", " ")
+            except Exception: return str(n)
         return str(n)
 
-    total_skus = df['product_name'].nunique() if 'product_name' in df.columns else len(df)
-    at_risk = int((df['Stock Status'].isin(['Out of Stock', 'Predicted Stockout Soon']).sum())) if 'Stock Status' in df.columns else 0
-    order_sum = df['Predicted Order Quantity'].sum() if 'Predicted Order Quantity' in df.columns else 0
-    suppliers = df['Supplier'].nunique() if 'Supplier' in df.columns else 0
+    # Nettoyage : exclure delisted
+    mask_valid = df['delisting_status'].str.lower().ne('delisted') if 'delisting_status' in df.columns else [True] * len(df)
+    df_valid = df[mask_valid].copy()
 
+    total_skus = df_valid['product_name'].nunique() if 'product_name' in df_valid.columns else len(df_valid)
+
+    # Rupture réelle (constaté dans le tableau)
+    out_of_stock = int((df_valid['Stock Status'] == 'Out of Stock').sum()) if 'Stock Status' in df_valid.columns else 0
+
+    # Fournisseurs
+    suppliers = df_valid['Suppliers (all)'].nunique() if 'Suppliers (all)' in df_valid.columns else (
+        df_valid['Supplier'].nunique() if 'Supplier' in df_valid.columns else 0
+    )
+
+    # Risque de rupture (ML)
+    risk_count = 0
+    if 'Predicted Stockout' in df_valid.columns and 'Credit Adequacy Score' in df_valid.columns:
+        risk_count = int((
+            (df_valid['Predicted Stockout'] == True) &
+            (df_valid['Credit Adequacy Score'] < 0.5)
+        ).sum())
+
+    # Cartes KPI
     cards = dbc.Row([
-        dbc.Col(html.Div(className="kpi", children=[html.Small("SKUs"), html.H3(fmt(total_skus))]), md=3),
-        dbc.Col(html.Div(className="kpi", children=[html.Small("À risque de rupture"),
-            html.H3([fmt(at_risk), html.Span("  ", className="mx-1"), html.Span("•", className="badge badge-danger")])]), md=3),
-        dbc.Col(html.Div(className="kpi", children=[html.Small("Qté réassort prédite (somme)"), html.H3(fmt(order_sum))]), md=3),
-        dbc.Col(html.Div(className="kpi", children=[html.Small("Fournisseurs actifs"), html.H3(fmt(suppliers))]), md=3),
+        dbc.Col(html.Div(className="kpi", children=[html.Small("SKUs"), html.H3(fmt(total_skus))]), md=4),
+        dbc.Col(html.Div(className="kpi", children=[html.Small("Produits en rupture"), html.H3(fmt(out_of_stock))]), md=4),
+        dbc.Col(html.Div(className="kpi", children=[html.Small("Fournisseurs actifs"), html.H3(fmt(suppliers))]), md=4),
     ], className="gy-3")
-    return cards
+
+    # Cloche d’alerte basée uniquement sur ML
+    bell = html.Div(
+        className="pill",
+        children=[
+            html.Span("🔔", style={"fontSize": "16px", "marginRight": "8px"}),
+            html.B("À risque de rupture (ML) : "),
+            html.Span(f"{risk_count}", className="badge badge-warn", style={"marginLeft": "6px"})
+        ],
+        style={"display": "inline-block", "marginTop": "10px"}
+    )
+
+    return cards, bell
 
 def page_overview(master_df: pd.DataFrame = None):
+    # Charger les données
     df = master_df if master_df is not None else get_df_cached()
-    df = add_action_cols(df)
-    kpi_cards = make_kpis(df)
+    df = df.copy()
 
+    # ✅ Harmoniser quelques alias pour l’UI
+    # Ici, on NE recopie PAS bêtement product_category
+    if "supplier_categorization" in df.columns and "Product Category" not in df.columns:
+        # Respecter la règle métier → prendre supplier_categorization comme référence
+        df["Product Category"] = df["supplier_categorization"]
+
+    elif "product_category" in df.columns and "Product Category" not in df.columns:
+        # Fallback si la catégorisation fournisseur n’existe pas encore
+        df["Product Category"] = df["product_category"]
+
+    if "credit_cumulable" in df.columns and "Credit_cumulable" not in df.columns:
+        df["Credit_cumulable"] = df["credit_cumulable"]
+
+    if "supplier" in df.columns and "Supplier" not in df.columns:
+        df["Supplier"] = df["supplier"]
+
+    # Colonnes prioritaires dans l’ordre
+    cols_priority = [
+        "product_name", "Supplier", "Suppliers (all)", "Product Category",
+        "total_stock", "Avg Daily Sales", "Max Daily Sales (Pikine)",
+        "Max Coverage Day", "ADJUSTED_LEADTIME",
+        "Optimal Stock (Reorder Point)", "Predicted Stockout",
+        "Predicted Order Quantity", "purchase_need",
+        "MOQ MAAD", "QAC", "Ajusted_total_need",
+        "credit_days", "Credit_cumulable", "MAX_CREDIT_BUFFER", "AJUSTER_BUFFER",
+        "delisting_status"
+    ]
+
+    available_priority = [c for c in cols_priority if c in df.columns]
+    extra_cols = [c for c in df.columns if c not in cols_priority]
+    available_cols = available_priority + extra_cols
+
+    # ➕ Nouvelle colonne Actions
+    # ➕ Colonne Actions avec vrais boutons Dash
+    df["Actions"] = [
+        html.Div([
+            html.Button("✏️", id={"type": "edit-btn", "index": i}, n_clicks=0,
+                        className="btn btn-sm btn-warning", style={"marginRight": "4px"}),
+            html.Button("🗑️", id={"type": "delete-btn", "index": i}, n_clicks=0,
+                        className="btn btn-sm btn-danger", style={"marginRight": "4px"}),
+            html.Button("➕", id={"type": "add-btn", "index": i}, n_clicks=0,
+                        className="btn btn-sm btn-success")
+        ], style={"display": "flex", "gap": "4px"})
+        for i in range(len(df))
+    ]
+
+    # KPIs
+    kpi_cards, risk_bell = make_kpis(df)
+
+    # En-tête
+    header_row = dbc.Row([
+        dbc.Col(html.H2("Overview"), md=8),
+        dbc.Col(html.Div(risk_bell, style={"textAlign": "right"}), md=4),
+    ])
+
+    # Tableau principal
     table = dash_table.DataTable(
         id="main-table",
-        columns=[{"name": c, "id": c, "deletable": False} for c in df.columns] +
-                [{"name": "Actions", "id": "✏️ Edit"}, {"name": " ", "id": "🗑️ Delete"}],
-        data=df.to_dict("records"),
+        columns=[
+            {"name": c, "id": c, "deletable": False, "hideable": True,
+             "presentation": "component" if c == "Actions" else "input"}
+            for c in available_cols
+        ],
+        data=df[available_cols].to_dict("records"),
         page_size=15,
         filter_action="native",
         sort_action="native", sort_mode="multi",
@@ -617,107 +1200,374 @@ def page_overview(master_df: pd.DataFrame = None):
         editable=True,
         row_selectable="single",
         selected_rows=[],
-        style_table={"overflowX": "auto"},
-        style_header={"backgroundColor": "#0f1625", "border": "1px solid #1f2937", "fontWeight": "700"},
-        style_cell={"backgroundColor": "#0b1220", "color": "#e5e7eb", "border": "1px solid #1f2937", "fontSize": 12},
+        style_table={"overflowX": "auto", "maxWidth": "100%"},
+        style_header={"backgroundColor": "#0f1625", "border": "1px solid #1f2937",
+                      "fontWeight": "700", "textAlign": "center"},
+        style_cell={"backgroundColor": "#0b1220", "color": "#e5e7eb",
+                    "border": "1px solid #1f2937", "fontSize": 11,
+                    "textAlign": "left", "padding": "6px"},
         style_data_conditional=[
-            {"if": {"filter_query": "{Stock Status} = 'Out of Stock'"}, "backgroundColor": "rgba(239,68,68,.15)", "color": "#fecaca"},
-            {"if": {"filter_query": "{Stock Status} = 'Predicted Stockout Soon'"}, "backgroundColor": "rgba(245,158,11,.15)", "color": "#fde68a"},
-            {"if": {"filter_query": "{Stock Status} = 'Order Soon'"}, "backgroundColor": "rgba(59,130,246,.12)", "color": "#bfdbfe"},
-            {"if": {"filter_query": "{Stock Status} = 'Stock OK'"}, "backgroundColor": "rgba(16,185,129,.1)", "color": "#a7f3d0"},
+            {"if": {"filter_query": "{Ajusted_total_need} = 'ORDER NOW'"},
+             "backgroundColor": "rgba(239,68,68,.2)", "color": "#fee2e2"},
+            {"if": {"filter_query": "{Ajusted_total_need} = 'ORDER NOT URGENT'"},
+             "backgroundColor": "rgba(245,158,11,.2)", "color": "#fef3c7"},
+            {"if": {"filter_query": "{Ajusted_total_need} = 'NO NEED'"},
+             "backgroundColor": "rgba(16,185,129,.15)", "color": "#d1fae5"},
         ],
-        export_format="none",
+        style_data={"whiteSpace": "normal", "height": "auto"},
+        export_format="csv",
+        export_headers="display",
         persistence=True,
-        persisted_props=["filter_query", "sort_by", "page_current", "selected_rows", "selected_columns", "hidden_columns"],
+        persisted_props=["filter_query", "sort_by", "page_current",
+                         "selected_rows", "selected_columns", "hidden_columns"],
     )
 
-    add_btn = dbc.Button("➕ Ajouter", id="btn-add-row", className="btn-primary", size="sm")
+    # Boutons d’actions globales
+    action_buttons = dbc.ButtonGroup([
+        dbc.Button("📥 Export CSV", id="btn-export", className="btn-outline-primary", size="sm"),
+        dbc.Button("🔄 Actualiser", id="btn-refresh", className="btn-outline-secondary", size="sm"),
+        dbc.Button("➕ Ajouter une ligne", id="btn-add-row", className="btn-primary", size="sm"),
+    ])
 
-    modal = dbc.Modal([
-        dbc.ModalHeader(dbc.ModalTitle("Éditer / Ajouter un produit")),
-        dbc.ModalBody([
-            dbc.Row([
-                dbc.Col([html.Small("Nom produit"), dbc.Input(id="edit-product", type="text")], md=6),
-                dbc.Col([html.Small("Fournisseur"), dbc.Input(id="edit-supplier", type="text")], md=6),
+    # ✅ Modal pour édition
+    edit_modal = dbc.Modal(
+        [
+            dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
+            dbc.ModalBody([
+                html.Div("Formulaire d’édition à implémenter ici…"),
+                dcc.Input(id="edit-input", type="text", placeholder="Modifier la valeur")
             ]),
-            html.Br(),
-            dbc.Row([
-                dbc.Col([html.Small("Catégorie"), dbc.Input(id="edit-category", type="text")], md=6),
-                dbc.Col([html.Small("Stock total"), dbc.Input(id="edit-stock", type="number")], md=6),
-            ]),
-        ]),
-        dbc.ModalFooter([
-            dbc.Button("Annuler", id="edit-cancel", className="btn-secondary", n_clicks=0),
-            dbc.Button("Enregistrer", id="edit-save", className="btn-primary", n_clicks=0),
-        ]),
-    ], id="edit-modal", is_open=False, backdrop="static")
+            dbc.ModalFooter(
+                dbc.Button("Fermer", id="close-edit", className="ms-auto", n_clicks=0)
+            ),
+        ],
+        id="edit-modal",
+        is_open=False,
+    )
 
     return html.Div(className="content", children=[
-        html.H2("Overview"),
+        header_row,
         html.Div(kpi_cards),
         html.Br(),
         html.Div(className="soft-card", children=[
-            html.Div(dbc.Row([dbc.Col(html.Div("Détails Produits (non modifié : calculs d’origine)", className="section-title"), md=9),
-                              dbc.Col(html.Div(add_btn, style={"textAlign":"right"}), md=3)])),
-            table
-        ]),
-        modal
+            html.Div(dbc.Row([
+                dbc.Col(html.Div(f"Détails Produits - {len(available_cols)} colonnes", className="section-title"), md=8),
+                dbc.Col(html.Div(action_buttons, style={"textAlign": "right"}), md=4)
+            ])),
+            html.Br(),
+            table,
+            edit_modal  # ✅ ajout modal
+        ])
     ])
 
-def page_analytics():
-    df = get_df_cached()
-    top_po = df.sort_values("Predicted Order Quantity", ascending=False).head(20) if 'Predicted Order Quantity' in df.columns else df.head(20)
-    fig_po = px.bar(top_po, x="product_name", y="Predicted Order Quantity", color="Supplier",
-                    title="Top 20 — Besoin de réappro (Predicted Order Quantity)") if 'Predicted Order Quantity' in top_po.columns else px.bar()
-    if not fig_po.data: fig_po.update_layout(title="Top 20 — Besoin de réappro (Données indisponibles)")
+from dash import callback_context
 
-    cat_share = df.groupby("Product Category", dropna=False)['total_stock'].sum().reset_index() if {'Product Category','total_stock'}.issubset(df.columns) else pd.DataFrame(columns=['Product Category','total_stock'])
-    fig_cat = px.pie(cat_share, names="Product Category", values="total_stock", title="Répartition du stock par catégorie") if not cat_share.empty else px.pie()
+# ✏️ Éditer une ligne
+@app.callback(
+    Output("main-table", "data", allow_duplicate=True),
+    Input({"type": "edit-btn", "index": ALL}, "n_clicks"),
+    State("main-table", "data"),
+    prevent_initial_call=True
+)
+def edit_row(edit_clicks, rows):
+    ctx = callback_context
+    if not ctx.triggered:
+        return rows
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    triggered = json.loads(triggered_id)
+    index = triggered["index"]
 
-    status_count = df['Stock Status'].value_counts(dropna=False).reset_index() if 'Stock Status' in df.columns else pd.DataFrame(columns=['Stock Status','count'])
-    if not status_count.empty: status_count.columns = ['Stock Status','count']
-    fig_status = px.bar(status_count, x="Stock Status", y="count", title="Distribution des statuts") if not status_count.empty else px.bar()
+    if 0 <= index < len(rows):
+        rows[index]["product_name"] = str(rows[index].get("product_name", "")) + " (✏️ édité)"
+    return rows
 
-    sup_map = df.groupby(['Supplier','Product Category'], dropna=False)['Predicted Order Quantity'].sum().reset_index() \
-        if {'Supplier','Product Category','Predicted Order Quantity'}.issubset(df.columns) else pd.DataFrame(columns=['Supplier','Product Category','Predicted Order Quantity'])
-    fig_treemap = px.treemap(sup_map, path=['Supplier','Product Category'], values='Predicted Order Quantity',
-                             title="Carte réassort — Supplier > Category") if not sup_map.empty else px.treemap()
 
-    for fig in [fig_po, fig_cat, fig_status, fig_treemap]:
-        fig.update_layout(template="plotly_dark")
+# 🗑️ Supprimer une ligne
+@app.callback(
+    Output("main-table", "data", allow_duplicate=True),
+    Input({"type": "delete-btn", "index": ALL}, "n_clicks"),
+    State("main-table", "data"),
+    prevent_initial_call=True
+)
+def delete_row(delete_clicks, rows):
+    ctx = callback_context
+    if not ctx.triggered:
+        return rows
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    triggered = json.loads(triggered_id)
+    index = triggered["index"]
 
-    return html.Div(className="content", children=[
-        html.H2("Analyses"),
-        dbc.Row([dbc.Col(dcc.Graph(figure=fig_po), md=12)], className="gy-3"),
-        html.Br(),
-        dbc.Row([dbc.Col(dcc.Graph(figure=fig_cat), md=6), dbc.Col(dcc.Graph(figure=fig_status), md=6)], className="gy-3"),
-        html.Br(),
-        dbc.Row([dbc.Col(dcc.Graph(figure=fig_treemap), md=12)], className="gy-3"),
-    ])
+    if 0 <= index < len(rows):
+        rows.pop(index)
+    return rows
 
-def page_predictions():
-    table = dash_table.DataTable(
-        id="pred-table",
-        columns=[{"name": c, "id": c} for c in ["product_name","Supplier","total_stock",
-                                                "Optimal Stock (Reorder Point)","Max Lead Time",
-                                                "Max Avg Daily Sales","Buffer Value","Suggested Order Qty"]],
-        data=[], page_size=15, sort_action="native",
-        style_table={"overflowX": "auto"},
-        style_header={"backgroundColor":"#0f1625","border":"1px solid #1f2937","fontWeight":"700"},
-        style_cell={"backgroundColor":"#0b1220","color":"#e5e7eb","border":"1px solid #1f2937","fontSize":12},
+
+# ➕ Ajouter une ligne
+@app.callback(
+    Output("main-table", "data", allow_duplicate=True),
+    Input({"type": "add-btn", "index": ALL}, "n_clicks"),
+    State("main-table", "data"),
+    State("main-table", "columns"),
+    prevent_initial_call=True
+)
+def add_row(add_clicks, rows, columns):
+    ctx = callback_context
+    if not ctx.triggered:
+        return rows
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    triggered = json.loads(triggered_id)
+    index = triggered["index"]
+
+    # Crée une ligne vide
+    new_row = {c["id"]: "" for c in columns}
+    rows.insert(index + 1, new_row)
+    return rows
+
+
+def page_analytics(master_df: pd.DataFrame = None):
+    df = master_df if master_df is not None else get_df_cached()
+
+    # Colonnes nécessaires
+    cols_to_keep = [
+        "product_name", "Supplier", "Product Category",
+        "total_stock", "Recalculated Average Daily Sales",
+        "Max Coverage Day", "ADJUSTED_LEADTIME",
+        "Ajusted_total_need", "purchase_need",
+        "QAC", "Optimal Stock (Reorder Point)"
+    ]
+    cols_to_keep = [c for c in cols_to_keep if c in df.columns]
+    analytics_df = df[cols_to_keep].dropna()
+
+    # KPI cards
+    kpi_cards, _ = make_kpis(df)
+
+    # Scatter Lead Time vs Coverage
+    fig_scatter = px.scatter(
+        analytics_df,
+        x="ADJUSTED_LEADTIME",
+        y="Max Coverage Day",
+        color="Ajusted_total_need",
+        hover_data=["product_name", "Supplier", "purchase_need", "QAC"],
+        labels={
+            "ADJUSTED_LEADTIME": "Adjusted Lead Time (jours)",
+            "Max Coverage Day": "Max Coverage (jours)"
+        },
+        title="Relation Lead Time ajusté vs Couverture stock"
     )
-    controls = html.Div(className="soft-card", children=[
-        html.Div("Scénarios What-If (non intrusif)", className="section-title"),
-        dbc.Row([
-            dbc.Col([html.Small("Multiplicateur Buffer (x)"), dcc.Slider(0.5, 2.0, 0.1, value=1.0, id="buffer-mult")], md=6),
-            dbc.Col([html.Small("Multiplicateur Lead Time (x)"), dcc.Slider(0.5, 2.0, 0.1, value=1.0, id="lead-mult")], md=6),
-        ]),
-        html.Br(), html.Small("La suggestion ci-dessous est recalculée à la volée pour l’exploration, sans changer les résultats source.")
-    ])
+
+    # Histogramme distribution du stock
+    fig_hist_stock = px.histogram(
+        analytics_df,
+        x="total_stock",
+        nbins=40,
+        title="Distribution du stock total",
+        labels={"total_stock": "Stock total"}
+    )
+
+    # Boxplot par catégorie
+    fig_box_category = px.box(
+        analytics_df,
+        x="Product Category",
+        y="Recalculated Average Daily Sales",
+        title="Distribution des ventes moyennes par catégorie",
+        labels={"Recalculated Average Daily Sales": "Ventes moyennes recalculées"}
+    )
+
+    # Bar chart besoin d'achat par fournisseur
+    purchase_by_supplier = (
+        analytics_df.groupby("Supplier")["purchase_need"].sum()
+        .reset_index().sort_values("purchase_need", ascending=False).head(10)
+    )
+    fig_purchase_supplier = px.bar(
+        purchase_by_supplier,
+        x="Supplier",
+        y="purchase_need",
+        title="Top 10 besoins d'achat par fournisseur",
+        labels={"purchase_need": "Besoin d’achat"}
+    )
+
+    # Scatter QAC vs Optimal Stock
+    fig_qac_vs_optimal = px.scatter(
+        analytics_df,
+        x="QAC",
+        y="Optimal Stock (Reorder Point)",
+        color="Product Category",
+        title="Relation QAC vs Stock optimal",
+        labels={"QAC": "Quantité ajustée commandée"}
+    )
+
     return html.Div(className="content", children=[
-        html.H2("Prédictions"), controls, html.Br(),
-        html.Div(className="soft-card", children=[html.Div("Plan de Réassort — Suggestions", className="section-title"), table])
+        dbc.Row([dbc.Col(html.H2("Analyses avancées"), md=12)]),
+        html.Div(kpi_cards),
+        html.Br(),
+
+        # Ligne 1
+        dbc.Row([
+            dbc.Col(dcc.Graph(figure=fig_scatter, id="analytics-scatter"), md=6),
+            dbc.Col(dcc.Graph(figure=fig_hist_stock), md=6)
+        ]),
+        html.Br(),
+
+        # Ligne 2
+        dbc.Row([
+            dbc.Col(dcc.Graph(figure=fig_box_category), md=6),
+            dbc.Col(dcc.Graph(figure=fig_purchase_supplier), md=6),
+        ]),
+        html.Br(),
+
+        # Ligne 3
+        dbc.Row([
+            dbc.Col(dcc.Graph(figure=fig_qac_vs_optimal), md=12)
+        ])
     ])
+
+
+# Callback : mettre à jour le scatter analytics avec filtres
+@app.callback(
+    Output("analytics-scatter", "figure"),
+    Input("analytics-filter-supplier", "value"),
+    Input("analytics-filter-category", "value"),
+    prevent_initial_call=False
+)
+def update_analytics_scatter(supplier_value, category_value):
+    df = get_df_cached()
+
+    # Colonnes nécessaires
+    cols = ["product_name", "Supplier", "Product Category",
+            "ADJUSTED_LEADTIME", "Max Coverage Day",
+            "Ajusted_total_need", "purchase_need", "QAC"]
+    df = df[[c for c in cols if c in df.columns]].dropna()
+
+    # Filtres
+    if supplier_value and supplier_value != "Tous":
+        df = df[df["Supplier"] == supplier_value]
+    if category_value and category_value != "Toutes":
+        df = df[df["Product Category"] == category_value]
+
+    fig = px.scatter(
+        df,
+        x="ADJUSTED_LEADTIME",
+        y="Max Coverage Day",
+        color="Ajusted_total_need",
+        hover_data=["product_name", "Supplier", "purchase_need", "QAC"],
+        labels={
+            "ADJUSTED_LEADTIME": "Adjusted Lead Time (jours)",
+            "Max Coverage Day": "Max Coverage (jours)"
+        },
+        title="Relation Lead Time ajusté vs Couverture stock"
+    )
+    return fig
+
+def page_predictive(master_df: pd.DataFrame = None):
+    df = master_df if master_df is not None else get_df_cached()
+
+    cols_to_keep = [
+        "product_name", "Supplier", "Product Category",
+        "total_stock", "Recalculated Average Daily Sales",
+        "Predicted Stockout", "Predicted Order Quantity",
+        "purchase_need", "QAC", "Ajusted_total_need",
+        "ADJUSTED_LEADTIME", "Max Coverage Day"
+    ]
+    cols_to_keep = [c for c in cols_to_keep if c in df.columns]
+    pred_df = df[cols_to_keep].copy()
+
+    # KPI : % de stockout prédits
+    if "Predicted Stockout" in pred_df.columns:
+        stockout_rate = pred_df["Predicted Stockout"].mean() * 100
+    else:
+        stockout_rate = 0
+
+    fig_bar = px.bar(
+        pred_df.sort_values("Predicted Order Quantity", ascending=False).head(20),
+        x="product_name",
+        y="Predicted Order Quantity",
+        color="Ajusted_total_need",
+        hover_data=["Supplier", "QAC", "purchase_need"],
+        labels={"Predicted Order Quantity": "Qté de commande prédite"},
+        title="Top 20 produits par besoin de commande"
+    )
+
+    return html.Div(className="content", children=[
+        dbc.Row([
+            dbc.Col(html.H2("Prédictions"), md=8),
+            dbc.Col(html.H5(f"Taux de stockout prédit : {stockout_rate:.1f}%", style={"textAlign": "right"}), md=4),
+        ]),
+        html.Br(),
+        html.Div(className="soft-card", children=[
+            dcc.Graph(figure=fig_bar, id="predictive-bar")
+        ]),
+        html.Br(),
+        dash_table.DataTable(
+            id="predictive-table",
+            columns=[{"name": c, "id": c} for c in pred_df.columns],
+            data=pred_df.to_dict("records"),
+            page_size=15,
+            filter_action="native",
+            sort_action="native", sort_mode="multi",
+            style_table={"overflowX": "auto"},
+            style_header={"backgroundColor": "#0f1625", "border": "1px solid #1f2937", "fontWeight": "700"},
+            style_cell={"backgroundColor": "#0b1220", "color": "#e5e7eb", "border": "1px solid #1f2937", "fontSize": 12},
+        )
+    ])
+
+
+# Callback : mettre à jour le bar chart prédictif
+@app.callback(
+    Output("predictive-bar", "figure"),
+    Input("predictive-filter-supplier", "value"),
+    Input("predictive-filter-category", "value"),
+    prevent_initial_call=False
+)
+def update_predictive_bar(supplier_value, category_value):
+    df = get_df_cached()
+
+    cols = ["product_name", "Supplier", "Product Category",
+            "Predicted Stockout", "Predicted Order Quantity",
+            "purchase_need", "QAC", "Ajusted_total_need"]
+    df = df[[c for c in cols if c in df.columns]].copy()
+
+    # Filtres
+    if supplier_value and supplier_value != "Tous":
+        df = df[df["Supplier"] == supplier_value]
+    if category_value and category_value != "Toutes":
+        df = df[df["Product Category"] == category_value]
+
+    fig = px.bar(
+        df.sort_values("Predicted Order Quantity", ascending=False).head(20),
+        x="product_name",
+        y="Predicted Order Quantity",
+        color="Ajusted_total_need",
+        hover_data=["Supplier", "QAC", "purchase_need"],
+        labels={"Predicted Order Quantity": "Qté de commande prédite"},
+        title="Top 20 produits par besoin de commande"
+    )
+    return fig
+
+
+# Callback : mettre à jour le tableau prédictif
+@app.callback(
+    Output("predictive-table", "data"),
+    Input("predictive-filter-supplier", "value"),
+    Input("predictive-filter-category", "value"),
+    prevent_initial_call=False
+)
+def update_predictive_table(supplier_value, category_value):
+    df = get_df_cached()
+
+    cols = ["product_name", "Supplier", "Product Category",
+            "total_stock", "Recalculated Average Daily Sales",
+            "Predicted Stockout", "Predicted Order Quantity",
+            "purchase_need", "QAC", "Ajusted_total_need",
+            "ADJUSTED_LEADTIME", "Max Coverage Day"]
+    df = df[[c for c in cols if c in df.columns]].copy()
+
+    # Filtres
+    if supplier_value and supplier_value != "Tous":
+        df = df[df["Supplier"] == supplier_value]
+    if category_value and category_value != "Toutes":
+        df = df[df["Product Category"] == category_value]
+
+    return df.to_dict("records")
 
 def page_about():
     return html.Div(className="content", children=[
@@ -916,7 +1766,7 @@ app.validation_layout = html.Div([
     make_sidebar(),
     page_overview(initial_df),
     page_analytics(),
-    page_predictions(),
+    page_predictive(),
     page_about(),
     html.Div(id="page-container"),
     html.Button(id="chat-fab"),
@@ -949,13 +1799,13 @@ def render_page(path, master_json):
     if path == "/analytics":
         return page_analytics()
     elif path == "/predictions":
-        return page_predictions()
+        return page_predictive()
     elif path == "/about":
         return page_about()
     return page_overview(base)
 
 # ------------------------------ Filtering logic ----------------------------------
-def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: list, cats: list, risk_only: bool):
+def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: list, cats: list, options: list):
     out = df.copy()
     if query:
         q = str(query).strip().lower()
@@ -967,25 +1817,35 @@ def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: li
         out = out[out['Stock Status'].isin(statuses)] if 'Stock Status' in out.columns else out
     if cats:
         out = out[out['Product Category'].isin(cats)] if 'Product Category' in out.columns else out
+
+    options = options or []
+    risk_only = ('risk' in options)
+
     if risk_only and 'Stock Status' in out.columns:
         out = out[out['Stock Status'].isin(['Out of Stock','Predicted Stockout Soon'])]
+
+    if 'by_product' in options:
+        out = aggregate_by_product(out)
+
     return out
 
+# ------------------------------ Callbacks: filtering / banner --------------------
 @app.callback(
     [Output("filtered-data","data"), Output("main-table","data"), Output("risk-banner","children")],
-    [Input("search-input","value"), Input("filter-supplier","value"), Input("filter-status","value"),
-     Input("filter-category","value"), Input("toggle-risk-only","value")],
+    [Input("search-input", "value"), Input("filter-supplier", "value"), Input("filter-status", "value"),
+     Input("filter-category", "value"), Input("toggle-options", "value")],
     State("master-data","data"),
     prevent_initial_call=False
 )
-def apply_filters(search, sup, stat, cat, risk_toggle, master_json):
+def apply_filters(search, sup, stat, cat, options, master_json):
     base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
-    sup = sup or []; stat = stat or []; cat = cat or []
-    risk_only = ('risk' in (risk_toggle or []))
-    fdf = filter_dataframe(base, search, sup, stat, cat, risk_only)
-    risk_count = int((fdf['Stock Status'].isin(['Out of Stock','Predicted Stockout Soon']).sum())) if 'Stock Status' in fdf.columns else 0
-    banner = [html.B("Alerte Rupture : "), f"{risk_count} SKU(s) à risque dans la vue filtrée — ",
-              html.Span("OOS", className="badge badge-danger"), " / ", html.Span("Rupture imminente", className="badge-warn")]
+    sup = sup or []; stat = stat or []; cat = cat or []; options = options or []
+    fdf = filter_dataframe(base, search, sup, stat, cat, options)
+
+    # ➜ On supprime l'ancienne bannière ; on renvoie un petit texte neutre,
+    #    ou même une chaîne vide pour laisser l'espace libre.
+    banner = " "  # ou: [html.Span(" ")]
+
     fdf_actions = add_action_cols(fdf)
     return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
 
@@ -1003,7 +1863,7 @@ def export_csv(n, data_json):
         if c in df.columns: df.drop(columns=[c], inplace=True)
     return dcc.send_data_frame(df.to_csv, f"supply_filtered_{datetime.now().strftime('%Y%m%d_%H%M')}.csv", index=False)
 
-# ------------------------------ Export Purchase Order PDF (1 produit sélectionné) -----
+# ------------------------------ Export Purchase Order PDF ------------------------
 @app.callback(
     Output("download-po", "data"),
     Input("btn-po-pdf", "n_clicks"),
@@ -1015,7 +1875,6 @@ def export_csv(n, data_json):
 def export_po_pdf(n, active_cell, selected_rows, table_data):
     if not n or not table_data:
         return no_update
-
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
@@ -1024,7 +1883,6 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.lib.units import mm
 
-        # 1) Déterminer la ligne choisie (active_cell ou sélection de ligne)
         row_idx = None
         if active_cell and isinstance(active_cell, dict):
             row_idx = active_cell.get("row")
@@ -1034,33 +1892,26 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
             return no_update
 
         r = table_data[row_idx]
-
-        # Champs attendus
         prod_name = str(r.get("product_name", "")).strip()
         supplier  = str(r.get("Supplier", "")).strip()
         qty       = r.get("Predicted Order Quantity", 0)
         unit_ht   = r.get("Unit Price HT", 0.0)
         remise    = r.get("Discount", 0.0)
-
         if not prod_name or not supplier:
             return no_update
 
-        # Normalisations numériques
         try: qty = int(pd.to_numeric(qty, errors="coerce") or 0)
         except Exception: qty = 0
         try: unit_ht = float(pd.to_numeric(unit_ht, errors="coerce") or 0.0)
         except Exception: unit_ht = 0.0
         try: remise = float(pd.to_numeric(remise, errors="coerce") or 0.0)
         except Exception: remise = 0.0
-        if qty <= 0:
-            qty = 1  # on force 1 pour éviter un BC vide
+        if qty <= 0: qty = 1
 
-        # 2) Calculs
         taux_tva  = DEFAULT_TVA_RATE
         total_ht  = (qty * unit_ht) * (1 - remise/100.0)
         total_ttc = total_ht * (1 + taux_tva)
 
-        # ref code simple depuis le nom
         def ref_from_name(name: str) -> str:
             if not name: return ""
             parts = [p for p in str(name).split() if p]
@@ -1068,10 +1919,8 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
             left = (parts[0][:3] if len(parts[0])>=3 else parts[0]).upper()
             right = (parts[1][:3] if len(parts)>1 and len(parts[1])>=3 else (parts[0][3:6] if len(parts[0])>3 else "")).upper()
             return "-".join([left, right]) if right else left
-
         ref_code = ref_from_name(prod_name)
 
-        # 3) PDF
         buf = io.BytesIO()
         po_number = get_next_po_number()
         fname = f"{po_number}_{ref_code}.pdf"
@@ -1080,7 +1929,6 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
         styles = getSampleStyleSheet()
         story = []
 
-        # Header : logo + entreprise
         header_row = []
         logo_src = get_logo_for_reportlab()
         if logo_src:
@@ -1099,6 +1947,7 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
         if COMPANY_EMAIL:   company_lines.append(f"Email : {COMPANY_EMAIL}")
         header_row.append(Paragraph("<br/>".join(company_lines), styles["Normal"]))
 
+        from reportlab.platypus import Table, TableStyle
         header_tbl = Table([header_row], colWidths=[25*mm, 150*mm])
         header_tbl.setStyle(TableStyle([
             ("VALIGN", (0,0), (-1,-1), "TOP"),
@@ -1107,7 +1956,6 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
         story.append(header_tbl)
         story.append(Spacer(1, 8))
 
-        # Titre + méta
         story.append(Paragraph("<b>BON DE COMMANDE</b>", styles["Title"]))
         story.append(Spacer(1, 6))
         meta_left = [
@@ -1122,7 +1970,6 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
         story.append(meta_tbl)
         story.append(Spacer(1, 10))
 
-        # Tableau lignes
         headers = ["REF","DESCRIPTION","QUANTITÉ","PU HT","REMISE","TOTAL HT","TAUX TVA","TOTAL TTC"]
         data_tbl = [headers, [
             ref_code, prod_name, qty, f"{unit_ht:.2f}", f"{remise:.1f}%",
@@ -1143,7 +1990,6 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
         story.append(tbl)
         story.append(Spacer(1, 12))
 
-        # Conditions
         for title, content in [
             ("Conditions de livraison :", "À préciser (lieu, délai, incoterm)."),
             ("Conditions de règlement :", "À préciser (échéance, mode, pénalités)."),
@@ -1164,7 +2010,7 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
         print("PDF error:", repr(e))
         return no_update
 
-# Activer le bouton PO si une cellule OU une ligne est sélectionnée et contient product_name + Supplier
+# Activer le bouton PO si une cellule/ligne est sélectionnée et contient product_name + Supplier
 @app.callback(
     Output("btn-po-pdf", "disabled"),
     [Input("main-table", "active_cell"),
@@ -1175,50 +2021,22 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
 def toggle_po_button(active_cell, selected_rows, data):
     if not data:
         return True
-
-    # déterminer la ligne sélectionnée
     row_idx = None
     if active_cell and isinstance(active_cell, dict):
         row_idx = active_cell.get("row")
     if (row_idx is None) and selected_rows:
         row_idx = selected_rows[0]
-
     if row_idx is None or row_idx < 0 or row_idx >= len(data):
         return True
-
     r = data[row_idx] or {}
     prod = str(r.get("product_name", "")).strip()
     sup  = str(r.get("Supplier", "")).strip()
     return not (prod and sup)
 
-# ------------------------------ Predictions What-If -------------------------------
-@app.callback(
-    Output("pred-table","data"),
-    [Input("buffer-mult","value"), Input("lead-mult","value"), State("filtered-data","data")],
-    prevent_initial_call=False
-)
-def recompute_suggestions(buffer_mult, lead_mult, filtered_json):
-    df = get_df_cached()
-    base = pd.DataFrame(json.loads(filtered_json)) if filtered_json else add_action_cols(df)
-    out = base.copy()
-    for c in ["✏️ Edit","🗑️ Delete"]:
-        if c in out.columns: out.drop(columns=[c], inplace=True)
-    for col in ['Max Daily Sales (Pikine)','Buffer Value','Max Avg Daily Sales','total_stock','Optimal Stock (Reorder Point)','Max Lead Time']:
-        if col not in out.columns: out[col] = 0
-    new_reorder = np.maximum(
-        out['Max Daily Sales (Pikine)'].fillna(0),
-        (out['Max Daily Sales (Pikine)'].fillna(0)/2.0) + (out['Buffer Value'].fillna(0) * float(buffer_mult)) * out.get('Max Avg Daily Sales',0).fillna(0)
-    )
-    anticip = (out['Max Lead Time'].fillna(0) * out['Max Avg Daily Sales'].fillna(0)) * (float(lead_mult) - 1.0)
-    suggested = (new_reorder - out['total_stock'].fillna(0) + anticip).clip(lower=0)
-    res = out[['product_name','Supplier','total_stock','Optimal Stock (Reorder Point)','Max Lead Time','Max Avg Daily Sales','Buffer Value']].copy()
-    res['Suggested Order Qty'] = suggested.round(0).astype(int)
-    return res.to_dict("records")
-
-# ------------------------------ Table Actions (Edit/Delete/Add) -------------------
+# ------------------------------ Edit/Add/Delete rows ------------------------------
 @app.callback(
     Output("edit-modal","is_open"),
-    Output("edit-product","value"),
+    Output("edit-input", "value"),
     Output("edit-supplier","value"),
     Output("edit-category","value"),
     Output("edit-stock","value"),
@@ -1247,7 +2065,7 @@ def open_edit_modal(n_add, active_cell, data):
     Output("master-data","data", allow_duplicate=True),
     Output("filtered-data","data", allow_duplicate=True),
     Output("main-table","data", allow_duplicate=True),
-    Output("risk-banner","children", allow_duplicate=True),
+    #Output("risk-banner","children", allow_duplicate=True),
     Output("edit-modal","is_open", allow_duplicate=True),
     Input("edit-save","n_clicks"),
     State("edit-product","value"),
@@ -1260,11 +2078,11 @@ def open_edit_modal(n_add, active_cell, data):
     State("filter-supplier","value"),
     State("filter-status","value"),
     State("filter-category","value"),
-    State("toggle-risk-only","value"),
+    State("toggle-options","value"),
     State("master-data","data"),
     prevent_initial_call=True
 )
-def save_edit(n, prod, sup, cat, stock, active_cell, table_data, q, fs, fst, fc, rt, master_json):
+def save_edit(n, prod, sup, cat, stock, active_cell, table_data, q, fs, fst, fc, opts, master_json):
     base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
     df = base.copy()
 
@@ -1283,7 +2101,7 @@ def save_edit(n, prod, sup, cat, stock, active_cell, table_data, q, fs, fst, fc,
                 try: df.at[i,"total_stock"] = float(stock)
                 except: pass
     else:
-        new_row = {c: np.nan for c in df.columns}  # np.nan au lieu de None
+        new_row = {c: np.nan for c in df.columns}
         new_row["product_name"] = prod or ""
         new_row["Supplier"] = sup or ""
         new_row["Product Category"] = cat or ""
@@ -1291,7 +2109,6 @@ def save_edit(n, prod, sup, cat, stock, active_cell, table_data, q, fs, fst, fc,
             new_row["total_stock"] = float(stock or 0)
         except:
             new_row["total_stock"] = 0.0
-        # initialise proprement quelques colonnes numériques si elles existent
         for c in ["Optimal Stock (Reorder Point)", "Max Lead Time", "Max Avg Daily Sales", "Max Coverage Day",
                   "Daily OOS Rate (30d)", "Predicted Order Quantity"]:
             if c in df.columns and pd.isna(new_row.get(c)):
@@ -1300,18 +2117,15 @@ def save_edit(n, prod, sup, cat, stock, active_cell, table_data, q, fs, fst, fc,
             new_row["Predicted Stockout"] = False
         if "Stock Status" in df.columns and pd.isna(new_row.get("Stock Status")):
             new_row["Stock Status"] = "Order Soon" if new_row["total_stock"] else "Out of Stock"
-
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-    # Refiltrer et renvoyer
-    sup_list = fs or []; stat_list = fst or []; cat_list = fc or []
-    risk_only = ('risk' in (rt or []))
-    fdf = filter_dataframe(df, q, sup_list, stat_list, cat_list, risk_only)
+    sup_list = fs or []; stat_list = fst or []; cat_list = fc or []; options = opts or []
+    fdf = filter_dataframe(df, q, sup_list, stat_list, cat_list, options)
     risk_count = int((fdf['Stock Status'].isin(['Out of Stock','Predicted Stockout Soon']).sum())) if 'Stock Status' in fdf.columns else 0
-    banner = [html.B("Alerte Rupture : "), f"{risk_count} SKU(s) à risque dans la vue filtrée — ",
-              html.Span("OOS", className="badge badge-danger"), " / ", html.Span("Rupture imminente", className="badge-warn")]
+    #banner = [html.B("Alerte Rupture : "), f"{risk_count} SKU(s) à risque dans la vue filtrée — ",
+            #  html.Span("OOS", className="badge badge-danger"), " / ", html.Span("Rupture imminente", className="badge-warn")]
     fdf_actions = add_action_cols(fdf)
-    return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner, False
+    return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), False
 
 @app.callback(
     Output("master-data","data", allow_duplicate=True),
@@ -1324,11 +2138,11 @@ def save_edit(n, prod, sup, cat, stock, active_cell, table_data, q, fs, fst, fc,
     State("filter-supplier","value"),
     State("filter-status","value"),
     State("filter-category","value"),
-    State("toggle-risk-only","value"),
+    State("toggle-options","value"),
     State("master-data","data"),
     prevent_initial_call=True
 )
-def delete_row(active_cell, table_data, q, fs, fst, fc, rt, master_json):
+def delete_row(active_cell, table_data, q, fs, fst, fc, opts, master_json):
     if not active_cell or active_cell.get("column_id") != "🗑️ Delete" or not table_data:
         raise dash.exceptions.PreventUpdate
     base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
@@ -1338,9 +2152,8 @@ def delete_row(active_cell, table_data, q, fs, fst, fc, rt, master_json):
     key_s = r.get("Supplier")
     df = base[~((base["product_name"].astype(str)==str(key_p)) & (base["Supplier"].astype(str)==str(key_s)))].copy()
 
-    sup_list = fs or []; stat_list = fst or []; cat_list = fc or []
-    risk_only = ('risk' in (rt or []))
-    fdf = filter_dataframe(df, q, sup_list, stat_list, cat_list, risk_only)
+    sup_list = fs or []; stat_list = fst or []; cat_list = fc or []; options = opts or []
+    fdf = filter_dataframe(df, q, sup_list, stat_list, cat_list, options)
     risk_count = int((fdf['Stock Status'].isin(['Out of Stock','Predicted Stockout Soon']).sum())) if 'Stock Status' in fdf.columns else 0
     banner = [html.B("Alerte Rupture : "), f"{risk_count} SKU(s) à risque dans la vue filtrée — ",
               html.Span("OOS", className="badge badge-danger"), " / ", html.Span("Rupture imminente", className="badge-warn")]

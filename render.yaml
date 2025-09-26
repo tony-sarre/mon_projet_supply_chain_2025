@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: supply-chain-analytics
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn supply_chain_analytics:server -b 0.0.0.0:$PORT --workers=2 --threads=4 --timeout=240 --worker-tmp-dir /dev/shm
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9

@@ -1572,12 +1572,12 @@ def page_analytics(master_df: pd.DataFrame = None):
 
 
 # Callback : mettre à jour le scatter analytics avec filtres
-@app.callback(
-    Output("analytics-scatter", "figure"),
-    Input("analytics-filter-supplier", "value"),
-    Input("analytics-filter-category", "value"),
-    prevent_initial_call=False
-)
+#@app.callback(
+ #   Output("analytics-scatter", "figure"),
+  #  Input("analytics-filter-supplier", "value"),
+   # Input("analytics-filter-category", "value"),
+    #prevent_initial_call=False
+#)
 def update_analytics_scatter(supplier_value, category_value):
     df = get_df_cached()
 
@@ -2203,27 +2203,30 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
 
 # Activer le bouton PO si une cellule/ligne est sélectionnée et contient product_name + Supplier
 @app.callback(
-    Output("btn-po-pdf", "disabled"),
+    Output("btn-po-pdf", "disabled", allow_duplicate=True),
     [Input("main-table", "active_cell"),
      Input("main-table", "selected_rows"),
      Input("main-table", "data")],
-    prevent_initial_call=False
+    prevent_initial_call=True  # Crucial pour éviter l'exécution prématurée
 )
 def toggle_po_button(active_cell, selected_rows, data):
     if not data:
         return True
+
     row_idx = None
     if active_cell and isinstance(active_cell, dict):
         row_idx = active_cell.get("row")
     if (row_idx is None) and selected_rows:
-        row_idx = selected_rows[0]
+        row_idx = selected_rows[0] if selected_rows else None
+
     if row_idx is None or row_idx < 0 or row_idx >= len(data):
         return True
+
     r = data[row_idx] or {}
     prod = str(r.get("product_name", "")).strip()
-    sup  = str(r.get("Supplier", "")).strip()
-    return not (prod and sup)
+    sup = str(r.get("Supplier", "")).strip()
 
+    return not (prod and sup)
 # ------------------------------ Edit/Add/Delete rows ------------------------------
 @app.callback(
     Output("edit-modal","is_open"),
@@ -2256,7 +2259,7 @@ def open_edit_modal(n_add, active_cell, data):
     Output("master-data","data", allow_duplicate=True),
     Output("filtered-data","data", allow_duplicate=True),
     Output("main-table","data", allow_duplicate=True),
-    #Output("risk-banner","children", allow_duplicate=True),
+    Output("risk-banner","children", allow_duplicate=True),  # ✅ Décommenté
     Output("edit-modal","is_open", allow_duplicate=True),
     Input("edit-save","n_clicks"),
     State("edit-product","value"),

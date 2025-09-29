@@ -500,10 +500,10 @@ def load_supply_data() -> pd.DataFrame:
 
     # ✅ Nettoyage : suppression colonnes parasites après merge
     cols_to_drop = [
-        "Average Daily Sales (7d)_x", "Average Daily Sales (30d)_x","Average Daily Sales (7d)","Average Daily Sales (30d)",
-        "Daily OOS Rate (7d)_x", "Daily OOS Rate (30d)_x","Coverage Day (7d)","Coverage Day (30d)",
-        "Average Daily Sales (7d)_y", "Average Daily Sales (30d)_y","Avg Lead Time",
-        "Daily OOS Rate (7d)_y", "Daily OOS Rate (30d)_y","Stock Status","Credit Adequacy Score","Credit Adequacy Risk"
+        "Average Daily Sales (7d)_x", "Average Daily Sales (30d)_x",
+        "Daily OOS Rate (7d)_x", "Daily OOS Rate (30d)_x",
+        "Average Daily Sales (7d)_y", "Average Daily Sales (30d)_y",
+        "Daily OOS Rate (7d)_y", "Daily OOS Rate (30d)_y","Stock Status"
     ]
     final_stock_sales_df.drop(
         columns=[c for c in cols_to_drop if c in final_stock_sales_df.columns],

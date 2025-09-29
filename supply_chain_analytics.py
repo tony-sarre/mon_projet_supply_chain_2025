@@ -1214,12 +1214,21 @@ def page_overview(master_df: pd.DataFrame = None):
         "credit_days", "Credit_cumulable", "MAX_CREDIT_BUFFER", "AJUSTER_BUFFER",
         "delisting_status"
     ]
+    # 🔒 Forcer les colonnes critiques à exister
+    for col in ["Supplier", "Recalculated Average Daily Sales"]:
+        if col not in df.columns:
+            df[col] = "Unknown" if col == "Supplier" else 0.1
 
     available_priority = [c for c in cols_priority if c in df.columns]
     extra_cols = [c for c in df.columns if c not in cols_priority]
     available_cols = available_priority + extra_cols
 
-    # ➕ Nouvelle colonne Actions
+    # 🔒 Double sécurité : garantir Supplier et Recalculated ADS
+    for col in ["Supplier", "Recalculated Average Daily Sales"]:
+        if col not in available_cols:
+            available_cols.insert(1, col)
+
+            # ➕ Nouvelle colonne Actions
     # ➕ Colonne Actions avec vrais boutons Dash
     df["Actions"] = [
         html.Div([

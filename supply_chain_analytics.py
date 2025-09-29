@@ -1354,10 +1354,11 @@ def page_overview(master_df: pd.DataFrame = None):
         data=df[available_cols].to_dict("records"),
         page_size=15,
         filter_action="native",
-        sort_action="native", sort_mode="multi",
+        sort_action="native",
+        sort_mode="multi",
         column_selectable="single",
         editable=True,
-        row_selectable="single",
+        row_selectable="single",  # ✅ UNE SEULE FOIS
         selected_rows=[],
         style_table={"overflowX": "auto", "maxWidth": "100%"},
         style_header={"backgroundColor": "#0f1625", "border": "1px solid #1f2937",
@@ -2266,26 +2267,58 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
     [Input("main-table", "active_cell"),
      Input("main-table", "selected_rows"),
      Input("main-table", "data")],
-    prevent_initial_call=True  # ✅ N'exécute que sur interaction
+    prevent_initial_call=True  # ✅ CRUCIAL : ne s'exécute que sur interaction
 )
 def toggle_po_button(active_cell, selected_rows, data):
-    if not data:
+    # Si pas de données, désactiver
+    if not data or len(data) == 0:
         return True
 
+    # Déterminer quelle ligne est sélectionnée
     row_idx = None
-    if active_cell and isinstance(active_cell, dict):
+
+    # Priorité 1 : selected_rows (clic sur la checkbox)
+    if selected_rows and len(selected_rows) > 0:
+        row_idx = selected_rows[0]
+
+    # Priorité 2 : active_cell (clic sur une cellule)
+    if row_idx is None and active_cell and isinstance(active_cell, dict):
         row_idx = active_cell.get("row")
-    if row_idx is None and selected_rows:
-        row_idx = selected_rows[0] if selected_rows else None
 
+    # Vérifier que l'index est valide
     if row_idx is None or row_idx < 0 or row_idx >= len(data):
-        return True
+        return True  # Désactivé
 
-    r = data[row_idx]
-    prod = str(r.get("product_name", "")).strip()
-    sup = str(r.get("Supplier", "")).strip()
+    # Récupérer la ligne et vérifier les champs obligatoires
+    try:
+        r = data[row_idx]
+        prod = str(r.get("product_name", "")).strip()
+        sup = str(r.get("Supplier", "")).strip()
 
-    return not (prod and sup)  # False = activé, True = désactivé
+        # Activer seulement si les deux champs sont présents
+        return not (prod and sup)  # False = activé, True = désactivé
+
+    except (IndexError, KeyError, TypeError):
+        return True  # Désactivé en cas d'erreur
+
+@app.callback(
+    Output("debug-info", "children"),  # Ajoutez <div id="debug-info"></div> dans la sidebar
+    [Input("main-table", "active_cell"),
+     Input("main-table", "selected_rows"),
+     Input("main-table", "data")],
+    prevent_initial_call=True
+)
+def debug_selection(active_cell, selected_rows, data):
+    return html.Pre(f"""
+🔍 DEBUG SÉLECTION:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- active_cell: {active_cell}
+- selected_rows: {selected_rows}
+- Nombre lignes data: {len(data) if data else 0}
+
+{f"• Ligne sélectionnée: {selected_rows[0] if selected_rows else 'None'}" if selected_rows else ""}
+{f"• Données ligne: {data[selected_rows[0]] if selected_rows and len(selected_rows) > 0 and len(data) > selected_rows[0] else 'N/A'}" if selected_rows else ""}
+""")
 # ------------------------------ Edit/Add/Delete rows ------------------------------
 @app.callback(
     Output("edit-modal","is_open"),

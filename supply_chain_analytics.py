@@ -970,7 +970,8 @@ def make_sidebar():
                     {"label": "Afficher uniquement risques de rupture", "value": "risk"},
                     {"label": "Regrouper par produit (dé-dup)", "value": "by_product"},
                 ],
-                value=["by_product"], id="toggle-options", switch=True
+                value=[],  # ✅ VIDE PAR DÉFAUT au lieu de ["by_product"]
+                id="toggle-options", switch=True
             )
         ]),
 
@@ -1102,12 +1103,16 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
 
     grouped = tmp.groupby('product_name', dropna=False).agg(agg_map).reset_index()
 
-    # Rejoindre le fournisseur principal (selon stock)
+    # Rejoindre le fournisseur principal
     if not main_sup.empty:
         grouped = grouped.merge(main_sup, on='product_name', how='left')
-        # Renommer la colonne Supplier -> Suppliers (all)
+        # ✅ GARDER "Supplier" comme colonne principale
         if 'Supplier' in grouped.columns:
             grouped.rename(columns={'Supplier': 'Suppliers (all)'}, inplace=True)
+        # ✅ AJOUTER : renommer Main Supplier -> Supplier pour compatibilité UI
+        if 'Main Supplier' in grouped.columns:
+            grouped['Supplier'] = grouped['Main Supplier']
+            # Optionnel : garder aussi Suppliers (all) pour référence
 
     return grouped
 
@@ -1242,17 +1247,17 @@ def page_overview(master_df: pd.DataFrame = None):
 
             # ➕ Nouvelle colonne Actions
     # ➕ Colonne Actions avec vrais boutons Dash
-    df["Actions"] = [
-        html.Div([
-            html.Button("✏️", id={"type": "edit-btn", "index": i}, n_clicks=0,
-                        className="btn btn-sm btn-warning", style={"marginRight": "4px"}),
-            html.Button("🗑️", id={"type": "delete-btn", "index": i}, n_clicks=0,
-                        className="btn btn-sm btn-danger", style={"marginRight": "4px"}),
-            html.Button("➕", id={"type": "add-btn", "index": i}, n_clicks=0,
-                        className="btn btn-sm btn-success")
-        ], style={"display": "flex", "gap": "4px"})
-        for i in range(len(df))
-    ]
+    #df["Actions"] = [
+     #   html.Div([
+      #      html.Button("✏️", id={"type": "edit-btn", "index": i}, n_clicks=0,
+       #                 className="btn btn-sm btn-warning", style={"marginRight": "4px"}),
+        #    html.Button("🗑️", id={"type": "delete-btn", "index": i}, n_clicks=0,
+         #               className="btn btn-sm btn-danger", style={"marginRight": "4px"}),
+          #  html.Button("➕", id={"type": "add-btn", "index": i}, n_clicks=0,
+           #             className="btn btn-sm btn-success")
+        #], style={"display": "flex", "gap": "4px"})
+        #for i in range(len(df))
+    #]
 
     # KPIs
     kpi_cards, risk_bell = make_kpis(df)
@@ -1921,16 +1926,44 @@ def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: li
 
     return out
 
+
+def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Garantit que les colonnes critiques existent et sont valides"""
+    df = df.copy()
+
+    # 1. Supplier
+    if "Supplier" not in df.columns:
+        if "Suppliers (all)" in df.columns:
+            # Extraire le premier fournisseur de la liste
+            df["Supplier"] = df["Suppliers (all)"].str.split(",").str[0].str.strip()
+        else:
+            df["Supplier"] = "unknown"
+
+    # Nettoyer les valeurs vides
+    df["Supplier"] = df["Supplier"].fillna("unknown").replace("", "unknown")
+
+    # 2. Recalculated Average Daily Sales
+    if "Recalculated Average Daily Sales" not in df.columns:
+        df["Recalculated Average Daily Sales"] = 0.1
+
+    df["Recalculated Average Daily Sales"] = pd.to_numeric(
+        df["Recalculated Average Daily Sales"],
+        errors='coerce'
+    ).fillna(0.1).clip(lower=0.1)
+
+    return df
+
 # ------------------------------ Callbacks: filtering / banner --------------------
 @app.callback(
     [Output("filtered-data","data"), Output("main-table","data"), Output("risk-banner","children")],
     [Input("search-input", "value"), Input("filter-supplier", "value"), Input("filter-status", "value"),
      Input("filter-category", "value"), Input("toggle-options", "value")],
     State("master-data","data"),
-    prevent_initial_call=False
+    prevent_initial_call=True
 )
 def apply_filters(search, sup, stat, cat, options, master_json):
     base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+    base = validate_core_columns(base)
     sup = sup or []; stat = stat or []; cat = cat or []; options = options or []
     fdf = filter_dataframe(base, search, sup, stat, cat, options)
 
@@ -1941,6 +1974,20 @@ def apply_filters(search, sup, stat, cat, options, master_json):
     fdf_actions = add_action_cols(fdf)
     return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
 
+
+@app.callback(
+    [Output("filtered-data", "data"), Output("main-table", "data"), Output("risk-banner", "children")],
+    Input("master-data", "data"),
+    prevent_initial_call=False
+)
+def initialize_table(master_json):
+    """Initialise le tableau au chargement sans filtres"""
+    df = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+    df = validate_core_columns(df)
+
+    # Pas d'agrégation, pas de filtres
+    banner = " "
+    return df.to_json(orient="records"), df.to_dict("records"), banner
 # ------------------------------ Export CSV ---------------------------------------
 @app.callback(
     Output("download-data","data"),

@@ -1819,29 +1819,69 @@ def _detect_lang(text: str) -> str:
     if any(w in t for w in fr_markers) or re.search(r"[àâçéèêëîïôùûüœ]", t): return "fr"
     return "en"
 
+
 def _clean_df_for_advice(df: pd.DataFrame) -> pd.DataFrame:
-    if not isinstance(df, pd.DataFrame) or df.empty: return pd.DataFrame()
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return pd.DataFrame()
+
     d = pd.DataFrame()
-    d["product_name_display"] = df.get("product_name","")
-    d["supplier_name"] = df.get("Supplier","")
-    d["abc_class"] = df.get("Product Category","")
+    d["product_name_display"] = df.get("product_name", "")
+    d["supplier_name"] = df.get("Supplier", "")
+    d["abc_class"] = df.get("Product Category", "")
     d["xyz_class"] = ""
-    d["current_stock"] = pd.to_numeric(df.get("total_stock",0), errors="coerce").fillna(0).clip(lower=0)
-    d["avg_daily_sales"] = pd.to_numeric(df.get("Max Avg Daily Sales",0), errors="coerce").fillna(0).clip(lower=0)
-    cov = np.where(d["avg_daily_sales"]>0, d["current_stock"]/d["avg_daily_sales"], np.nan)
-    d["coverage_days"] = pd.to_numeric(df.get("Max Coverage Day", cov), errors="coerce")
-    d["coverage_days"] = pd.Series(d["coverage_days"]).fillna(0).clip(lower=0, upper=365)
-    d["leadtime_days"] = pd.to_numeric(df.get("Max Lead Time",7), errors="coerce").fillna(7).clip(lower=0, upper=180)
-    d["credit_days"] = 14
+    d["current_stock"] = pd.to_numeric(df.get("total_stock", 0), errors="coerce").fillna(0).clip(lower=0)
+    d["avg_daily_sales"] = pd.to_numeric(df.get("Recalculated Average Daily Sales", 0), errors="coerce").fillna(0).clip(
+        lower=0)  # ✅ Changé de "Max Avg Daily Sales"
+
+    # ✅ CORRECTION : Gestion robuste de coverage_days
+    with np.errstate(divide='ignore', invalid='ignore'):
+        cov = np.where(d["avg_daily_sales"] > 0, d["current_stock"] / d["avg_daily_sales"], 0)
+
+    if "Max Coverage Day" in df.columns:
+        # Si la colonne existe, l'utiliser
+        d["coverage_days"] = pd.to_numeric(df["Max Coverage Day"], errors="coerce").fillna(0)
+    else:
+        # Sinon, utiliser le calcul
+        d["coverage_days"] = cov
+
+    # Convertir explicitement en Series avant clip
+    d["coverage_days"] = pd.Series(d["coverage_days"], dtype=float).clip(lower=0, upper=365)
+
+    # ✅ CORRECTION : Lead time avec fallback
+    if "ADJUSTED_LEADTIME" in df.columns:
+        d["leadtime_days"] = pd.to_numeric(df["ADJUSTED_LEADTIME"], errors="coerce").fillna(7)
+    elif "Max Lead Time" in df.columns:
+        d["leadtime_days"] = pd.to_numeric(df["Max Lead Time"], errors="coerce").fillna(7)
+    else:
+        d["leadtime_days"] = 7
+
+    d["leadtime_days"] = pd.Series(d["leadtime_days"], dtype=float).clip(lower=0, upper=180)
+
+    # ✅ CORRECTION : Crédit
+    if "credit_days" in df.columns:
+        d["credit_days"] = pd.to_numeric(df["credit_days"], errors="coerce").fillna(14)
+    else:
+        d["credit_days"] = 14
+
+    # Rupture ML
     if "Predicted Stockout" in df.columns:
         d["rupture_ml"] = np.where(df["Predicted Stockout"], "OUI", "NON")
     else:
-        st = df.get("Stock Status","").astype(str)
-        d["rupture_ml"] = np.where(st.isin(["Out of Stock","Predicted Stockout Soon"]), "OUI", "NON")
+        st = df.get("Stock Status", "").astype(str)
+        d["rupture_ml"] = np.where(st.isin(["Out of Stock", "Predicted Stockout Soon"]), "OUI", "NON")
+
     d["delisting_product"] = "NON"
-    bad = d["product_name_display"].astype(str).str.contains(r'\b(CFA|CASH|CFA\s*-\s*CASH|ESPECES|CAISSE)\b', case=False, na=False)
-    d = d[~bad]
-    d["risk"] = (d["rupture_ml"].astype(str).str.upper()=="OUI").astype(int)
+
+    # Exclure produits non pertinents
+    bad = d["product_name_display"].astype(str).str.contains(
+        r'\b(CFA|CASH|CFA\s*-\s*CASH|ESPECES|CAISSE)\b',
+        case=False,
+        na=False
+    )
+    d = d[~bad].copy()  # ✅ Ajout de .copy() pour éviter SettingWithCopyWarning
+
+    d["risk"] = (d["rupture_ml"].astype(str).str.upper() == "OUI").astype(int)
+
     return d
 
 def _bubble(role: str, text: str):

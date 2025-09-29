@@ -790,6 +790,32 @@ def load_supply_data() -> pd.DataFrame:
     final_stock_sales_df["Recalculated Average Daily Sales"] = pd.to_numeric(
         final_stock_sales_df["Recalculated Average Daily Sales"], errors="coerce"
     ).fillna(0.1)
+
+    # =========================
+    # 🔒 Sécurisation colonnes critiques pour l'UI
+    # =========================
+    # Supplier → toujours string propre
+    if "Supplier" in final_stock_sales_df.columns:
+        final_stock_sales_df["Supplier"] = (
+            final_stock_sales_df["Supplier"]
+            .astype(str)
+            .fillna("unknown")
+            .str.strip()
+            .str.lower()
+        )
+    else:
+        final_stock_sales_df["Supplier"] = "unknown"
+
+    # Recalculated Average Daily Sales → toujours numérique > 0
+    if "Recalculated Average Daily Sales" in final_stock_sales_df.columns:
+        final_stock_sales_df["Recalculated Average Daily Sales"] = (
+            pd.to_numeric(final_stock_sales_df["Recalculated Average Daily Sales"], errors="coerce")
+            .fillna(0.1)
+            + 0.1
+        )
+    else:
+        final_stock_sales_df["Recalculated Average Daily Sales"] = 0.1
+
     return final_stock_sales_df
 
 

@@ -1226,8 +1226,6 @@ def page_overview(master_df: pd.DataFrame = None):
              "backgroundColor": "#1e293b", "color": "#f9fafb"},
             {"if": {"state": "selected"},
              "backgroundColor": "#334155", "color": "#f9fafb"},
-            {"if": {"state": "hover"},
-             "backgroundColor": "#1f2937", "color": "#f9fafb"},
         ],
         style_data={"whiteSpace": "normal", "height": "auto"},
         export_format="csv",

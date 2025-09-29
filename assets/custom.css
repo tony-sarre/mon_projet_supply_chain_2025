@@ -1,0 +1,48 @@
+/* 🎨 Style custom pour Dash DataTable */
+
+/* Hover sur les lignes */
+.dash-table-container .dash-spreadsheet-container
+.dash-spreadsheet-inner table tbody tr:hover {
+    background-color: #1f2937 !important; /* bleu foncé */
+    color: #f9fafb !important;            /* texte clair */
+    cursor: pointer;
+}
+
+/* Ligne sélectionnée */
+.dash-table-container .dash-spreadsheet-container
+.dash-spreadsheet-inner table tbody tr.is-selected {
+    background-color: #334155 !important; /* gris bleuté */
+    color: #f9fafb !important;
+}
+
+/* Ligne active (clic) */
+.dash-table-container .dash-spreadsheet-container
+.dash-spreadsheet-inner table tbody tr.active {
+    background-color: #1a2536 !important;
+    color: #ffffff !important;
+}
+
+/* ============================= */
+/* 🔴 Colonnes critiques (ORDER) */
+/* ============================= */
+
+/* ORDER NOW → fond rouge clair + texte rouge vif en gras */
+.dash-table-container td[data-dash-column="Ajusted_total_need"][data-dash-value="ORDER NOW"] {
+    background-color: rgba(239, 68, 68, 0.2) !important;
+    color: #ef4444 !important;
+    font-weight: bold !important;
+}
+
+/* ORDER NOT URGENT → fond orange clair + texte orange en gras */
+.dash-table-container td[data-dash-column="Ajusted_total_need"][data-dash-value="ORDER NOT URGENT"] {
+    background-color: rgba(245, 158, 11, 0.2) !important;
+    color: #f59e0b !important;
+    font-weight: bold !important;
+}
+
+/* NO NEED → fond vert clair + texte vert en gras */
+.dash-table-container td[data-dash-column="Ajusted_total_need"][data-dash-value="NO NEED"] {
+    background-color: rgba(16, 185, 129, 0.15) !important;
+    color: #10b981 !important;
+    font-weight: bold !important;
+}

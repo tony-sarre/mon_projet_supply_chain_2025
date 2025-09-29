@@ -14,11 +14,11 @@ app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[db
 server = app.server
 import re
 import io
-import json
 import base64
+from datetime import datetime
+import json
 import threading
 from pathlib import Path
-from datetime import datetime
 import numpy as np
 import pandas as pd
 
@@ -74,19 +74,33 @@ def _get_logo_data_uri():
 
 LOGO_DATA_URI = _get_logo_data_uri()
 
+
 def get_logo_for_reportlab():
     try:
         from reportlab.lib.utils import ImageReader
+
+        # Priorité 1 : Fichier local
         p = Path("logo_maad.jpg")
-        if p.exists():
+        if p.exists() and p.stat().st_size > 0:
+            print(f"✅ Logo found: {p.absolute()}")
             return str(p)
+
+        # Priorité 2 : Base64
         if LOGO_DATA_URI and "," in LOGO_DATA_URI:
-            b64 = LOGO_DATA_URI.split(",", 1)[1] if LOGO_DATA_URI.startswith("data:") else LOGO_DATA_URI
-            raw = base64.b64decode(b64)
-            return ImageReader(io.BytesIO(raw))
-    except Exception:
-        pass
-    return None
+            try:
+                b64 = LOGO_DATA_URI.split(",", 1)[1] if LOGO_DATA_URI.startswith("data:") else LOGO_DATA_URI
+                raw = base64.b64decode(b64)
+                print(f"✅ Logo loaded from base64 ({len(raw)} bytes)")
+                return ImageReader(io.BytesIO(raw))
+            except Exception as e:
+                print(f"⚠️ Base64 logo decode failed: {e}")
+
+        print("⚠️ No logo available, continuing without")
+        return None
+
+    except Exception as e:
+        print(f"❌ Logo loading error: {e}")
+        return None
 
 # ------------------------------ PO Numbering -------------------------------------
 PO_COUNTER_PATH = Path("./po_counter.json")
@@ -2066,6 +2080,8 @@ def export_csv(n, data_json):
 def export_po_pdf(n, active_cell, selected_rows, table_data):
     if not n or not table_data:
         return no_update
+
+    # ============= BLOC 1 : Import ReportLab avec gestion d'erreur =============
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
@@ -2073,45 +2089,74 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
                                         TableStyle, Spacer, Image)
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.lib.units import mm
+    except ImportError as e:
+        print(f"❌ ReportLab import error: {e}")
+        print("→ Run: pip install reportlab")
+        return no_update
 
-        row_idx = None
-        if active_cell and isinstance(active_cell, dict):
-            row_idx = active_cell.get("row")
-        if (row_idx is None) and selected_rows:
-            row_idx = selected_rows[0]
-        if row_idx is None or row_idx < 0 or row_idx >= len(table_data):
-            return no_update
+    # ============= BLOC 2 : Logique de sélection améliorée =============
+    row_idx = None
 
-        r = table_data[row_idx]
-        prod_name = str(r.get("product_name", "")).strip()
-        supplier  = str(r.get("Supplier", "")).strip()
-        qty       = r.get("Predicted Order Quantity", 0)
-        unit_ht   = r.get("Unit Price HT", 0.0)
-        remise    = r.get("Discount", 0.0)
-        if not prod_name or not supplier:
-            return no_update
+    # Priorité 1 : Ligne explicitement sélectionnée
+    if selected_rows and len(selected_rows) > 0:
+        row_idx = selected_rows[0]
 
-        try: qty = int(pd.to_numeric(qty, errors="coerce") or 0)
-        except Exception: qty = 0
-        try: unit_ht = float(pd.to_numeric(unit_ht, errors="coerce") or 0.0)
-        except Exception: unit_ht = 0.0
-        try: remise = float(pd.to_numeric(remise, errors="coerce") or 0.0)
-        except Exception: remise = 0.0
-        if qty <= 0: qty = 1
+    # Priorité 2 : Cellule active
+    elif active_cell and isinstance(active_cell, dict):
+        row_idx = active_cell.get("row")
 
-        taux_tva  = DEFAULT_TVA_RATE
-        total_ht  = (qty * unit_ht) * (1 - remise/100.0)
-        total_ttc = total_ht * (1 + taux_tva)
+    # Validation
+    if row_idx is None or row_idx < 0 or row_idx >= len(table_data):
+        print(f"❌ PDF Error: Invalid row_idx={row_idx}, table length={len(table_data)}")
+        return no_update
 
-        def ref_from_name(name: str) -> str:
-            if not name: return ""
-            parts = [p for p in str(name).split() if p]
-            if not parts: return str(name)[:6].upper()
-            left = (parts[0][:3] if len(parts[0])>=3 else parts[0]).upper()
-            right = (parts[1][:3] if len(parts)>1 and len(parts[1])>=3 else (parts[0][3:6] if len(parts[0])>3 else "")).upper()
-            return "-".join([left, right]) if right else left
-        ref_code = ref_from_name(prod_name)
+    r = table_data[row_idx]
+    print(f"✅ Generating PDF for row {row_idx}: {r.get('product_name')}")
 
+    # ============= BLOC 3 : Extraction des données (VOTRE CODE ORIGINAL) =============
+    prod_name = str(r.get("product_name", "")).strip()
+    supplier = str(r.get("Supplier", "")).strip()
+    qty = r.get("Predicted Order Quantity", 0)
+    unit_ht = r.get("Unit Price HT", 0.0)
+    remise = r.get("Discount", 0.0)
+
+    if not prod_name or not supplier:
+        print(f"❌ Missing required fields: product_name='{prod_name}', supplier='{supplier}'")
+        return no_update
+
+    try:
+        qty = int(pd.to_numeric(qty, errors="coerce") or 0)
+    except Exception:
+        qty = 0
+    try:
+        unit_ht = float(pd.to_numeric(unit_ht, errors="coerce") or 0.0)
+    except Exception:
+        unit_ht = 0.0
+    try:
+        remise = float(pd.to_numeric(remise, errors="coerce") or 0.0)
+    except Exception:
+        remise = 0.0
+
+    if qty <= 0:
+        qty = 1
+
+    taux_tva = DEFAULT_TVA_RATE
+    total_ht = (qty * unit_ht) * (1 - remise / 100.0)
+    total_ttc = total_ht * (1 + taux_tva)
+
+    def ref_from_name(name: str) -> str:
+        if not name: return ""
+        parts = [p for p in str(name).split() if p]
+        if not parts: return str(name)[:6].upper()
+        left = (parts[0][:3] if len(parts[0]) >= 3 else parts[0]).upper()
+        right = (parts[1][:3] if len(parts) > 1 and len(parts[1]) >= 3 else (
+            parts[0][3:6] if len(parts[0]) > 3 else "")).upper()
+        return "-".join([left, right]) if right else left
+
+    ref_code = ref_from_name(prod_name)
+
+    # ============= BLOC 4 : Génération PDF avec gestion d'erreur robuste =============
+    try:
         buf = io.BytesIO()
         po_number = get_next_po_number()
         fname = f"{po_number}_{ref_code}.pdf"
@@ -2120,16 +2165,22 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
         styles = getSampleStyleSheet()
         story = []
 
+        # Header avec logo
         header_row = []
         logo_src = get_logo_for_reportlab()
         if logo_src:
-            logo_img = Image(logo_src)
-            logo_img.drawHeight = 18 * mm
-            logo_img.drawWidth = 18 * mm
-            header_row.append(logo_img)
+            try:
+                logo_img = Image(logo_src)
+                logo_img.drawHeight = 18 * mm
+                logo_img.drawWidth = 18 * mm
+                header_row.append(logo_img)
+            except Exception as logo_err:
+                print(f"⚠️ Logo image creation failed: {logo_err}, skipping")
+                header_row.append(Paragraph("", styles["Normal"]))
         else:
             header_row.append(Paragraph("", styles["Normal"]))
 
+        # Company info
         company_lines = [f"<b>{COMPANY_NAME}</b>"]
         if COMPANY_CAPITAL: company_lines.append(f"Montant du capital social : {COMPANY_CAPITAL}")
         if COMPANY_RCS:     company_lines.append(f"N° et lieu RCS : {COMPANY_RCS}")
@@ -2138,17 +2189,18 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
         if COMPANY_EMAIL:   company_lines.append(f"Email : {COMPANY_EMAIL}")
         header_row.append(Paragraph("<br/>".join(company_lines), styles["Normal"]))
 
-        from reportlab.platypus import Table, TableStyle
-        header_tbl = Table([header_row], colWidths=[25*mm, 150*mm])
+        header_tbl = Table([header_row], colWidths=[25 * mm, 150 * mm])
         header_tbl.setStyle(TableStyle([
-            ("VALIGN", (0,0), (-1,-1), "TOP"),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ]))
         story.append(header_tbl)
         story.append(Spacer(1, 8))
 
+        # Title et metadata
         story.append(Paragraph("<b>BON DE COMMANDE</b>", styles["Title"]))
         story.append(Spacer(1, 6))
+
         meta_left = [
             f"Bon de commande N° : <b>{po_number}</b>",
             f"Date : {datetime.now().strftime('%d/%m/%Y')}",
@@ -2156,31 +2208,35 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
         meta_right = ["Fournisseur :", f"<b>{supplier}</b>"] if supplier else []
         meta_tbl = Table([[Paragraph("<br/>".join(meta_left), styles["Normal"]),
                            Paragraph("<br/>".join(meta_right), styles["Normal"])]],
-                         colWidths=[100*mm, 75*mm])
-        meta_tbl.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "TOP")]))
+                         colWidths=[100 * mm, 75 * mm])
+        meta_tbl.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
         story.append(meta_tbl)
         story.append(Spacer(1, 10))
 
-        headers = ["REF","DESCRIPTION","QUANTITÉ","PU HT","REMISE","TOTAL HT","TAUX TVA","TOTAL TTC"]
-        data_tbl = [headers, [
-            ref_code, prod_name, qty, f"{unit_ht:.2f}", f"{remise:.1f}%",
-            f"{total_ht:.2f}", f"{int(taux_tva*100)}%", f"{total_ttc:.2f}"
-        ], ["","TOTAL", qty, "", "", f"{total_ht:.2f}", "", f"{total_ttc:.2f}"]]
+        # Tableau produit
+        headers = ["REF", "DESCRIPTION", "QUANTITÉ", "PU HT", "REMISE", "TOTAL HT", "TAUX TVA", "TOTAL TTC"]
+        data_tbl = [
+            headers,
+            [ref_code, prod_name, qty, f"{unit_ht:.2f}", f"{remise:.1f}%",
+             f"{total_ht:.2f}", f"{int(taux_tva * 100)}%", f"{total_ttc:.2f}"],
+            ["", "TOTAL", qty, "", "", f"{total_ht:.2f}", "", f"{total_ttc:.2f}"]
+        ]
 
         tbl = Table(data_tbl, hAlign="LEFT",
-                    colWidths=[25*mm,65*mm,20*mm,20*mm,20*mm,25*mm,20*mm,25*mm])
+                    colWidths=[25 * mm, 65 * mm, 20 * mm, 20 * mm, 20 * mm, 25 * mm, 20 * mm, 25 * mm])
         tbl.setStyle(TableStyle([
-            ("GRID", (0,0), (-1,-1), 0.25, colors.grey),
-            ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
-            ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-            ("ALIGN", (2,1), (2,-1), "RIGHT"),
-            ("ALIGN", (3,1), (-1,-1), "RIGHT"),
-            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("BOTTOMPADDING", (0,0), (-1,0), 6),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("ALIGN", (2, 1), (2, -1), "RIGHT"),
+            ("ALIGN", (3, 1), (-1, -1), "RIGHT"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
         ]))
         story.append(tbl)
         story.append(Spacer(1, 12))
 
+        # Conditions
         for title, content in [
             ("Conditions de livraison :", "À préciser (lieu, délai, incoterm)."),
             ("Conditions de règlement :", "À préciser (échéance, mode, pénalités)."),
@@ -2192,22 +2248,25 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
 
         doc.build(story)
         buf.seek(0)
+
+        print(f"✅ PDF generated successfully: {fname}")
         return dcc.send_bytes(lambda b: b.write(buf.getvalue()), filename=fname)
 
-    except ModuleNotFoundError:
-        print("ReportLab non installé: pip install reportlab")
-        return no_update
     except Exception as e:
-        print("PDF error:", repr(e))
+        import traceback
+        print(f"❌ PDF generation failed:")
+        print(f"   Error: {type(e).__name__}: {e}")
+        print(f"   Row data: {r}")
+        print(f"   Traceback:\n{traceback.format_exc()}")
         return no_update
 
 # Activer le bouton PO si une cellule/ligne est sélectionnée et contient product_name + Supplier
 @app.callback(
-    Output("btn-po-pdf", "disabled", allow_duplicate=True),
+    Output("btn-po-pdf", "disabled"),
     [Input("main-table", "active_cell"),
      Input("main-table", "selected_rows"),
      Input("main-table", "data")],
-    prevent_initial_call=True  # Crucial pour éviter l'exécution prématurée
+    prevent_initial_call=True  # ✅ N'exécute que sur interaction
 )
 def toggle_po_button(active_cell, selected_rows, data):
     if not data:
@@ -2216,17 +2275,17 @@ def toggle_po_button(active_cell, selected_rows, data):
     row_idx = None
     if active_cell and isinstance(active_cell, dict):
         row_idx = active_cell.get("row")
-    if (row_idx is None) and selected_rows:
+    if row_idx is None and selected_rows:
         row_idx = selected_rows[0] if selected_rows else None
 
     if row_idx is None or row_idx < 0 or row_idx >= len(data):
         return True
 
-    r = data[row_idx] or {}
+    r = data[row_idx]
     prod = str(r.get("product_name", "")).strip()
     sup = str(r.get("Supplier", "")).strip()
 
-    return not (prod and sup)
+    return not (prod and sup)  # False = activé, True = désactivé
 # ------------------------------ Edit/Add/Delete rows ------------------------------
 @app.callback(
     Output("edit-modal","is_open"),

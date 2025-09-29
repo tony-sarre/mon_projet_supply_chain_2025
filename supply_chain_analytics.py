@@ -792,29 +792,28 @@ def load_supply_data() -> pd.DataFrame:
     ).fillna(0.1)
 
     # =========================
-    # 🔒 Sécurisation colonnes critiques pour l'UI
+    # 🔒 Dernier filet de sécurité
     # =========================
-    # Supplier → toujours string propre
-    if "Supplier" in final_stock_sales_df.columns:
-        final_stock_sales_df["Supplier"] = (
-            final_stock_sales_df["Supplier"]
-            .astype(str)
-            .fillna("unknown")
-            .str.strip()
-            .str.lower()
-        )
-    else:
-        final_stock_sales_df["Supplier"] = "unknown"
+    must_have_cols = {
+        "Supplier": "unknown",
+        "Recalculated Average Daily Sales": 0.1,
+    }
 
-    # Recalculated Average Daily Sales → toujours numérique > 0
-    if "Recalculated Average Daily Sales" in final_stock_sales_df.columns:
-        final_stock_sales_df["Recalculated Average Daily Sales"] = (
-            pd.to_numeric(final_stock_sales_df["Recalculated Average Daily Sales"], errors="coerce")
-            .fillna(0.1)
-            + 0.1
-        )
-    else:
-        final_stock_sales_df["Recalculated Average Daily Sales"] = 0.1
+    for col, default_val in must_have_cols.items():
+        if col not in final_stock_sales_df.columns:
+            final_stock_sales_df[col] = default_val
+        else:
+            if isinstance(default_val, str):
+                final_stock_sales_df[col] = (
+                    final_stock_sales_df[col].astype(str)
+                    .fillna(default_val)
+                    .str.strip()
+                    .str.lower()
+                )
+            else:
+                final_stock_sales_df[col] = pd.to_numeric(
+                    final_stock_sales_df[col], errors="coerce"
+                ).fillna(default_val)
 
     return final_stock_sales_df
 

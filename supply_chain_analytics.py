@@ -1204,7 +1204,8 @@ def page_overview(master_df: pd.DataFrame = None):
 
     # Colonnes prioritaires dans l’ordre
     cols_priority = [
-        "product_name", "Supplier", "Suppliers (all)", "Product Category",
+        "product_name", "Supplier", "Suppliers (all)", "Recalculated Average Daily Sales",
+        "Product Category",
         "total_stock", "Avg Daily Sales", "Max Daily Sales (Pikine)",
         "Max Coverage Day", "ADJUSTED_LEADTIME",
         "Optimal Stock (Reorder Point)", "Predicted Stockout",

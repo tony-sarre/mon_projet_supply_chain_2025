@@ -503,6 +503,9 @@ def load_supply_data() -> pd.DataFrame:
     # =========================
     # SUPPLIER CATEGORIZATION → UPDATE PRODUCT CATEGORY
     # =========================
+    # =========================
+    # SUPPLIER CATEGORIZATION → UPDATE PRODUCT CATEGORY
+    # =========================
     supplier_categorization_lookup_df = pd.DataFrame()
     if not supplier_categorization_df.empty and supplier_categorization_df.shape[1] > 7:
         supplier_categorization_lookup_df = supplier_categorization_df.iloc[:, [0, 7]].copy()
@@ -512,6 +515,7 @@ def load_supply_data() -> pd.DataFrame:
         )
         supplier_categorization_lookup_df = supplier_categorization_lookup_df.drop_duplicates(
             subset=['Supplier_Name_Lookup'])
+        print(f"Supplier categorization loaded: {len(supplier_categorization_lookup_df)} suppliers")
 
     if not supplier_categorization_lookup_df.empty and 'Supplier' in final_stock_sales_df.columns:
         final_stock_sales_df['Supplier'] = final_stock_sales_df['Supplier'].astype(str).str.lower().str.strip()
@@ -534,21 +538,37 @@ def load_supply_data() -> pd.DataFrame:
         # RÈGLE MÉTIER CRITIQUE: Si credit_days > 0, utiliser supplier categorization
         if all(col in final_stock_sales_df.columns for col in
                ['credit_days', 'Product Category', 'Supplier_Categorization_Lookup']):
-            final_stock_sales_df['credit_days'] = pd.to_numeric(final_stock_sales_df['credit_days'],
-                                                                errors='coerce').fillna(0)
 
+            final_stock_sales_df['credit_days'] = pd.to_numeric(
+                final_stock_sales_df['credit_days'], errors='coerce'
+            ).fillna(0)
+
+            # AVANT modification
+            original_categories = final_stock_sales_df['Product Category'].copy()
+
+            # APPLICATION DE LA RÈGLE
             final_stock_sales_df['Product Category'] = final_stock_sales_df.apply(
                 lambda row: row['Supplier_Categorization_Lookup'] if row['credit_days'] > 0 else row[
                     'Product Category'],
                 axis=1
             )
-            print("'Product Category' updated based on supplier categorization and credit_days.")
+
+            # LOGGING : compter les modifications
+            modified_count = (final_stock_sales_df['Product Category'] != original_categories).sum()
+            print(f"'Product Category' updated: {modified_count} products modified based on credit_days > 0")
+
+            # Afficher échantillon
+            if modified_count > 0:
+                sample = final_stock_sales_df[final_stock_sales_df['Product Category'] != original_categories][
+                    ['product_name', 'Supplier', 'credit_days', 'Product Category']
+                ].head(5)
+                print("Sample of modified products:")
+                print(sample.to_string(index=False))
 
         if 'Supplier_Categorization_Lookup' in final_stock_sales_df.columns:
             final_stock_sales_df.drop(columns=['Supplier_Categorization_Lookup'], inplace=True)
     else:
         print("Warning: Supplier categorization data unavailable or incomplete.")
-
     # =========================
     # Parametres Replenish (Buffer lookup) - APRÈS update Product Category
     # =========================
@@ -1157,8 +1177,23 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
         agg_map['Ajusted_total_need'] = pick_need
     if 'Stock Status' in tmp.columns:
         agg_map['Stock Status'] = pick_status
+    # Dans aggregate_by_product(), ligne ~1182
     if 'Product Category' in tmp.columns:
-        agg_map['Product Category'] = first_non_null
+        # Fonction qui priorise les catégories issues de la règle crédit
+        def pick_category_with_credit_priority(series):
+            # Si toutes les valeurs sont identiques, prendre n'importe laquelle
+            unique_vals = series.dropna().unique()
+            if len(unique_vals) <= 1:
+                return first_non_null(series)
+
+            # Sinon, prioriser les valeurs qui ne sont PAS "CX" (défaut)
+            non_default = series[series != "CX"].dropna()
+            if not non_default.empty:
+                return non_default.iloc[0]
+
+            return first_non_null(series)
+
+        agg_map['Product Category'] = pick_category_with_credit_priority
     if 'delisting_status' in tmp.columns:
         agg_map['delisting_status'] = first_non_null
     if 'Credit_cumulable' in tmp.columns:
@@ -2031,16 +2066,24 @@ def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
 def apply_filters(search, sup, stat, cat, options, master_json):
     base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
     base = validate_core_columns(base)
-    sup = sup or []; stat = stat or []; cat = cat or []; options = options or []
+
+    # LOGGING AVANT FILTRAGE
+    print(f"[apply_filters] Product Category distribution BEFORE filtering:")
+    print(base['Product Category'].value_counts().head())
+
+    sup = sup or [];
+    stat = stat or [];
+    cat = cat or [];
+    options = options or []
     fdf = filter_dataframe(base, search, sup, stat, cat, options)
 
-    # ➜ On supprime l'ancienne bannière ; on renvoie un petit texte neutre,
-    #    ou même une chaîne vide pour laisser l'espace libre.
-    banner = " "  # ou: [html.Span(" ")]
+    # LOGGING APRÈS FILTRAGE
+    print(f"[apply_filters] Product Category distribution AFTER filtering:")
+    print(fdf['Product Category'].value_counts().head())
 
+    banner = " "
     fdf_actions = add_action_cols(fdf)
     return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
-
 
 @app.callback(
     [Output("filtered-data", "data"), Output("main-table", "data"), Output("risk-banner", "children")],

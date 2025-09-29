@@ -767,54 +767,37 @@ def load_supply_data() -> pd.DataFrame:
         print(f"[ML Stockout] Erreur lors du calcul ML: {e}")
         final_stock_sales_df["Stockout Probability"] = 0.0
 
-    if "supplier_categorization" in final_stock_sales_df.columns and "Product Category" not in final_stock_sales_df.columns:
-        final_stock_sales_df["Product Category"] = final_stock_sales_df["supplier_categorization"]
-    elif "product_category" in final_stock_sales_df.columns and "Product Category" not in final_stock_sales_df.columns:
-        final_stock_sales_df["Product Category"] = final_stock_sales_df["product_category"]
+    def _ensure_not_empty_string(s: pd.Series, default_val: str) -> pd.Series:
+        # Remplace None/NaN et chaînes vides par une valeur par défaut, proprement.
+        return (
+            s.where(~s.isna(), None)  # garde les NaN comme None
+            .apply(lambda x: None if (isinstance(x, str) and x.strip() == "") else x)
+            .fillna(default_val)
+            .astype(str).str.strip()
+        )
 
-    if "credit_cumulable" in final_stock_sales_df.columns and "Credit_cumulable" not in final_stock_sales_df.columns:
-        final_stock_sales_df["Credit_cumulable"] = final_stock_sales_df["credit_cumulable"]
+    # Supplier
+    if "Supplier" not in final_stock_sales_df.columns:
+        final_stock_sales_df["Supplier"] = "unknown"
+    else:
+        final_stock_sales_df["Supplier"] = _ensure_not_empty_string(final_stock_sales_df["Supplier"], "unknown")
 
-    if "supplier" in final_stock_sales_df.columns and "Supplier" not in final_stock_sales_df.columns:
-        final_stock_sales_df["Supplier"] = final_stock_sales_df["supplier"]
-
-
-    if "supplier" in final_stock_sales_df.columns and "Supplier" not in final_stock_sales_df.columns:
-        final_stock_sales_df.rename(columns={"supplier": "Supplier"}, inplace=True)
-    elif "Supplier" not in final_stock_sales_df.columns:
-        final_stock_sales_df["Supplier"] = "Unknown"
-
-    # Recalculated ADS : toujours présent et numérique
+    # Recalculated Average Daily Sales
     if "Recalculated Average Daily Sales" not in final_stock_sales_df.columns:
         final_stock_sales_df["Recalculated Average Daily Sales"] = 0.1
-    final_stock_sales_df["Recalculated Average Daily Sales"] = pd.to_numeric(
-        final_stock_sales_df["Recalculated Average Daily Sales"], errors="coerce"
-    ).fillna(0.1)
 
-    # =========================
-    # 🔒 Dernier filet de sécurité
-    # =========================
-    must_have_cols = {
-        "Supplier": "unknown",
-        "Recalculated Average Daily Sales": 0.1,
-    }
+    final_stock_sales_df["Recalculated Average Daily Sales"] = (
+        pd.to_numeric(final_stock_sales_df["Recalculated Average Daily Sales"], errors="coerce")
+        .fillna(0.1)
+        .clip(lower=0.1)
+    )
 
-    for col, default_val in must_have_cols.items():
-        if col not in final_stock_sales_df.columns:
-            final_stock_sales_df[col] = default_val
-        else:
-            if isinstance(default_val, str):
-                final_stock_sales_df[col] = (
-                    final_stock_sales_df[col].astype(str)
-                    .fillna(default_val)
-                    .str.strip()
-                    .str.lower()
-                )
-            else:
-                final_stock_sales_df[col] = pd.to_numeric(
-                    final_stock_sales_df[col], errors="coerce"
-                ).fillna(default_val)
-
+    # (Optionnel mais utile) : mettre ces colonnes en tête pour éviter toute “disparition visuelle”
+    _front = ["product_name", "Supplier", "Recalculated Average Daily Sales"]
+    final_stock_sales_df = final_stock_sales_df[
+        [c for c in _front if c in final_stock_sales_df.columns] +
+        [c for c in final_stock_sales_df.columns if c not in _front]
+        ]
     return final_stock_sales_df
 
 
@@ -1186,6 +1169,33 @@ def page_overview(master_df: pd.DataFrame = None):
     df = master_df if master_df is not None else get_df_cached()
     df = df.copy()
 
+    # === UI HARDENING (garantir présence + valeurs non vides) ===
+    def _ui_harden(df):
+        # Supplier non vide
+        if "Supplier" not in df.columns:
+            df["Supplier"] = "unknown"
+        else:
+            s = df["Supplier"]
+            df["Supplier"] = (
+                s.where(~s.isna(), None)
+                .apply(lambda x: None if (isinstance(x, str) and str(x).strip() == "") else x)
+                .fillna("unknown")
+                .astype(str).str.strip()
+            )
+
+        # Recalculated ADS non vide et numérique
+        if "Recalculated Average Daily Sales" not in df.columns:
+            df["Recalculated Average Daily Sales"] = 0.1
+
+        df["Recalculated Average Daily Sales"] = (
+            pd.to_numeric(df["Recalculated Average Daily Sales"], errors="coerce")
+            .fillna(0.1)
+            .clip(lower=0.1)
+        )
+        return df
+
+    df = _ui_harden(df)
+
     # ✅ Harmoniser quelques alias pour l’UI
     # Ici, on NE recopie PAS bêtement product_category
     if "supplier_categorization" in df.columns and "Product Category" not in df.columns:
@@ -1214,10 +1224,12 @@ def page_overview(master_df: pd.DataFrame = None):
         "credit_days", "Credit_cumulable", "MAX_CREDIT_BUFFER", "AJUSTER_BUFFER",
         "delisting_status"
     ]
-    # 🔒 Forcer les colonnes critiques à exister
-    for col in ["Supplier", "Recalculated Average Daily Sales"]:
-        if col not in df.columns:
-            df[col] = "Unknown" if col == "Supplier" else 0.1
+    # Forcer ces colonnes à être prioritaires et visibles
+    for must in ["Supplier", "Recalculated Average Daily Sales"]:
+        if must not in cols_priority:
+            # les mettre très haut (après product_name)
+            insert_at = 1 if "product_name" in cols_priority else 0
+            cols_priority.insert(insert_at, must)
 
     available_priority = [c for c in cols_priority if c in df.columns]
     extra_cols = [c for c in df.columns if c not in cols_priority]

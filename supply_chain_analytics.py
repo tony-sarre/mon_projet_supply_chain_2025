@@ -767,6 +767,29 @@ def load_supply_data() -> pd.DataFrame:
         print(f"[ML Stockout] Erreur lors du calcul ML: {e}")
         final_stock_sales_df["Stockout Probability"] = 0.0
 
+    if "supplier_categorization" in final_stock_sales_df.columns and "Product Category" not in final_stock_sales_df.columns:
+        final_stock_sales_df["Product Category"] = final_stock_sales_df["supplier_categorization"]
+    elif "product_category" in final_stock_sales_df.columns and "Product Category" not in final_stock_sales_df.columns:
+        final_stock_sales_df["Product Category"] = final_stock_sales_df["product_category"]
+
+    if "credit_cumulable" in final_stock_sales_df.columns and "Credit_cumulable" not in final_stock_sales_df.columns:
+        final_stock_sales_df["Credit_cumulable"] = final_stock_sales_df["credit_cumulable"]
+
+    if "supplier" in final_stock_sales_df.columns and "Supplier" not in final_stock_sales_df.columns:
+        final_stock_sales_df["Supplier"] = final_stock_sales_df["supplier"]
+
+
+    if "supplier" in final_stock_sales_df.columns and "Supplier" not in final_stock_sales_df.columns:
+        final_stock_sales_df.rename(columns={"supplier": "Supplier"}, inplace=True)
+    elif "Supplier" not in final_stock_sales_df.columns:
+        final_stock_sales_df["Supplier"] = "Unknown"
+
+    # Recalculated ADS : toujours présent et numérique
+    if "Recalculated Average Daily Sales" not in final_stock_sales_df.columns:
+        final_stock_sales_df["Recalculated Average Daily Sales"] = 0.1
+    final_stock_sales_df["Recalculated Average Daily Sales"] = pd.to_numeric(
+        final_stock_sales_df["Recalculated Average Daily Sales"], errors="coerce"
+    ).fillna(0.1)
     return final_stock_sales_df
 
 
@@ -1198,7 +1221,7 @@ def page_overview(master_df: pd.DataFrame = None):
         "Daily OOS Rate (30d)_y", "Avg Lead Time",
         "Coverage Day (30d)", "Coverage Day (7d)",
         "Average Daily Sales (30d)", "Average Daily Sales (7d)",
-        "Daily OOS Rate (30d)_x"
+        "Daily OOS Rate (30d)_x", "Stockout Probability"
     ]
     available_cols = [c for c in available_cols if c not in cols_to_hide]
 

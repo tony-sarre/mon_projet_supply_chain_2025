@@ -1894,40 +1894,51 @@ def _bubble(role: str, text: str):
 def _render_messages(msgs: list):
     return [_bubble(m.get("role","assistant"), m.get("text","")) for m in msgs or []]
 
+
 def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> str:
     try:
         if not user_text or not str(user_text).strip():
             return "Je peux analyser tes stocks, les risques de rupture et suggérer des quantités à commander."
+
         lang = _detect_lang(user_text)
         sample = _clean_df_for_advice(df if isinstance(df, pd.DataFrame) else pd.DataFrame())
-        fields = ['product_name_display','supplier_name','abc_class','xyz_class','current_stock','avg_daily_sales',
-                  'coverage_days','leadtime_days','credit_days','rupture_ml','delisting_product']
+        fields = ['product_name_display', 'supplier_name', 'abc_class', 'xyz_class', 'current_stock', 'avg_daily_sales',
+                  'coverage_days', 'leadtime_days', 'credit_days', 'rupture_ml', 'delisting_product',
+                  'risk']  # ✅ Ajout de 'risk'
         view = sample[[c for c in fields if c in sample.columns]].copy() if not sample.empty else pd.DataFrame()
 
-        cov_med = None; rows_digest = []
+        cov_med = None;
+        rows_digest = []
         try:
             if not view.empty:
-                cov_med = float(pd.to_numeric(view.get('coverage_days', pd.Series(dtype=float)), errors='coerce').median())
-                at_risk = view[view.get('rupture_ml','NON').astype(str).str.upper().eq('OUI')] if not view.empty else pd.DataFrame()
-                top_list = at_risk.sort_values('coverage_days', ascending=True).head(6) if not at_risk.empty else view.sort_values('coverage_days', ascending=True).head(6)
-                for _, r in (top_list if isinstance(top_list, pd.DataFrame) else pd.DataFrame()).iterrows():
+                cov_med = float(
+                    view['coverage_days'].median()) if 'coverage_days' in view.columns else None  # ✅ Simplifié
+                at_risk = view[
+                    view['rupture_ml'].str.upper() == 'OUI'] if 'rupture_ml' in view.columns else pd.DataFrame()
+                top_list = at_risk.sort_values('coverage_days', ascending=True).head(
+                    6) if not at_risk.empty else view.sort_values('coverage_days', ascending=True).head(6)
+
+                for _, r in top_list.iterrows():
                     rows_digest.append({
-                        "name": str(r.get('product_name_display','')),
-                        "sup": str(r.get('supplier_name','')),
-                        "cov": float(pd.to_numeric(r.get('coverage_days',0), errors='coerce') or 0),
-                        "lt": int(pd.to_numeric(r.get('leadtime_days',0), errors='coerce') or 0),
-                        "abc": str(r.get('abc_class','')), "xyz": str(r.get('xyz_class','')),
-                        "cred": int(pd.to_numeric(r.get('credit_days',0), errors='coerce') or 0),
+                        "name": str(r.get('product_name_display', '')),
+                        "sup": str(r.get('supplier_name', '')),
+                        "cov": float(r.get('coverage_days', 0)),
+                        "lt": int(r.get('leadtime_days', 0)),
+                        "abc": str(r.get('abc_class', '')),
+                        "xyz": str(r.get('xyz_class', '')),
+                        "cred": int(r.get('credit_days', 0)),
                     })
+        except Exception as e:
+            print(f"[Chatbot] Erreur agrégation: {e}")
+
+        table_json = []
+        try:
+            table_json = view.head(80).to_dict(orient="records")
         except Exception:
             pass
 
-        table_json = []
-        try: table_json = view.head(80).to_dict(orient="records")
-        except Exception: pass
-
         if openai_client is None:
-            return _chatbot_fallback(user_text, view)
+            return _chatbot_fallback(user_text, view)  # ✅ Passe view, pas df
 
         if lang == "fr":
             system_msg = (
@@ -1939,7 +1950,9 @@ def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> 
                    (f"KPI: couverture médiane ≈ {cov_med:.1f} j\n" if cov_med is not None else ""))
             if rows_digest:
                 ctx += "Priorités (extrait): " + "; ".join(
-                    [f"{d['name']} (sup {d['sup']}) cov {d['cov']:.1f}j, LT {d['lt']}j, crédit {d['cred']}j, {d['abc']}{d['xyz']}" for d in rows_digest]
+                    [
+                        f"{d['name']} (sup {d['sup']}) cov {d['cov']:.1f}j, LT {d['lt']}j, crédit {d['cred']}j, {d['abc']}{d['xyz']}"
+                        for d in rows_digest]
                 ) + "\n"
             user_q = f"Question: {user_text.strip()}"
         else:
@@ -1951,12 +1964,17 @@ def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> 
                    (f"KPI: median coverage ≈ {cov_med:.1f} d\n" if cov_med is not None else ""))
             if rows_digest:
                 ctx += "Priorities (excerpt): " + "; ".join(
-                    [f"{d['name']} (sup {d['sup']}) cov {d['cov']:.1f}d, LT {d['lt']}d, credit {d['cred']}d, {d['abc']}{d['xyz']}" for d in rows_digest]
+                    [
+                        f"{d['name']} (sup {d['sup']}) cov {d['cov']:.1f}d, LT {d['lt']}d, credit {d['cred']}d, {d['abc']}{d['xyz']}"
+                        for d in rows_digest]
                 ) + "\n"
             user_q = f"User question: {user_text.strip()}"
 
-        hist = [{"role": "assistant" if m.get("role")=="assistant" else "user", "content": m.get("text","")} for m in (history_messages or [])]
-        messages = [{"role":"system","content":system_msg}] + hist + [{"role":"user","content": ctx + "\n" + user_q}]
+        hist = [{"role": "assistant" if m.get("role") == "assistant" else "user", "content": m.get("text", "")} for m in
+                (history_messages or [])]
+        messages = [{"role": "system", "content": system_msg}] + hist + [
+            {"role": "user", "content": ctx + "\n" + user_q}]
+
         try:
             resp = openai_client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -1966,31 +1984,50 @@ def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> 
             return out if out else _chatbot_fallback(user_text, view)
         except Exception as api_err:
             return _chatbot_fallback(user_text, view, prefix=f"⚠️ IA: {type(api_err).__name__} ")
+
     except Exception as e:
+        import traceback
+        print(f"[Chatbot] Erreur _chatbot_reply: {traceback.format_exc()}")
         return f"⚠️ Erreur inattendue: {type(e).__name__}: {e}"
 
+
 def _chatbot_fallback(user_text: str, df: pd.DataFrame, prefix: str = "") -> str:
+    """
+    df ici est déjà le DataFrame nettoyé (view), pas besoin de re-nettoyer
+    """
     lang = _detect_lang(user_text)
-    d = _clean_df_for_advice(df)
-    if d.empty:
-        return prefix + ("Données insuffisantes. Recharge les sources." if lang=="fr" else "Insufficient data. Please reload sources.")
+
+    # ✅ NE PAS appeler _clean_df_for_advice ici, df est déjà nettoyé
+    if df.empty:
+        return prefix + (
+            "Données insuffisantes. Recharge les sources." if lang == "fr" else "Insufficient data. Please reload sources.")
+
     try:
-        top_risk = d.sort_values(['risk','coverage_days'], ascending=[False, True]).head(5)
-        cnt_risk = int(d['risk'].sum())
-        cov_med = float(pd.to_numeric(d['coverage_days'], errors='coerce').median())
-        lines = [f"{prefix}" + (f"Risque: {cnt_risk} prod. • Couverture médiane ~ {cov_med:.1f} j." if lang=="fr"
+        # Utiliser directement df (qui est view)
+        top_risk = df.sort_values(['risk', 'coverage_days'], ascending=[False, True]).head(
+            5) if 'risk' in df.columns else df.head(5)
+        cnt_risk = int(df['risk'].sum()) if 'risk' in df.columns else 0
+        cov_med = float(df['coverage_days'].median()) if 'coverage_days' in df.columns else 0
+
+        lines = [f"{prefix}" + (f"Risque: {cnt_risk} prod. • Couverture médiane ~ {cov_med:.1f} j." if lang == "fr"
                                 else f"Risk: {cnt_risk} SKUs • Median coverage ~ {cov_med:.1f}d.")]
+
         for _, r in top_risk.iterrows():
-            if lang=="fr":
-                lines.append(f"- {r.get('product_name_display','?')} · cov {float(r.get('coverage_days',0)):.1f}j · LT {int(r.get('leadtime_days',0))}j · crédit {int(r.get('credit_days',0))}j")
+            if lang == "fr":
+                lines.append(
+                    f"- {r.get('product_name_display', '?')} · cov {float(r.get('coverage_days', 0)):.1f}j · LT {int(r.get('leadtime_days', 0))}j · crédit {int(r.get('credit_days', 0))}j")
             else:
-                lines.append(f"- {r.get('product_name_display','?')} · cov {float(r.get('coverage_days',0)):.1f}d · LT {int(r.get('leadtime_days',0))}d · credit {int(r.get('credit_days',0))}d")
-        lines += [("Cibles: A/AX en Y/Z <7j; crédit>14j si LT>20j; promos classe C." if lang=="fr"
+                lines.append(
+                    f"- {r.get('product_name_display', '?')} · cov {float(r.get('coverage_days', 0)):.1f}d · LT {int(r.get('leadtime_days', 0))}d · credit {int(r.get('credit_days', 0))}d")
+
+        lines += [("Cibles: A/AX en Y/Z <7j; crédit>14j si LT>20j; promos classe C." if lang == "fr"
                    else "Focus A/A+ in Y/Z <7d; credit>14d if LT>20d; promo bundles for class C.")]
         return "\n".join(lines)
-    except Exception:
-        return prefix + ("Recommandation impossible avec les données disponibles." if lang=="fr" else "Unable to compute recommendation with available data.")
 
+    except Exception as e:
+        print(f"[Chatbot] Erreur fallback: {e}")
+        return prefix + (
+            "Recommandation impossible avec les données disponibles." if lang == "fr" else "Unable to compute recommendation with available data.")
 # ------------------------------ Layout root (with floating chat) ------------------
 initial_df = get_df_cached()
 app.layout = html.Div([

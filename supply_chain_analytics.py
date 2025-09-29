@@ -202,11 +202,7 @@ warnings.filterwarnings('ignore')
 def load_supply_data() -> pd.DataFrame:
     import numpy as np
     import pandas as pd
-    from sklearn.pipeline import Pipeline
-    from sklearn.compose import ColumnTransformer
-    from sklearn.preprocessing import OneHotEncoder
-    from sklearn.impute import SimpleImputer
-    from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+    from sklearn.ensemble import RandomForestClassifier
     from sklearn.model_selection import train_test_split
     from sklearn.metrics import precision_score
 
@@ -232,7 +228,6 @@ def load_supply_data() -> pd.DataFrame:
     # =========================
     SUPPLIERS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRTyAxh6v8o0FXV0r7f6ALPDgmeJNkjTZITjrEoKBHo2gs_f3iyV8sFk8fOzcAsUSkJMXBJCpJnhQKi/pub?gid=1015760114&single=true&output=csv"
     url_leadtime = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0FO0s7-V6uloIHLDB8Nm5TiH-W7q7zJOaA_jnzQtTgMUp-WOOX6CQP33__djc4shJym4r0PSAQF6t/pub?gid=1347877260&single=true&output=csv"
-    BUFFER_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1011110883&single=true&output=csv"
     inventory_pikine_staging = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1876150276&single=true&output=csv"
     sales_pikine = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1493123930&single=true&output=csv"
     Tbh_7dsales = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1080970598&single=true&output=csv"
@@ -240,13 +235,13 @@ def load_supply_data() -> pd.DataFrame:
     Product_category = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbJqHsr6Kifee7I91YD-7-sCZDWgM5GvxCeN0OqUvZhok0j-kDywguqe5I61y97b-uBhHbWraTIrux/pub?gid=803048228&single=true&output=csv"
     DELISTING_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQax3ZQW2QhDLE-waDewtdD8x_Q5tpn2FWzVJftr9egik4_JF3s2ytSYJmXh55aUnp79vmF-XtkaTmN/pub?gid=1681543945&single=true&output=csv"
     PARAMETRES_REPLENISH_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRxM2QokFGadTdTRDE2pInLKP57QkwMdSDQS8L5nXoYL0YRu9HSHoFvsnQs_MHjcwXUVUm5puexguy8/pub?gid=1011110883&single=true&output=csv"
+    SUPPLIER_CATEGORIZATION_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQax3ZQW2QhDLE-waDewtdD8x_Q5tpn2FWzVJftr9egik4_JF3s2ytSYJmXh55aUnp79vmF-XtkaTmN/pub?gid=1938047484&single=true&output=csv"
 
     # =========================
     # Load CSV
     # =========================
     suppliers_df = pd.read_csv(SUPPLIERS_URL)
     df_leadtime = pd.read_csv(url_leadtime)
-    buffer_df = pd.read_csv(BUFFER_URL)
     inventory_pikine_staging_df = pd.read_csv(inventory_pikine_staging, skiprows=1)
     sales_pikine_df = pd.read_csv(sales_pikine, header=1, low_memory=False)
     Tbh_7dsales_df = pd.read_csv(Tbh_7dsales)
@@ -265,6 +260,13 @@ def load_supply_data() -> pd.DataFrame:
     except:
         parametres_replenish_df = pd.DataFrame()
 
+    try:
+        supplier_categorization_df = pd.read_csv(SUPPLIER_CATEGORIZATION_URL)
+        print("'Supplier Categorization' data loaded successfully.")
+    except Exception as e:
+        print(f"Error loading 'Supplier Categorization' data: {e}")
+        supplier_categorization_df = pd.DataFrame()
+
     # =========================
     # Harmonisation inventaire
     # =========================
@@ -276,7 +278,6 @@ def load_supply_data() -> pd.DataFrame:
         .str.replace(" ", "_")
         .str.replace("-", "_")
     )
-    # mapping souple
     col_map = {
         "product_name": ["product_name", "produit", "nom_produit", "name"],
         "Supplier": ["supplier", "supplier.1", "fournisseur", "vendor"],
@@ -356,13 +357,8 @@ def load_supply_data() -> pd.DataFrame:
     print(f"Shape of final_stock_sales_df after merging product category: {final_stock_sales_df.shape}")
 
     # =========================
-    # ADS 7d / ADS 30d + OOS 7d / OOS 30d
+    # ADS 7d / ADS 30d + OOS 7d / OOS 30d - MERGE UNIQUE
     # =========================
-    ads7 = pd.DataFrame(columns=["product_name", "Average Daily Sales (7d)"])
-    ads30 = pd.DataFrame(columns=["product_name", "Average Daily Sales (30d)"])
-    oos7 = pd.DataFrame(columns=["product_name", "Daily OOS Rate (7d)"])
-    oos30 = pd.DataFrame(columns=["product_name", "Daily OOS Rate (30d)"])
-
     if {"2", "9"}.issubset(Tbh_7dsales_df.columns):
         ads7 = (
             Tbh_7dsales_df[["2", "9"]]
@@ -370,7 +366,6 @@ def load_supply_data() -> pd.DataFrame:
             .drop_duplicates(subset=["product_name"])
         )
         ads7["Average Daily Sales (7d)"] = safe_numeric(ads7["Average Daily Sales (7d)"], 0)
-        # ✅ PAS de +0.1 ici, on garde les données brutes
     else:
         ads7 = pd.DataFrame(columns=["product_name", "Average Daily Sales (7d)"])
 
@@ -381,11 +376,9 @@ def load_supply_data() -> pd.DataFrame:
             .drop_duplicates(subset=["product_name"])
         )
         ads30["Average Daily Sales (30d)"] = safe_numeric(ads30["Average Daily Sales (30d)"], 0)
-        # ✅ PAS de +0.1 ici non plus
     else:
         ads30 = pd.DataFrame(columns=["product_name", "Average Daily Sales (30d)"])
 
-        # OOS Rate 7j
     if {"2", "12"}.issubset(Tbh_7dsales_df.columns):
         oos7 = (
             Tbh_7dsales_df[["2", "12"]]
@@ -398,7 +391,6 @@ def load_supply_data() -> pd.DataFrame:
     else:
         oos7 = pd.DataFrame(columns=["product_name", "Daily OOS Rate (7d)"])
 
-        # OOS Rate 30j
     if {"2", "28"}.issubset(Tbh_30dsales_products_df.columns):
         oos30 = (
             Tbh_30dsales_products_df[["2", "28"]]
@@ -411,51 +403,36 @@ def load_supply_data() -> pd.DataFrame:
     else:
         oos30 = pd.DataFrame(columns=["product_name", "Daily OOS Rate (30d)"])
 
-        # Merge avec final_stock_sales_df
+    # MERGE UNIQUE
     final_stock_sales_df = final_stock_sales_df.merge(ads7, on="product_name", how="left", validate="m:1")
     final_stock_sales_df = final_stock_sales_df.merge(ads30, on="product_name", how="left", validate="m:1")
     final_stock_sales_df = final_stock_sales_df.merge(oos7, on="product_name", how="left", validate="m:1")
     final_stock_sales_df = final_stock_sales_df.merge(oos30, on="product_name", how="left", validate="m:1")
 
-    # Correction +0.1 comme dans ta logique
-    #final_stock_sales_df["Average Daily Sales (7d)"] = safe_numeric(
-     #   final_stock_sales_df.get("Average Daily Sales (7d)", 0), 0) + 0.1
-    #final_stock_sales_df["Average Daily Sales (30d)"] = safe_numeric(
-     #   final_stock_sales_df.get("Average Daily Sales (30d)", 0), 0) + 0.1
+    # =========================
+    # CALCUL UNIQUE DE RECALCULATED AVERAGE DAILY SALES
+    # =========================
     def calc_recalculated_ads(row):
-        """
-        RÈGLE MÉTIER :
-        - Si OOS 7j >= 60% OU ventes 7j manquantes : utiliser ventes 30j
-        - Si OOS 30j aussi >= 60% : utiliser la moins pire des deux
-        - Ajouter +0.1 UNE SEULE FOIS à la fin (sécurité division par zéro)
-        """
         oos_7d = row.get("Daily OOS Rate (7d)", 1.0)
         oos_30d = row.get("Daily OOS Rate (30d)", 1.0)
         sales_7d = row.get("Average Daily Sales (7d)", np.nan)
         sales_30d = row.get("Average Daily Sales (30d)", np.nan)
 
-        # Cas 1 : Pas de données du tout
         if pd.isna(sales_7d) and pd.isna(sales_30d):
-            return 0.1  # Valeur plancher
+            return 0.1
 
-        # Cas 2 : OOS 7j >= 60% OU pas de ventes 7j
         if pd.isna(sales_7d) or pd.isna(oos_7d) or (oos_7d >= 0.6):
-            # Vérifier si 30j est fiable
             if pd.notna(sales_30d):
                 if pd.notna(oos_30d) and (oos_30d >= 0.6):
-                    # Les deux périodes ont fort OOS : prendre la moyenne
                     if pd.notna(sales_7d):
                         return (sales_7d + sales_30d) / 2.0 + 0.1
                     else:
                         return sales_30d + 0.1
                 else:
-                    # 30j est fiable, l'utiliser
                     return sales_30d + 0.1
             else:
-                # Pas de données 30j, fallback sur 7j si existe
                 return (sales_7d + 0.1) if pd.notna(sales_7d) else 0.1
 
-        # Cas 3 : 7j est fiable (OOS < 60%)
         return sales_7d + 0.1
 
     final_stock_sales_df["Recalculated Average Daily Sales"] = (
@@ -468,72 +445,12 @@ def load_supply_data() -> pd.DataFrame:
     print(f"   Médiane: {final_stock_sales_df['Recalculated Average Daily Sales'].median():.2f}")
     print(f"   Moyenne: {final_stock_sales_df['Recalculated Average Daily Sales'].mean():.2f}")
 
-    def validate_recalculated_ads(df: pd.DataFrame) -> None:
-        """Tests de cohérence sur Recalculated Average Daily Sales"""
-
-        # Test 1 : Aucune valeur <= 0
-        invalid_zero = df[df["Recalculated Average Daily Sales"] <= 0]
-        if len(invalid_zero) > 0:
-            print(f"⚠️ ERREUR : {len(invalid_zero)} produits avec ADS <= 0")
-
-        # Test 2 : Cohérence avec ventes brutes
-        df_test = df[df["Average Daily Sales (7d)"].notna() & df["Average Daily Sales (30d)"].notna()].copy()
-        df_test["ads_min"] = df_test[["Average Daily Sales (7d)", "Average Daily Sales (30d)"]].min(axis=1)
-        df_test["ads_max"] = df_test[["Average Daily Sales (7d)", "Average Daily Sales (30d)"]].max(axis=1)
-
-        # Recalculated doit être entre min-0.1 et max+0.2 (tolérance)
-        outliers = df_test[
-            (df_test["Recalculated Average Daily Sales"] < df_test["ads_min"] - 0.1) |
-            (df_test["Recalculated Average Daily Sales"] > df_test["ads_max"] + 0.2)
-            ]
-
-        if len(outliers) > 0:
-            print(f"⚠️ {len(outliers)} produits avec ADS recalculé hors plage attendue :")
-            print(outliers[["product_name", "Average Daily Sales (7d)",
-                            "Average Daily Sales (30d)", "Recalculated Average Daily Sales",
-                            "Daily OOS Rate (7d)"]].head(10))
-        else:
-            print("✅ Tous les ADS recalculés sont cohérents")
-
-    # Appeler après le calcul
-    validate_recalculated_ads(final_stock_sales_df)
-
-    # ✅ Nettoyage : suppression colonnes parasites après merge
-    cols_to_drop = [
-        "Average Daily Sales (7d)_x", "Average Daily Sales (30d)_x",
-        "Daily OOS Rate (7d)_x", "Daily OOS Rate (30d)_x",
-        "Average Daily Sales (7d)_y", "Average Daily Sales (30d)_y",
-        "Daily OOS Rate (7d)_y", "Daily OOS Rate (30d)_y","Stock Status"
-    ]
-    final_stock_sales_df.drop(
-        columns=[c for c in cols_to_drop if c in final_stock_sales_df.columns],
-        inplace=True, errors="ignore"
+    # Max Coverage Day
+    final_stock_sales_df["Max Coverage Day"] = np.minimum(
+        safe_numeric(final_stock_sales_df["total_stock"], 0) /
+        np.maximum(safe_numeric(final_stock_sales_df["Recalculated Average Daily Sales"], 0.01), 0.01),
+        365
     )
-
-    if "Average Daily Sales (7d)" not in final_stock_sales_df.columns:
-        final_stock_sales_df["Average Daily Sales (7d)"] = 0.0
-    if "Average Daily Sales (30d)" not in final_stock_sales_df.columns:
-        final_stock_sales_df["Average Daily Sales (30d)"] = 0.0
-
-    final_stock_sales_df["Average Daily Sales (7d)"] = safe_numeric(final_stock_sales_df["Average Daily Sales (7d)"],
-                                                                    0) + 0.1
-    final_stock_sales_df["Average Daily Sales (30d)"] = safe_numeric(final_stock_sales_df["Average Daily Sales (30d)"],
-                                                                     0) + 0.1
-
-    # Coverage Days
-    final_stock_sales_df["Coverage Day (7d)"] = final_stock_sales_df["total_stock"] / final_stock_sales_df["Average Daily Sales (7d)"].replace(0, np.nan)
-    final_stock_sales_df["Coverage Day (30d)"] = final_stock_sales_df["total_stock"] / final_stock_sales_df["Average Daily Sales (30d)"].replace(0, np.nan)
-
-    # Recalculated ADS (cond. OOS)
-    def calc_ads_cond(row):
-        oos = row.get("Daily OOS Rate (7d)", np.nan)
-        s7 = row.get("Average Daily Sales (7d)", np.nan)
-        s30 = row.get("Average Daily Sales (30d)", np.nan)
-        if pd.isna(oos) or (oos >= 0.6) or pd.isna(s7):
-            return s30 if pd.notna(s30) else 0.1
-        return s7 if pd.notna(s7) else 0.1
-
-    final_stock_sales_df["Recalculated Average Daily Sales"] = final_stock_sales_df.apply(calc_ads_cond, axis=1) + 0.1
 
     # =========================
     # Lead time (Supplier unique)
@@ -551,60 +468,8 @@ def load_supply_data() -> pd.DataFrame:
     else:
         final_stock_sales_df["Avg Lead Time"] = np.nan
 
-    # OOS 30d
-    if {"2", "28"}.issubset(Tbh_30dsales_products_df.columns):
-        oos30 = (
-            Tbh_30dsales_products_df[["2", "28"]]
-            .rename(columns={"2": "product_name", "28": "Daily OOS Rate (30d)"})
-        )
-        oos30["Daily OOS Rate (30d)"] = safe_numeric(
-            oos30["Daily OOS Rate (30d)"].astype(str).str.replace("%", "", regex=False), 0
-        ) / 100.0
-        oos30 = oos30.drop_duplicates(subset=["product_name"])
-        final_stock_sales_df = final_stock_sales_df.merge(
-            oos30, on="product_name", how="left", validate="m:1"
-        )
-    else:
-        final_stock_sales_df["Daily OOS Rate (30d)"] = np.nan
-
     # =========================
-    # Parametres Replenish (Buffer lookup)
-    # =========================
-    if not parametres_replenish_df.empty and parametres_replenish_df.shape[1] > 1:
-        pr_buf = parametres_replenish_df.iloc[:, [0, 1]].copy()
-        pr_buf.columns = ["Param_Product_Category", "Param_Buffer_Value_Lookup"]
-        pr_buf["Param_Product_Category"] = pr_buf["Param_Product_Category"].astype(str).str.lower().str.strip()
-        pr_buf["Param_Buffer_Value_Lookup"] = safe_numeric(pr_buf["Param_Buffer_Value_Lookup"], 0)
-        final_stock_sales_df["Product Category"] = final_stock_sales_df["Product Category"].astype(str).str.lower().str.strip()
-        final_stock_sales_df = final_stock_sales_df.merge(
-            pr_buf.drop_duplicates(subset=["Param_Product_Category"]),
-            left_on="Product Category",
-            right_on="Param_Product_Category",
-            how="left",
-            validate="m:1",
-        )
-        if "Param_Product_Category" in final_stock_sales_df.columns:
-            final_stock_sales_df.drop(columns=["Param_Product_Category"], inplace=True)
-        final_stock_sales_df["Param_Buffer_Value_Lookup"] = final_stock_sales_df["Param_Buffer_Value_Lookup"].fillna(0)
-        print("'Param_Buffer_Value_Lookup' merged for Optimal Stock calculation.")
-    else:
-        final_stock_sales_df["Param_Buffer_Value_Lookup"] = 0.0
-
-    # Optimal Stock (formule exacte)
-    final_stock_sales_df["Max Daily Sales (Pikine)"] = safe_numeric(final_stock_sales_df["Max Daily Sales (Pikine)"], 0)
-    final_stock_sales_df["Recalculated Average Daily Sales"] = safe_numeric(final_stock_sales_df["Recalculated Average Daily Sales"], 0.1)
-    final_stock_sales_df["Param_Buffer_Value_Lookup"] = safe_numeric(final_stock_sales_df["Param_Buffer_Value_Lookup"], 0)
-    final_stock_sales_df["Optimal Stock (Reorder Point)"] = final_stock_sales_df.apply(
-        lambda r: max(
-            r["Max Daily Sales (Pikine)"],
-            (r["Max Daily Sales (Pikine)"] / 2.0) + (r["Param_Buffer_Value_Lookup"] * r["Recalculated Average Daily Sales"]),
-        ),
-        axis=1,
-    )
-    print("'Optimal Stock (Reorder Point)' calculated successfully.")
-
-    # =========================
-    # Supplier credit info
+    # Supplier credit info (AVANT supplier categorization)
     # =========================
     if {"Supplier name", "credit_days", "Credit_cumulable"}.issubset(suppliers_df.columns):
         sc = suppliers_df[["Supplier name", "credit_days", "Credit_cumulable"]].copy()
@@ -622,6 +487,95 @@ def load_supply_data() -> pd.DataFrame:
         final_stock_sales_df["Credit_cumulable"] = "Non"
 
     # =========================
+    # SUPPLIER CATEGORIZATION → UPDATE PRODUCT CATEGORY
+    # =========================
+    supplier_categorization_lookup_df = pd.DataFrame()
+    if not supplier_categorization_df.empty and supplier_categorization_df.shape[1] > 7:
+        supplier_categorization_lookup_df = supplier_categorization_df.iloc[:, [0, 7]].copy()
+        supplier_categorization_lookup_df.columns = ['Supplier_Name_Lookup', 'Supplier_Categorization_Lookup']
+        supplier_categorization_lookup_df['Supplier_Name_Lookup'] = (
+            supplier_categorization_lookup_df['Supplier_Name_Lookup'].astype(str).str.lower().str.strip()
+        )
+        supplier_categorization_lookup_df = supplier_categorization_lookup_df.drop_duplicates(
+            subset=['Supplier_Name_Lookup'])
+
+    if not supplier_categorization_lookup_df.empty and 'Supplier' in final_stock_sales_df.columns:
+        final_stock_sales_df['Supplier'] = final_stock_sales_df['Supplier'].astype(str).str.lower().str.strip()
+
+        final_stock_sales_df = pd.merge(
+            final_stock_sales_df,
+            supplier_categorization_lookup_df,
+            left_on='Supplier',
+            right_on='Supplier_Name_Lookup',
+            how='left'
+        )
+
+        if 'Supplier_Name_Lookup' in final_stock_sales_df.columns:
+            final_stock_sales_df.drop(columns=['Supplier_Name_Lookup'], inplace=True)
+
+        final_stock_sales_df['Supplier_Categorization_Lookup'] = (
+            final_stock_sales_df['Supplier_Categorization_Lookup'].fillna('Unknown')
+        )
+
+        # RÈGLE MÉTIER CRITIQUE: Si credit_days > 0, utiliser supplier categorization
+        if all(col in final_stock_sales_df.columns for col in
+               ['credit_days', 'Product Category', 'Supplier_Categorization_Lookup']):
+            final_stock_sales_df['credit_days'] = pd.to_numeric(final_stock_sales_df['credit_days'],
+                                                                errors='coerce').fillna(0)
+
+            final_stock_sales_df['Product Category'] = final_stock_sales_df.apply(
+                lambda row: row['Supplier_Categorization_Lookup'] if row['credit_days'] > 0 else row[
+                    'Product Category'],
+                axis=1
+            )
+            print("'Product Category' updated based on supplier categorization and credit_days.")
+
+        if 'Supplier_Categorization_Lookup' in final_stock_sales_df.columns:
+            final_stock_sales_df.drop(columns=['Supplier_Categorization_Lookup'], inplace=True)
+    else:
+        print("Warning: Supplier categorization data unavailable or incomplete.")
+
+    # =========================
+    # Parametres Replenish (Buffer lookup) - APRÈS update Product Category
+    # =========================
+    if not parametres_replenish_df.empty and parametres_replenish_df.shape[1] > 1:
+        pr_buf = parametres_replenish_df.iloc[:, [0, 1]].copy()
+        pr_buf.columns = ["Param_Product_Category", "Param_Buffer_Value_Lookup"]
+        pr_buf["Param_Product_Category"] = pr_buf["Param_Product_Category"].astype(str).str.lower().str.strip()
+        pr_buf["Param_Buffer_Value_Lookup"] = safe_numeric(pr_buf["Param_Buffer_Value_Lookup"], 0)
+        final_stock_sales_df["Product Category"] = final_stock_sales_df["Product Category"].astype(
+            str).str.lower().str.strip()
+        final_stock_sales_df = final_stock_sales_df.merge(
+            pr_buf.drop_duplicates(subset=["Param_Product_Category"]),
+            left_on="Product Category",
+            right_on="Param_Product_Category",
+            how="left",
+            validate="m:1",
+        )
+        if "Param_Product_Category" in final_stock_sales_df.columns:
+            final_stock_sales_df.drop(columns=["Param_Product_Category"], inplace=True)
+        final_stock_sales_df["Param_Buffer_Value_Lookup"] = final_stock_sales_df["Param_Buffer_Value_Lookup"].fillna(0)
+        print("'Param_Buffer_Value_Lookup' merged for Optimal Stock calculation.")
+    else:
+        final_stock_sales_df["Param_Buffer_Value_Lookup"] = 0.0
+
+    # Optimal Stock
+    final_stock_sales_df["Max Daily Sales (Pikine)"] = safe_numeric(final_stock_sales_df["Max Daily Sales (Pikine)"], 0)
+    final_stock_sales_df["Recalculated Average Daily Sales"] = safe_numeric(
+        final_stock_sales_df["Recalculated Average Daily Sales"], 0.1)
+    final_stock_sales_df["Param_Buffer_Value_Lookup"] = safe_numeric(final_stock_sales_df["Param_Buffer_Value_Lookup"],
+                                                                     0)
+    final_stock_sales_df["Optimal Stock (Reorder Point)"] = final_stock_sales_df.apply(
+        lambda r: max(
+            r["Max Daily Sales (Pikine)"],
+            (r["Max Daily Sales (Pikine)"] / 2.0) + (
+                        r["Param_Buffer_Value_Lookup"] * r["Recalculated Average Daily Sales"]),
+        ),
+        axis=1,
+    )
+    print("'Optimal Stock (Reorder Point)' calculated successfully.")
+
+    # =========================
     # Delisting
     # =========================
     if {"product_name", "delisting_status"}.issubset(delisting_df.columns):
@@ -635,48 +589,50 @@ def load_supply_data() -> pd.DataFrame:
         final_stock_sales_df["delisting_status"] = "Not Delisted"
 
     # =========================
-    # Dédupes de sécurité
+    # Dédupes
     # =========================
     final_stock_sales_df = final_stock_sales_df.drop_duplicates(subset=["product_name"], keep="first")
-    print("DataFrame after removing duplicate product entries.")
     print(f"Shape after removing duplicates: {final_stock_sales_df.shape}")
 
     # =========================
-    # Métriques métier
+    # Métriques métier (suite exacte de votre code)
     # =========================
-    # ADJUSTED_LEADTIME
     final_stock_sales_df["Avg Lead Time"] = safe_numeric(final_stock_sales_df.get("Avg Lead Time", 0), 0)
     final_stock_sales_df["Credit_cumulable"] = final_stock_sales_df.get("Credit_cumulable", "Non").fillna("Non")
+
     def calc_adjusted_leadtime(row):
-        return row["Avg Lead Time"] if str(row.get("Credit_cumulable", "")).lower() == "oui" else row["Avg Lead Time"] + 3
+        return row["Avg Lead Time"] if str(row.get("Credit_cumulable", "")).lower() == "oui" else row[
+                                                                                                      "Avg Lead Time"] + 3
+
     final_stock_sales_df["ADJUSTED_LEADTIME"] = final_stock_sales_df.apply(calc_adjusted_leadtime, axis=1)
 
-    # MAX_CREDIT_BUFFER
     final_stock_sales_df["credit_days"] = safe_numeric(final_stock_sales_df["credit_days"], 0)
+
     def calc_max_credit_buffer(row):
         cd = row["credit_days"]
         cc = str(row.get("Credit_cumulable", "")).lower()
         return min(cd, 20) if cc == "oui" else cd
+
     final_stock_sales_df["MAX_CREDIT_BUFFER"] = final_stock_sales_df.apply(calc_max_credit_buffer, axis=1)
 
-    # AJUSTER_BUFFER (max buffer vs crédit)
     final_stock_sales_df["AJUSTER_BUFFER"] = np.maximum(
         safe_numeric(final_stock_sales_df["Param_Buffer_Value_Lookup"], 0),
         safe_numeric(final_stock_sales_df["MAX_CREDIT_BUFFER"], 0),
     )
 
-    # MOQ MAAD
-    final_stock_sales_df["MOQ MAAD"] = (safe_numeric(final_stock_sales_df["ADJUSTED_LEADTIME"], 0) + 3) * safe_numeric(final_stock_sales_df["Recalculated Average Daily Sales"], 0.1)
+    final_stock_sales_df["MOQ MAAD"] = (safe_numeric(final_stock_sales_df["ADJUSTED_LEADTIME"], 0) + 3) * safe_numeric(
+        final_stock_sales_df["Recalculated Average Daily Sales"], 0.1)
 
-    # Param_Supplier_Factor par défaut si absent
     if "Param_Supplier_Factor" not in final_stock_sales_df.columns:
         final_stock_sales_df["Param_Supplier_Factor"] = 0.0
 
     # Purchase Need
-    req_cols = ["total_stock","Max Daily Sales (Pikine)","Recalculated Average Daily Sales","Optimal Stock (Reorder Point)","Param_Buffer_Value_Lookup","Param_Supplier_Factor"]
+    req_cols = ["total_stock", "Max Daily Sales (Pikine)", "Recalculated Average Daily Sales",
+                "Optimal Stock (Reorder Point)", "Param_Buffer_Value_Lookup", "Param_Supplier_Factor"]
     if all(c in final_stock_sales_df.columns for c in req_cols):
         for c in req_cols:
             final_stock_sales_df[c] = safe_numeric(final_stock_sales_df[c], 0)
+
         def calculate_purchase_need(row):
             total_stock = row["total_stock"]
             max_daily_sales = row["Max Daily Sales (Pikine)"]
@@ -690,23 +646,24 @@ def load_supply_data() -> pd.DataFrame:
                 return (optimal_stock - total_stock) + (param_supplier_factor * avg_daily_sales)
             else:
                 return 0
+
         final_stock_sales_df["purchase_need"] = final_stock_sales_df.apply(calculate_purchase_need, axis=1)
         print("'purchase_need' calculated successfully.")
     else:
         final_stock_sales_df["purchase_need"] = np.nan
-        print("Warning: 'purchase_need' set to NA due to missing columns.")
 
-    # QAC
     final_stock_sales_df["QAC"] = np.maximum(
         safe_numeric(final_stock_sales_df["MOQ MAAD"], 0),
         safe_numeric(final_stock_sales_df["purchase_need"], 0),
     )
 
-    # Predicted Order Quantity (avec ADJUSTED_LEADTIME)
-    need_cols = ["total_stock","Optimal Stock (Reorder Point)","Recalculated Average Daily Sales","credit_days","ADJUSTED_LEADTIME"]
+    # Predicted Order Quantity
+    need_cols = ["total_stock", "Optimal Stock (Reorder Point)", "Recalculated Average Daily Sales", "credit_days",
+                 "ADJUSTED_LEADTIME"]
     if all(c in final_stock_sales_df.columns for c in need_cols):
         for c in need_cols:
             final_stock_sales_df[c] = safe_numeric(final_stock_sales_df[c], 0)
+
         def calc_poq(row):
             stock = row["total_stock"]
             rp = row["Optimal Stock (Reorder Point)"]
@@ -716,12 +673,14 @@ def load_supply_data() -> pd.DataFrame:
             demand_period = alt + credit_days
             demand_during_period = ads * demand_period
             return max(0.0, (rp + demand_during_period) - stock)
+
         final_stock_sales_df["Predicted Order Quantity"] = final_stock_sales_df.apply(calc_poq, axis=1)
         print("'Predicted Order Quantity' calculated successfully.")
     else:
         final_stock_sales_df["Predicted Order Quantity"] = np.nan
 
-    # Ajusted_total_need
+        # Ajusted_total_need
+
     def calc_adjusted_total_need(row):
         if str(row.get("delisting_status", "")).lower() == "delisted":
             return "NO NEED"
@@ -736,17 +695,13 @@ def load_supply_data() -> pd.DataFrame:
             return "ORDER NOT URGENT"
         else:
             return "NO NEED"
-    # Max Coverage Day
-    final_stock_sales_df["Max Coverage Day"] = np.minimum(
-        safe_numeric(final_stock_sales_df["total_stock"], 0) / np.maximum(safe_numeric(final_stock_sales_df["Recalculated Average Daily Sales"], 0.01), 0.01),
-        365,
-    )
+
     final_stock_sales_df["Ajusted_total_need"] = final_stock_sales_df.apply(calc_adjusted_total_need, axis=1)
 
-    # Predicted Stockout (lecture simple)
+    # Predicted Stockout
     final_stock_sales_df["Predicted Stockout"] = safe_numeric(final_stock_sales_df["total_stock"], 0) <= safe_numeric(final_stock_sales_df["Optimal Stock (Reorder Point)"], 0)
 
-    # Stock Status (indicatif pour l’interne; pas besoin au KPI)
+    # Stock Status
     def get_stock_status(row):
         stock = float(row.get("total_stock", 0))
         reorder_point = float(row.get("Optimal Stock (Reorder Point)", 0))
@@ -854,22 +809,22 @@ def load_supply_data() -> pd.DataFrame:
         print(f"[ML Stockout] Erreur lors du calcul ML: {e}")
         final_stock_sales_df["Stockout Probability"] = 0.0
 
+    # =========================
+    # Garantie colonnes critiques pour UI
+    # =========================
     def _ensure_not_empty_string(s: pd.Series, default_val: str) -> pd.Series:
-        # Remplace None/NaN et chaînes vides par une valeur par défaut, proprement.
         return (
-            s.where(~s.isna(), None)  # garde les NaN comme None
+            s.where(~s.isna(), None)
             .apply(lambda x: None if (isinstance(x, str) and x.strip() == "") else x)
             .fillna(default_val)
             .astype(str).str.strip()
         )
 
-    # Supplier
     if "Supplier" not in final_stock_sales_df.columns:
         final_stock_sales_df["Supplier"] = "unknown"
     else:
         final_stock_sales_df["Supplier"] = _ensure_not_empty_string(final_stock_sales_df["Supplier"], "unknown")
 
-    # Recalculated Average Daily Sales
     if "Recalculated Average Daily Sales" not in final_stock_sales_df.columns:
         final_stock_sales_df["Recalculated Average Daily Sales"] = 0.1
 
@@ -879,14 +834,24 @@ def load_supply_data() -> pd.DataFrame:
         .clip(lower=0.1)
     )
 
-    # (Optionnel mais utile) : mettre ces colonnes en tête pour éviter toute “disparition visuelle”
+    # Colonnes en tête pour visibilité
     _front = ["product_name", "Supplier", "Recalculated Average Daily Sales"]
     final_stock_sales_df = final_stock_sales_df[
         [c for c in _front if c in final_stock_sales_df.columns] +
         [c for c in final_stock_sales_df.columns if c not in _front]
-        ]
-    return final_stock_sales_df
+    ]
 
+    # =========================
+    # TEST FINAL DE VALIDATION
+    # =========================
+    print("\n========== VÉRIFICATION FINALE RECALCULATED ADS ==========")
+    sample = final_stock_sales_df[["product_name", "Average Daily Sales (7d)",
+                                    "Average Daily Sales (30d)", "Daily OOS Rate (7d)",
+                                    "Recalculated Average Daily Sales"]].head(10)
+    print("Échantillon (10 premiers produits) :")
+    print(sample.to_string())
+
+    return final_stock_sales_df
 
 # Utility: add Actions columns
 def add_action_cols(df: pd.DataFrame) -> pd.DataFrame:

@@ -370,7 +370,22 @@ def load_supply_data() -> pd.DataFrame:
             .drop_duplicates(subset=["product_name"])
         )
         ads7["Average Daily Sales (7d)"] = safe_numeric(ads7["Average Daily Sales (7d)"], 0)
+        # ✅ PAS de +0.1 ici, on garde les données brutes
+    else:
+        ads7 = pd.DataFrame(columns=["product_name", "Average Daily Sales (7d)"])
 
+    if {"2", "9"}.issubset(Tbh_30dsales_products_df.columns):
+        ads30 = (
+            Tbh_30dsales_products_df[["2", "9"]]
+            .rename(columns={"2": "product_name", "9": "Average Daily Sales (30d)"})
+            .drop_duplicates(subset=["product_name"])
+        )
+        ads30["Average Daily Sales (30d)"] = safe_numeric(ads30["Average Daily Sales (30d)"], 0)
+        # ✅ PAS de +0.1 ici non plus
+    else:
+        ads30 = pd.DataFrame(columns=["product_name", "Average Daily Sales (30d)"])
+
+        # OOS Rate 7j
     if {"2", "12"}.issubset(Tbh_7dsales_df.columns):
         oos7 = (
             Tbh_7dsales_df[["2", "12"]]
@@ -380,15 +395,10 @@ def load_supply_data() -> pd.DataFrame:
         oos7["Daily OOS Rate (7d)"] = safe_numeric(
             oos7["Daily OOS Rate (7d)"].astype(str).str.replace("%", "", regex=False), 100
         ) / 100.0
+    else:
+        oos7 = pd.DataFrame(columns=["product_name", "Daily OOS Rate (7d)"])
 
-    if {"2", "9"}.issubset(Tbh_30dsales_products_df.columns):
-        ads30 = (
-            Tbh_30dsales_products_df[["2", "9"]]
-            .rename(columns={"2": "product_name", "9": "Average Daily Sales (30d)"})
-            .drop_duplicates(subset=["product_name"])
-        )
-        ads30["Average Daily Sales (30d)"] = safe_numeric(ads30["Average Daily Sales (30d)"], 0)
-
+        # OOS Rate 30j
     if {"2", "28"}.issubset(Tbh_30dsales_products_df.columns):
         oos30 = (
             Tbh_30dsales_products_df[["2", "28"]]
@@ -398,18 +408,95 @@ def load_supply_data() -> pd.DataFrame:
         oos30["Daily OOS Rate (30d)"] = safe_numeric(
             oos30["Daily OOS Rate (30d)"].astype(str).str.replace("%", "", regex=False), 0
         ) / 100.0
+    else:
+        oos30 = pd.DataFrame(columns=["product_name", "Daily OOS Rate (30d)"])
 
-    # Merge avec final_stock_sales_df
+        # Merge avec final_stock_sales_df
     final_stock_sales_df = final_stock_sales_df.merge(ads7, on="product_name", how="left", validate="m:1")
     final_stock_sales_df = final_stock_sales_df.merge(ads30, on="product_name", how="left", validate="m:1")
     final_stock_sales_df = final_stock_sales_df.merge(oos7, on="product_name", how="left", validate="m:1")
     final_stock_sales_df = final_stock_sales_df.merge(oos30, on="product_name", how="left", validate="m:1")
 
     # Correction +0.1 comme dans ta logique
-    final_stock_sales_df["Average Daily Sales (7d)"] = safe_numeric(
-        final_stock_sales_df.get("Average Daily Sales (7d)", 0), 0) + 0.1
-    final_stock_sales_df["Average Daily Sales (30d)"] = safe_numeric(
-        final_stock_sales_df.get("Average Daily Sales (30d)", 0), 0) + 0.1
+    #final_stock_sales_df["Average Daily Sales (7d)"] = safe_numeric(
+     #   final_stock_sales_df.get("Average Daily Sales (7d)", 0), 0) + 0.1
+    #final_stock_sales_df["Average Daily Sales (30d)"] = safe_numeric(
+     #   final_stock_sales_df.get("Average Daily Sales (30d)", 0), 0) + 0.1
+    def calc_recalculated_ads(row):
+        """
+        RÈGLE MÉTIER :
+        - Si OOS 7j >= 60% OU ventes 7j manquantes : utiliser ventes 30j
+        - Si OOS 30j aussi >= 60% : utiliser la moins pire des deux
+        - Ajouter +0.1 UNE SEULE FOIS à la fin (sécurité division par zéro)
+        """
+        oos_7d = row.get("Daily OOS Rate (7d)", 1.0)
+        oos_30d = row.get("Daily OOS Rate (30d)", 1.0)
+        sales_7d = row.get("Average Daily Sales (7d)", np.nan)
+        sales_30d = row.get("Average Daily Sales (30d)", np.nan)
+
+        # Cas 1 : Pas de données du tout
+        if pd.isna(sales_7d) and pd.isna(sales_30d):
+            return 0.1  # Valeur plancher
+
+        # Cas 2 : OOS 7j >= 60% OU pas de ventes 7j
+        if pd.isna(sales_7d) or pd.isna(oos_7d) or (oos_7d >= 0.6):
+            # Vérifier si 30j est fiable
+            if pd.notna(sales_30d):
+                if pd.notna(oos_30d) and (oos_30d >= 0.6):
+                    # Les deux périodes ont fort OOS : prendre la moyenne
+                    if pd.notna(sales_7d):
+                        return (sales_7d + sales_30d) / 2.0 + 0.1
+                    else:
+                        return sales_30d + 0.1
+                else:
+                    # 30j est fiable, l'utiliser
+                    return sales_30d + 0.1
+            else:
+                # Pas de données 30j, fallback sur 7j si existe
+                return (sales_7d + 0.1) if pd.notna(sales_7d) else 0.1
+
+        # Cas 3 : 7j est fiable (OOS < 60%)
+        return sales_7d + 0.1
+
+    final_stock_sales_df["Recalculated Average Daily Sales"] = (
+        final_stock_sales_df.apply(calc_recalculated_ads, axis=1)
+    )
+
+    print(f"✅ Recalculated ADS - Stats:")
+    print(f"   Min: {final_stock_sales_df['Recalculated Average Daily Sales'].min():.2f}")
+    print(f"   Max: {final_stock_sales_df['Recalculated Average Daily Sales'].max():.2f}")
+    print(f"   Médiane: {final_stock_sales_df['Recalculated Average Daily Sales'].median():.2f}")
+    print(f"   Moyenne: {final_stock_sales_df['Recalculated Average Daily Sales'].mean():.2f}")
+
+    def validate_recalculated_ads(df: pd.DataFrame) -> None:
+        """Tests de cohérence sur Recalculated Average Daily Sales"""
+
+        # Test 1 : Aucune valeur <= 0
+        invalid_zero = df[df["Recalculated Average Daily Sales"] <= 0]
+        if len(invalid_zero) > 0:
+            print(f"⚠️ ERREUR : {len(invalid_zero)} produits avec ADS <= 0")
+
+        # Test 2 : Cohérence avec ventes brutes
+        df_test = df[df["Average Daily Sales (7d)"].notna() & df["Average Daily Sales (30d)"].notna()].copy()
+        df_test["ads_min"] = df_test[["Average Daily Sales (7d)", "Average Daily Sales (30d)"]].min(axis=1)
+        df_test["ads_max"] = df_test[["Average Daily Sales (7d)", "Average Daily Sales (30d)"]].max(axis=1)
+
+        # Recalculated doit être entre min-0.1 et max+0.2 (tolérance)
+        outliers = df_test[
+            (df_test["Recalculated Average Daily Sales"] < df_test["ads_min"] - 0.1) |
+            (df_test["Recalculated Average Daily Sales"] > df_test["ads_max"] + 0.2)
+            ]
+
+        if len(outliers) > 0:
+            print(f"⚠️ {len(outliers)} produits avec ADS recalculé hors plage attendue :")
+            print(outliers[["product_name", "Average Daily Sales (7d)",
+                            "Average Daily Sales (30d)", "Recalculated Average Daily Sales",
+                            "Daily OOS Rate (7d)"]].head(10))
+        else:
+            print("✅ Tous les ADS recalculés sont cohérents")
+
+    # Appeler après le calcul
+    validate_recalculated_ads(final_stock_sales_df)
 
     # ✅ Nettoyage : suppression colonnes parasites après merge
     cols_to_drop = [

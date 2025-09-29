@@ -885,6 +885,18 @@ def load_supply_data() -> pd.DataFrame:
     print("Échantillon (10 premiers produits) :")
     print(sample.to_string())
 
+    # À la fin de load_supply_data(), avant le return
+    print("\n========== COLONNES DISPONIBLES POUR FILTRAGE ==========")
+    print(f"✓ Supplier présent : {'Supplier' in final_stock_sales_df.columns}")
+    print(f"✓ Product Category présent : {'Product Category' in final_stock_sales_df.columns}")
+    print(f"✓ Ajusted_total_need présent : {'Ajusted_total_need' in final_stock_sales_df.columns}")
+    print(f"✓ product_name présent : {'product_name' in final_stock_sales_df.columns}")
+
+    if 'Ajusted_total_need' in final_stock_sales_df.columns:
+        print(f"\nValeurs uniques de Ajusted_total_need :")
+        print(final_stock_sales_df['Ajusted_total_need'].value_counts())
+    print("========================================================\n")
+
     return final_stock_sales_df
 
 # Utility: add Actions columns
@@ -1014,18 +1026,18 @@ def get_df_cached():
 # ------------------------------ Sidebar ------------------------------------------
 def make_sidebar():
     df = get_df_cached()
-    ps = df['Predicted Stockout'] if 'Predicted Stockout' in df.columns else pd.Series(False, index=df.index)
-    mask_stockout = pd.Series(ps, index=df.index).fillna(False).astype(bool)
-    risk_by_sup = df.loc[mask_stockout].groupby('Supplier', dropna=False)['product_name'].nunique().reset_index()
 
-    suppliers = sorted([s for s in df['Supplier'].dropna().unique().tolist() if s != '']) if 'Supplier' in df.columns else []
-    cats = sorted([c for c in df['Product Category'].dropna().unique().tolist() if c != '']) if 'Product Category' in df.columns else []
-    status_vals = df['Stock Status'].dropna().unique().tolist() if 'Stock Status' in df.columns else []
+    # Extraction des valeurs uniques pour les dropdowns
+    suppliers = sorted(
+        [s for s in df['Supplier'].dropna().unique().tolist() if s != '']) if 'Supplier' in df.columns else []
+    cats = sorted([c for c in df['Product Category'].dropna().unique().tolist() if
+                   c != '']) if 'Product Category' in df.columns else []
 
     return html.Div(className="sidebar", children=[
         html.Div([
             html.Div([
-                html.Img(src=LOGO_DATA_URI, style={"height": "42px", "marginRight": "8px"}) if LOGO_DATA_URI else html.Div(),
+                html.Img(src=LOGO_DATA_URI,
+                         style={"height": "42px", "marginRight": "8px"}) if LOGO_DATA_URI else html.Div(),
                 html.Div(APP_BRAND, className="brand"),
             ], style={"display": "flex", "alignItems": "center", "gap": "10px"}),
             html.Div("Supply Chain Command Center", className="muted")
@@ -1040,30 +1052,48 @@ def make_sidebar():
         html.Div(className="section-title", children="Filtres"),
         html.Div(className="pill", children=[
             html.Small("Supplier"),
-            dcc.Dropdown(id="filter-supplier", options=[{"label": s, "value": s} for s in suppliers],
-                         multi=True, placeholder="Tous", persistence=True),
-            html.Br(),
-            html.Small("Statut"),
-            dcc.Dropdown(id="filter-status", options=[{"label": s, "value": s} for s in status_vals],
-                         multi=True, placeholder="Tous", persistence=True),
+            dcc.Dropdown(
+                id="filter-supplier",
+                options=[{"label": s, "value": s} for s in suppliers],
+                multi=True,
+                placeholder="Tous",
+                persistence=True
+            ),
             html.Br(),
             html.Small("Catégorie"),
-            dcc.Dropdown(id="filter-category", options=[{"label": c, "value": c} for c in cats],
-                         multi=True, placeholder="Toutes", persistence=True),
+            dcc.Dropdown(
+                id="filter-category",
+                options=[{"label": c, "value": c} for c in cats],
+                multi=True,
+                placeholder="Toutes",
+                persistence=True
+            ),
+            html.Br(),
+            html.Small("Besoin d'achat"),
+            dcc.Dropdown(
+                id="filter-need",
+                options=[
+                    {"label": "ORDER NOW", "value": "ORDER NOW"},
+                    {"label": "ORDER NOT URGENT", "value": "ORDER NOT URGENT"},
+                    {"label": "NO NEED", "value": "NO NEED"}
+                ],
+                multi=True,
+                placeholder="Tous",
+                persistence=True
+            ),
             html.Br(),
             dbc.Checklist(
                 options=[
-                    {"label": "Afficher uniquement risques de rupture", "value": "risk"},
                     {"label": "Regrouper par produit (dé-dup)", "value": "by_product"},
                 ],
-                value=[],  # ✅ VIDE PAR DÉFAUT au lieu de ["by_product"]
-                id="toggle-options", switch=True
+                value=[],
+                id="toggle-options",
+                switch=True
             )
         ]),
 
         html.Br(),
         html.Div([
-            #dbc.Button("Exporter CSV (filtré)", id="btn-export", className="btn-primary", size="sm"),
             html.Span(" "),
             dbc.Button("Bon de commande PDF", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True),
             dcc.Download(id="download-data"),
@@ -1079,7 +1109,8 @@ def make_sidebar():
             ], vertical=True, pills=True)
         ]),
         html.Br(),
-        html.Small(f"© {datetime.now().year} • {AUTHOR}")
+        html.Small(f"© {datetime.now().year} • {AUTHOR}"),
+        html.Div(id="debug-info", style={"marginTop": "20px", "fontSize": "10px", "color": "#6b7280"})  # Pour debug
     ])
 
 # ------------------------------ Aggregation helpers ------------------------------
@@ -1959,6 +1990,11 @@ app.validation_layout = html.Div([
     dcc.Location(id="url"),
     dcc.Store(id="master-data"),
     dcc.Store(id="filtered-data"),
+    dcc.Dropdown(id="filter-supplier"),
+    dcc.Dropdown(id="filter-category"),
+    dcc.Dropdown(id="filter-need"),  # ✅ IMPORTANT
+    dcc.Input(id="search-input"),
+    dbc.Checklist(id="toggle-options"),
     dcc.Store(id="uploaded-csv"),
     dcc.Store(id="chat-store"),
     dcc.Store(id="chat-open"),
@@ -2006,28 +2042,32 @@ def render_page(path, master_json):
 # ------------------------------ Filtering logic ----------------------------------
 def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: list, cats: list, options: list):
     out = df.copy()
+
+    # Filtre recherche par product_name
     if query:
         q = str(query).strip().lower()
         if 'product_name' in out.columns:
-            out = out[out['product_name'].astype(str).str.contains(q, na=False)]
-    if suppliers:
-        out = out[out['Supplier'].isin(suppliers)] if 'Supplier' in out.columns else out
-    if statuses:
-        out = out[out['Stock Status'].isin(statuses)] if 'Stock Status' in out.columns else out
-    if cats:
-        out = out[out['Product Category'].isin(cats)] if 'Product Category' in out.columns else out
+            out = out[out['product_name'].astype(str).str.lower().str.contains(q, na=False, regex=False)]
 
+    # Filtre Supplier
+    if suppliers and len(suppliers) > 0:
+        if 'Supplier' in out.columns:
+            mask = out['Supplier'].astype(str).str.lower().apply(
+                lambda x: any(sup.lower() in x for sup in suppliers)
+            )
+            out = out[mask]
+
+    # Filtre Product Category
+    if cats and len(cats) > 0:
+        if 'Product Category' in out.columns:
+            out = out[out['Product Category'].astype(str).str.lower().isin([c.lower() for c in cats])]
+
+    # Agrégation par produit
     options = options or []
-    risk_only = ('risk' in options)
-
-    if risk_only and 'Stock Status' in out.columns:
-        out = out[out['Stock Status'].isin(['Out of Stock','Predicted Stockout Soon'])]
-
     if 'by_product' in options:
         out = aggregate_by_product(out)
 
     return out
-
 
 def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Garantit que les colonnes critiques existent et sont valides"""
@@ -2056,48 +2096,54 @@ def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 # ------------------------------ Callbacks: filtering / banner --------------------
+# Callback 1 : Initialisation (sans allow_duplicate)
 @app.callback(
-    [Output("filtered-data","data"), Output("main-table","data"), Output("risk-banner","children")],
-    [Input("search-input", "value"), Input("filter-supplier", "value"), Input("filter-status", "value"),
-     Input("filter-category", "value"), Input("toggle-options", "value")],
-    State("master-data","data"),
-    prevent_initial_call=True
-)
-def apply_filters(search, sup, stat, cat, options, master_json):
-    base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
-    base = validate_core_columns(base)
-
-    # LOGGING AVANT FILTRAGE
-    print(f"[apply_filters] Product Category distribution BEFORE filtering:")
-    print(base['Product Category'].value_counts().head())
-
-    sup = sup or [];
-    stat = stat or [];
-    cat = cat or [];
-    options = options or []
-    fdf = filter_dataframe(base, search, sup, stat, cat, options)
-
-    # LOGGING APRÈS FILTRAGE
-    print(f"[apply_filters] Product Category distribution AFTER filtering:")
-    print(fdf['Product Category'].value_counts().head())
-
-    banner = " "
-    fdf_actions = add_action_cols(fdf)
-    return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
-
-@app.callback(
-    [Output("filtered-data", "data"), Output("main-table", "data"), Output("risk-banner", "children")],
+    [Output("filtered-data", "data"),
+     Output("main-table", "data"),
+     Output("risk-banner", "children")],
     Input("master-data", "data"),
-    prevent_initial_call=False
+    prevent_initial_call=False  # ✅ S'exécute au chargement
 )
 def initialize_table(master_json):
     """Initialise le tableau au chargement sans filtres"""
     df = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
     df = validate_core_columns(df)
-
-    # Pas d'agrégation, pas de filtres
     banner = " "
     return df.to_json(orient="records"), df.to_dict("records"), banner
+
+
+# Callback 2 : Filtrage (avec allow_duplicate)
+@app.callback(
+    [Output("filtered-data", "data", allow_duplicate=True),
+     Output("main-table", "data", allow_duplicate=True),
+     Output("risk-banner", "children", allow_duplicate=True)],
+    [Input("search-input", "value"),
+     Input("filter-supplier", "value"),
+     Input("filter-category", "value"),
+     Input("filter-need", "value"),
+     Input("toggle-options", "value")],
+    State("master-data", "data"),
+    prevent_initial_call=True  # ✅ S'exécute sur interaction
+)
+def apply_filters(search, sup, cat, need, options, master_json):
+    base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+    base = validate_core_columns(base)
+
+    sup = sup or []
+    cat = cat or []
+    need = need or []
+    options = options or []
+
+    fdf = filter_dataframe(base, search, sup, [], cat, options)
+
+    if need and len(need) > 0 and 'Ajusted_total_need' in fdf.columns:
+        fdf = fdf[fdf['Ajusted_total_need'].isin(need)]
+
+    print(f"[apply_filters] Résultat: {len(fdf)} lignes")
+
+    banner = " "
+    fdf_actions = add_action_cols(fdf)
+    return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
 # ------------------------------ Export CSV ---------------------------------------
 @app.callback(
     Output("download-data","data"),

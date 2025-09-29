@@ -1193,6 +1193,15 @@ def page_overview(master_df: pd.DataFrame = None):
         dbc.Col(html.Div(risk_bell, style={"textAlign": "right"}), md=4),
     ])
 
+    cols_to_hide = [
+        "Credit Adequacy Score", "Credit Adequacy Risk", "Stock Status",
+        "Daily OOS Rate (30d)_y", "Avg Lead Time",
+        "Coverage Day (30d)", "Coverage Day (7d)",
+        "Average Daily Sales (30d)", "Average Daily Sales (7d)",
+        "Daily OOS Rate (30d)_x"
+    ]
+    available_cols = [c for c in available_cols if c not in cols_to_hide]
+
     # Tableau principal
     table = dash_table.DataTable(
         id="main-table",

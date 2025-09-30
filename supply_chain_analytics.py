@@ -2269,34 +2269,6 @@ def apply_filters(search, sup, cat, need, options, master_json):
     banner = " "
     fdf_actions = add_action_cols(fdf)
     return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
-
-
-@app.callback(
-    [Output("master-data", "data", allow_duplicate=True),
-     Output("filtered-data", "data", allow_duplicate=True),
-     Output("main-table", "data", allow_duplicate=True),
-     Output("risk-banner", "children", allow_duplicate=True)],
-    Input("btn-refresh", "n_clicks"),
-    prevent_initial_call=True
-)
-def refresh_data(n_clicks):
-    """Recharge les données depuis les sources Google Sheets"""
-    if not n_clicks:
-        return no_update, no_update, no_update, no_update
-
-    print("[Refresh] Rechargement des données...")
-
-    # Forcer le rechargement en invalidant le cache
-    cache.clear()
-
-    # Recharger les données
-    df = get_df_cached()
-    df = validate_core_columns(df)
-
-    print(f"[Refresh] {len(df)} produits rechargés")
-
-    banner = " "
-    return df.to_json(orient="records"), df.to_json(orient="records"), df.to_dict("records"), banner
 # ------------------------------ Export CSV ---------------------------------------
 @app.callback(
     Output("download-data","data"),

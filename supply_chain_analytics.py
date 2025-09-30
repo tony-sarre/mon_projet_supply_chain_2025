@@ -2122,19 +2122,23 @@ app.validation_layout = html.Div([
 @app.callback(
     Output("page-container", "children"),
     Input("url", "pathname"),
-    State("master-data","data"),
+    State("master-data", "data"),
     prevent_initial_call=False
 )
 def render_page(path, master_json):
+    # Charger les données une seule fois
     base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+    base = validate_core_columns(base)  # ✅ Ajout
+
+    # Router vers les pages
     if path == "/analytics":
-        return page_analytics()
+        return page_analytics(base)  # ✅ Passer base au lieu de rien
     elif path == "/predictions":
-        return page_predictive()
+        return page_predictive(base)  # ✅ Passer base
     elif path == "/about":
         return page_about()
-    return page_overview(base)
-
+    else:
+        return page_overview(base)
 # ------------------------------ Filtering logic ----------------------------------
 def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: list, cats: list, options: list):
     out = df.copy()

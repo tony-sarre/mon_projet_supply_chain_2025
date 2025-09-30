@@ -1463,10 +1463,10 @@ def page_overview(master_df: pd.DataFrame = None):
     # Dans page_overview(), remplacez le bloc edit_modal par :
     edit_modal = dbc.Modal(
         [
-            dbc.ModalHeader(dbc.ModalTitle("Ajouter un produit")),
+            dbc.ModalHeader(dbc.ModalTitle("Ajouter/Éditer produit")),
             dbc.ModalBody([
                 dbc.Label("Nom du produit"),
-                dbc.Input(id="edit-product", type="text", placeholder="Ex: Lait 400g"),  # ✅ Pas "edit-input"
+                dbc.Input(id="edit-product", type="text", placeholder="Ex: Lait concentré 400g"),
                 html.Br(),
                 dbc.Label("Fournisseur"),
                 dbc.Input(id="edit-supplier", type="text", placeholder="Ex: Carrefour"),
@@ -1475,23 +1475,31 @@ def page_overview(master_df: pd.DataFrame = None):
                 dcc.Dropdown(
                     id="edit-category",
                     options=[
-                        {"label": cat, "value": cat}
-                        for cat in ["AX", "AY", "AZ", "BX", "BY", "BZ", "CX", "CY", "CZ"]
+                        {"label": "AX", "value": "AX"},
+                        {"label": "AY", "value": "AY"},
+                        {"label": "AZ", "value": "AZ"},
+                        {"label": "BX", "value": "BX"},
+                        {"label": "BY", "value": "BY"},
+                        {"label": "BZ", "value": "BZ"},
+                        {"label": "CX", "value": "CX"},
+                        {"label": "CY", "value": "CY"},
+                        {"label": "CZ", "value": "CZ"},
                     ],
-                    value="CX"
+                    placeholder="Sélectionner une catégorie"
                 ),
                 html.Br(),
                 dbc.Label("Stock initial"),
-                dbc.Input(id="edit-stock", type="number", value=0, min=0),
+                dbc.Input(id="edit-stock", type="number", placeholder="0", min=0),
             ]),
             dbc.ModalFooter([
-                dbc.Button("Annuler", id="edit-cancel", className="btn-secondary"),
-                dbc.Button("Enregistrer", id="edit-save", className="btn-primary"),
+                dbc.Button("Annuler", id="edit-cancel", className="btn-secondary", n_clicks=0),
+                dbc.Button("Enregistrer", id="edit-save", className="btn-primary", n_clicks=0),
             ]),
         ],
         id="edit-modal",
         is_open=False,
     )
+
 @app.callback(
     Output("edit-modal", "is_open", allow_duplicate=True),
     Input("edit-cancel", "n_clicks"),

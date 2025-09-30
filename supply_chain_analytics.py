@@ -1460,46 +1460,35 @@ def page_overview(master_df: pd.DataFrame = None):
     ])
 
     # ✅ Modal pour édition
-    # Dans page_overview(), remplacez le bloc edit_modal par :
     edit_modal = dbc.Modal(
         [
-            dbc.ModalHeader(dbc.ModalTitle("Ajouter/Éditer produit")),
+            dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
             dbc.ModalBody([
-                dbc.Label("Nom du produit"),
-                dbc.Input(id="edit-product", type="text", placeholder="Ex: Lait concentré 400g"),
-                html.Br(),
-                dbc.Label("Fournisseur"),
-                dbc.Input(id="edit-supplier", type="text", placeholder="Ex: Carrefour"),
-                html.Br(),
-                dbc.Label("Catégorie"),
-                dcc.Dropdown(
-                    id="edit-category",
-                    options=[
-                        {"label": "AX", "value": "AX"},
-                        {"label": "AY", "value": "AY"},
-                        {"label": "AZ", "value": "AZ"},
-                        {"label": "BX", "value": "BX"},
-                        {"label": "BY", "value": "BY"},
-                        {"label": "BZ", "value": "BZ"},
-                        {"label": "CX", "value": "CX"},
-                        {"label": "CY", "value": "CY"},
-                        {"label": "CZ", "value": "CZ"},
-                    ],
-                    placeholder="Sélectionner une catégorie"
-                ),
-                html.Br(),
-                dbc.Label("Stock initial"),
-                dbc.Input(id="edit-stock", type="number", placeholder="0", min=0),
+                html.Div("Formulaire d’édition à implémenter ici…"),
+                dcc.Input(id="edit-input", type="text", placeholder="Modifier la valeur")
             ]),
-            dbc.ModalFooter([
-                dbc.Button("Annuler", id="edit-cancel", className="btn-secondary", n_clicks=0),
-                dbc.Button("Enregistrer", id="edit-save", className="btn-primary", n_clicks=0),
-            ]),
+            dbc.ModalFooter(
+                dbc.Button("Fermer", id="close-edit", className="ms-auto", n_clicks=0)
+            ),
         ],
         id="edit-modal",
         is_open=False,
     )
 
+    return html.Div(className="content", children=[
+        header_row,
+        html.Div(kpi_cards),
+        html.Br(),
+        html.Div(className="soft-card", children=[
+            html.Div(dbc.Row([
+                dbc.Col(html.Div(f"Détails Produits - {len(available_cols)} colonnes", className="section-title"), md=8),
+                dbc.Col(html.Div(action_buttons, style={"textAlign": "right"}), md=4)
+            ])),
+            html.Br(),
+            table,
+            edit_modal  # ✅ ajout modal
+        ])
+    ])
 
 from dash import callback_context
 

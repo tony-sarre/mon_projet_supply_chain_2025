@@ -1110,7 +1110,7 @@ def make_sidebar():
         ]),
         html.Br(),
         html.Small(f"© {datetime.now().year} • {AUTHOR}"),
-        html.Div(id="debug-info", style={"marginTop": "20px", "fontSize": "10px", "color": "#6b7280"})  # Pour debug
+        #html.Div(id="debug-info", style={"marginTop": "20px", "fontSize": "10px", "color": "#6b7280"})  # Pour debug
     ])
 
 # ------------------------------ Aggregation helpers ------------------------------
@@ -2516,23 +2516,17 @@ def toggle_po_button(active_cell, selected_rows, data):
         return True  # Désactivé en cas d'erreur
 
 @app.callback(
-    Output("debug-info", "children"),  # Ajoutez <div id="debug-info"></div> dans la sidebar
+    Output("debug-info", "children"),
     [Input("main-table", "active_cell"),
      Input("main-table", "selected_rows"),
      Input("main-table", "data")],
     prevent_initial_call=True
 )
 def debug_selection(active_cell, selected_rows, data):
-    return html.Pre(f"""
-🔍 DEBUG SÉLECTION:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- active_cell: {active_cell}
-- selected_rows: {selected_rows}
-- Nombre lignes data: {len(data) if data else 0}
-
-{f"• Ligne sélectionnée: {selected_rows[0] if selected_rows else 'None'}" if selected_rows else ""}
-{f"• Données ligne: {data[selected_rows[0]] if selected_rows and len(selected_rows) > 0 and len(data) > selected_rows[0] else 'N/A'}" if selected_rows else ""}
-""")
+    # ✅ Logger dans la console au lieu d'afficher dans l'UI
+    print(f"[Debug] active_cell: {active_cell}")
+    print(f"[Debug] selected_rows: {selected_rows}")
+    return ""  # Retourner une chaîne vide (n'affiche rien)
 # ------------------------------ Edit/Add/Delete rows ------------------------------
 @app.callback(
     Output("edit-modal","is_open"),

@@ -1947,7 +1947,7 @@ def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> 
 
         if lang == "fr":
             system_msg = (
-                "Tu es Tony, expert Supply Chain avec 15 ans d'expérience. Tu es conversationnel et réponds naturellement aux questions.\n\n"
+                "Tu es maad_assistante, expert Supply Chain avec 15 ans d'expérience. Tu es conversationnel et réponds naturellement aux questions.\n\n"
                 "RÈGLES DE CONVERSATION :\n"
                 "- Si l'utilisateur te salue ou discute, réponds de manière amicale et naturelle\n"
                 "- Si l'utilisateur pose une question générale sur la supply chain, explique clairement sans forcer une analyse de données\n"
@@ -1979,7 +1979,7 @@ def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> 
 
         else:  # English
             system_msg = (
-                "You are Tony, a Supply Chain expert with 15 years of experience. You're conversational and respond naturally to questions.\n\n"
+                "You are maad_assistante, a Supply Chain expert with 15 years of experience. You're conversational and respond naturally to questions.\n\n"
                 "CONVERSATION RULES:\n"
                 "- If the user greets you or chats, respond in a friendly and natural way\n"
                 "- If the user asks a general supply chain question, explain clearly without forcing data analysis\n"
@@ -2515,18 +2515,24 @@ def toggle_po_button(active_cell, selected_rows, data):
     except (IndexError, KeyError, TypeError):
         return True  # Désactivé en cas d'erreur
 
-#@app.callback(
- #   Output("debug-info", "children"),
-  #  [Input("main-table", "active_cell"),
-   #  Input("main-table", "selected_rows"),
-    # Input("main-table", "data")],
-    #prevent_initial_call=True
-#)
-#def debug_selection(active_cell, selected_rows, data):
- #   # ✅ Logger dans la console au lieu d'afficher dans l'UI
-  #  print(f"[Debug] active_cell: {active_cell}")
-  #  print(f"[Debug] selected_rows: {selected_rows}")
-   # return ""  # Retourner une chaîne vide (n'affiche rien)
+@app.callback(
+    Output("debug-info", "children"),  # Ajoutez <div id="debug-info"></div> dans la sidebar
+    [Input("main-table", "active_cell"),
+     Input("main-table", "selected_rows"),
+     Input("main-table", "data")],
+    prevent_initial_call=True
+)
+def debug_selection(active_cell, selected_rows, data):
+    return html.Pre(f"""
+🔍 DEBUG SÉLECTION:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- active_cell: {active_cell}
+- selected_rows: {selected_rows}
+- Nombre lignes data: {len(data) if data else 0}
+
+{f"• Ligne sélectionnée: {selected_rows[0] if selected_rows else 'None'}" if selected_rows else ""}
+{f"• Données ligne: {data[selected_rows[0]] if selected_rows and len(selected_rows) > 0 and len(data) > selected_rows[0] else 'N/A'}" if selected_rows else ""}
+""")
 # ------------------------------ Edit/Add/Delete rows ------------------------------
 @app.callback(
     Output("edit-modal","is_open"),

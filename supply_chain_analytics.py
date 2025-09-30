@@ -4,6 +4,7 @@
 # pip install pandas scikit-learn flask-caching numpy
 # pip install reportlab
 # Optional: pip install openai
+from dash import callback_context
 from dash import Dash
 import dash_bootstrap_components as dbc
 import os
@@ -1499,6 +1500,18 @@ def page_overview(master_df: pd.DataFrame = None):
         id="edit-modal",
         is_open=False,
     )
+    # ✅ AJOUTER CE RETURN MANQUANT
+    return html.Div(className="content", children=[
+        header_row,
+        html.Br(),
+        kpi_cards,
+        html.Br(),
+        action_buttons,
+        html.Br(),
+        table,
+        html.Br(),
+        edit_modal,
+    ])
 
 @app.callback(
     Output("edit-modal", "is_open", allow_duplicate=True),
@@ -1510,68 +1523,6 @@ def close_modal(n_clicks):
         return False
     return no_update
 
-from dash import callback_context
-
-# ✏️ Éditer une ligne
-@app.callback(
-    Output("main-table", "data", allow_duplicate=True),
-    Input({"type": "edit-btn", "index": ALL}, "n_clicks"),
-    State("main-table", "data"),
-    prevent_initial_call=True
-)
-def edit_row(edit_clicks, rows):
-    ctx = callback_context
-    if not ctx.triggered:
-        return rows
-    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
-    triggered = json.loads(triggered_id)
-    index = triggered["index"]
-
-    if 0 <= index < len(rows):
-        rows[index]["product_name"] = str(rows[index].get("product_name", "")) + " (✏️ édité)"
-    return rows
-
-
-# 🗑️ Supprimer une ligne
-@app.callback(
-    Output("main-table", "data", allow_duplicate=True),
-    Input({"type": "delete-btn", "index": ALL}, "n_clicks"),
-    State("main-table", "data"),
-    prevent_initial_call=True
-)
-def delete_row(delete_clicks, rows):
-    ctx = callback_context
-    if not ctx.triggered:
-        return rows
-    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
-    triggered = json.loads(triggered_id)
-    index = triggered["index"]
-
-    if 0 <= index < len(rows):
-        rows.pop(index)
-    return rows
-
-
-# ➕ Ajouter une ligne
-@app.callback(
-    Output("main-table", "data", allow_duplicate=True),
-    Input({"type": "add-btn", "index": ALL}, "n_clicks"),
-    State("main-table", "data"),
-    State("main-table", "columns"),
-    prevent_initial_call=True
-)
-def add_row(add_clicks, rows, columns):
-    ctx = callback_context
-    if not ctx.triggered:
-        return rows
-    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
-    triggered = json.loads(triggered_id)
-    index = triggered["index"]
-
-    # Crée une ligne vide
-    new_row = {c["id"]: "" for c in columns}
-    rows.insert(index + 1, new_row)
-    return rows
 
 
 def page_analytics(master_df: pd.DataFrame = None):
@@ -2583,8 +2534,8 @@ def debug_selection(active_cell, selected_rows, data):
 """)
 # ------------------------------ Edit/Add/Delete rows ------------------------------
 @app.callback(
-    [Output("edit-modal", "is_open"),
-     Output("edit-product", "value"),  # ✅ Corrigé de "edit-input"
+    [Output("edit-modal", "is_open", allow_duplicate=True),  # ✅ Ajout
+     Output("edit-product", "value"),
      Output("edit-supplier", "value"),
      Output("edit-category", "value"),
      Output("edit-stock", "value")],

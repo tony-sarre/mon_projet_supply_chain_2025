@@ -1426,7 +1426,8 @@ def page_overview(master_df: pd.DataFrame = None):
         column_selectable="single",
         editable=True,
         row_selectable="single",  # ✅ UNE SEULE FOIS
-        selected_rows=[],
+        selected_rows=[0] if len(df) > 0 else [],
+        #selected_rows=[],
         style_table={"overflowX": "auto", "maxWidth": "100%"},
         style_header={"backgroundColor": "#0f1625", "border": "1px solid #1f2937",
                       "fontWeight": "700", "textAlign": "center"},
@@ -1500,6 +1501,16 @@ def page_overview(master_df: pd.DataFrame = None):
         id="edit-modal",
         is_open=False,
     )
+    # ✅ DEBUG : Vérifier le contenu de la première ligne
+    if len(df) > 0:
+        first_row = df.iloc[0]
+        print("\n========== DEBUG PREMIÈRE LIGNE ==========")
+        print(f"product_name: '{first_row.get('product_name', 'ABSENT')}'")
+        print(f"Supplier: '{first_row.get('Supplier', 'ABSENT')}'")
+        print(f"Predicted Order Quantity: {first_row.get('Predicted Order Quantity', 0)}")
+        print("==========================================\n")
+
+    return html.Div(className="content", children=[...])
     # ✅ AJOUTER CE RETURN MANQUANT
     return html.Div(className="content", children=[
         header_row,
@@ -2126,18 +2137,24 @@ app.validation_layout = html.Div([
     prevent_initial_call=False
 )
 def render_page(path, master_json):
-    # Charger les données une seule fois
-    base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
-    base = validate_core_columns(base)  # ✅ Ajout
+    print(f"[Router] Path demandé : {path}")
 
-    # Router vers les pages
+    base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+    print(f"[Router] Données chargées : {len(base)} lignes")
+
+    base = validate_core_columns(base)
+
     if path == "/analytics":
-        return page_analytics(base)  # ✅ Passer base au lieu de rien
+        print("[Router] → page_analytics")
+        return page_analytics(base)
     elif path == "/predictions":
-        return page_predictive(base)  # ✅ Passer base
+        print("[Router] → page_predictive")
+        return page_predictive(base)
     elif path == "/about":
+        print("[Router] → page_about")
         return page_about()
     else:
+        print("[Router] → page_overview (défaut)")
         return page_overview(base)
 # ------------------------------ Filtering logic ----------------------------------
 def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: list, cats: list, options: list):
@@ -2484,7 +2501,7 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
     [Input("main-table", "active_cell"),
      Input("main-table", "selected_rows"),
      Input("main-table", "data")],
-    prevent_initial_call=True  # ✅ CRUCIAL : ne s'exécute que sur interaction
+    prevent_initial_call=False  # ✅ Changé de True à False
 )
 def toggle_po_button(active_cell, selected_rows, data):
     # Si pas de données, désactiver
@@ -2494,30 +2511,39 @@ def toggle_po_button(active_cell, selected_rows, data):
     # Déterminer quelle ligne est sélectionnée
     row_idx = None
 
-    # Priorité 1 : selected_rows (clic sur la checkbox)
+    # Priorité 1 : selected_rows (clic sur checkbox)
     if selected_rows and len(selected_rows) > 0:
         row_idx = selected_rows[0]
 
-    # Priorité 2 : active_cell (clic sur une cellule)
-    if row_idx is None and active_cell and isinstance(active_cell, dict):
+    # Priorité 2 : active_cell (clic sur cellule)
+    elif active_cell and isinstance(active_cell, dict):
         row_idx = active_cell.get("row")
+
+    # ✅ NOUVEAU : Si aucune sélection mais 1 seule ligne, activer par défaut
+    if row_idx is None and len(data) == 1:
+        row_idx = 0
+        print("[PDF Button] Auto-sélection de l'unique ligne")
 
     # Vérifier que l'index est valide
     if row_idx is None or row_idx < 0 or row_idx >= len(data):
         return True  # Désactivé
 
-    # Récupérer la ligne et vérifier les champs obligatoires
+    # Vérifier les champs obligatoires
     try:
         r = data[row_idx]
         prod = str(r.get("product_name", "")).strip()
         sup = str(r.get("Supplier", "")).strip()
 
-        # Activer seulement si les deux champs sont présents
-        return not (prod and sup)  # False = activé, True = désactivé
+        print(f"[PDF Button] Ligne {row_idx}: product='{prod}', supplier='{sup}'")
 
-    except (IndexError, KeyError, TypeError):
+        # Activer si les deux champs sont présents
+        is_disabled = not (prod and sup)
+        print(f"[PDF Button] Bouton {'DÉSACTIVÉ' if is_disabled else 'ACTIVÉ'}")
+        return is_disabled
+
+    except (IndexError, KeyError, TypeError) as e:
+        print(f"[PDF Button] Erreur: {e}")
         return True  # Désactivé en cas d'erreur
-
 @app.callback(
     Output("debug-info", "children"),  # Ajoutez <div id="debug-info"></div> dans la sidebar
     [Input("main-table", "active_cell"),

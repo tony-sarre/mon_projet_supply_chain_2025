@@ -2522,17 +2522,17 @@ def toggle_po_button(active_cell, selected_rows, data):
      Input("main-table", "data")],
     prevent_initial_call=True
 )
-def debug_selection(active_cell, selected_rows, data):
-    return html.Pre(f"""
-🔍 DEBUG SÉLECTION:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- active_cell: {active_cell}
-- selected_rows: {selected_rows}
-- Nombre lignes data: {len(data) if data else 0}
+#def debug_selection(active_cell, selected_rows, data):
+ #   return html.Pre(f"""
+#🔍 DEBUG SÉLECTION:
+#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#- active_cell: {active_cell}
+#- selected_rows: {selected_rows}
+#- Nombre lignes data: {len(data) if data else 0}
 
-{f"• Ligne sélectionnée: {selected_rows[0] if selected_rows else 'None'}" if selected_rows else ""}
-{f"• Données ligne: {data[selected_rows[0]] if selected_rows and len(selected_rows) > 0 and len(data) > selected_rows[0] else 'N/A'}" if selected_rows else ""}
-""")
+#{f"• Ligne sélectionnée: {selected_rows[0] if selected_rows else 'None'}" if selected_rows else ""}
+#{f"• Données ligne: {data[selected_rows[0]] if selected_rows and len(selected_rows) > 0 and len(data) > selected_rows[0] else 'N/A'}" if selected_rows else ""}
+#""")
 # ------------------------------ Edit/Add/Delete rows ------------------------------
 @app.callback(
     Output("edit-modal","is_open"),

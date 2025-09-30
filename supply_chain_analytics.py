@@ -1903,16 +1903,14 @@ def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> 
         lang = _detect_lang(user_text)
         sample = _clean_df_for_advice(df if isinstance(df, pd.DataFrame) else pd.DataFrame())
         fields = ['product_name_display', 'supplier_name', 'abc_class', 'xyz_class', 'current_stock', 'avg_daily_sales',
-                  'coverage_days', 'leadtime_days', 'credit_days', 'rupture_ml', 'delisting_product',
-                  'risk']  # ✅ Ajout de 'risk'
+                  'coverage_days', 'leadtime_days', 'credit_days', 'rupture_ml', 'delisting_product', 'risk']
         view = sample[[c for c in fields if c in sample.columns]].copy() if not sample.empty else pd.DataFrame()
 
         cov_med = None;
         rows_digest = []
         try:
             if not view.empty:
-                cov_med = float(
-                    view['coverage_days'].median()) if 'coverage_days' in view.columns else None  # ✅ Simplifié
+                cov_med = float(view['coverage_days'].median()) if 'coverage_days' in view.columns else None
                 at_risk = view[
                     view['rupture_ml'].str.upper() == 'OUI'] if 'rupture_ml' in view.columns else pd.DataFrame()
                 top_list = at_risk.sort_values('coverage_days', ascending=True).head(
@@ -1938,57 +1936,97 @@ def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> 
             pass
 
         if openai_client is None:
-            return _chatbot_fallback(user_text, view)  # ✅ Passe view, pas df
+            return _chatbot_fallback(user_text, view)
 
+        # ✅ NOUVEAU PROMPT SYSTÈME CONVERSATIONNEL
         if lang == "fr":
             system_msg = (
-                "Tu es Tony, assistant Supply Chain senior. Réponds brièvement et orienté action. "
-                "Appuie tes recommandations sur le tableau fourni (produits). Cite des SKU si pertinent. "
-                "Propose des quantités, priorités fournisseurs, et leviers (crédit, promo déstockage, ABC/XYZ)."
+                "Tu es Maad_assistante, expert Supply Chain avec 15 ans d'expérience. Tu es conversationnel et réponds naturellement aux questions.\n\n"
+                "RÈGLES DE CONVERSATION :\n"
+                "- Si l'utilisateur te salue ou discute, réponds de manière amicale et naturelle\n"
+                "- Si l'utilisateur pose une question générale sur la supply chain, explique clairement sans forcer une analyse de données\n"
+                "- SEULEMENT si l'utilisateur demande explicitement une analyse, recommandation, ou conseil sur ses stocks, utilise les données fournies\n"
+                "- Adapte ton niveau de détail à la question : simple question = réponse courte, analyse demandée = détails avec chiffres\n\n"
+                "QUAND TU ANALYSES LES DONNÉES :\n"
+                "- Cite des SKU concrets du tableau\n"
+                "- Propose des quantités chiffrées\n"
+                "- Mentionne les fournisseurs prioritaires\n"
+                "- Suggère des leviers (crédit, promo déstockage, catégories ABC/XYZ)\n"
+                "- Sois orienté action avec des recommandations précises"
             )
-            ctx = (f"Contexte (JSON extrait <=80 lignes): {json.dumps(table_json, ensure_ascii=False)[:12000]}\n" +
-                   (f"KPI: couverture médiane ≈ {cov_med:.1f} j\n" if cov_med is not None else ""))
+
+            # Contexte données (toujours disponible mais pas forcé)
+            ctx = f"Données disponibles (utilise-les SEULEMENT si l'utilisateur demande une analyse) :\n"
+            ctx += f"- Extrait produits (JSON) : {json.dumps(table_json, ensure_ascii=False)[:8000]}\n"
+            if cov_med is not None:
+                ctx += f"- KPI global : couverture médiane ≈ {cov_med:.1f} jours\n"
             if rows_digest:
-                ctx += "Priorités (extrait): " + "; ".join(
+                ctx += "- Produits prioritaires : " + "; ".join(
                     [
-                        f"{d['name']} (sup {d['sup']}) cov {d['cov']:.1f}j, LT {d['lt']}j, crédit {d['cred']}j, {d['abc']}{d['xyz']}"
-                        for d in rows_digest]
+                        f"{d['name']} (fournisseur {d['sup']}, couverture {d['cov']:.1f}j, lead time {d['lt']}j, crédit {d['cred']}j, catégorie {d['abc']}{d['xyz']})"
+                        for d in rows_digest[:3]]  # Limité à 3 pour pas surcharger
                 ) + "\n"
-            user_q = f"Question: {user_text.strip()}"
-        else:
+
+            user_q = f"Question de l'utilisateur : {user_text.strip()}"
+
+        else:  # English
             system_msg = (
-                "You are Tony, a senior Supply Chain assistant. Be concise and action-oriented. "
-                "Ground recommendations in the provided product table. Mention concrete SKUs when helpful."
+                "You are Maad_assistante, a Supply Chain expert with 15 years of experience. You're conversational and respond naturally to questions.\n\n"
+                "CONVERSATION RULES:\n"
+                "- If the user greets you or chats, respond in a friendly and natural way\n"
+                "- If the user asks a general supply chain question, explain clearly without forcing data analysis\n"
+                "- ONLY if the user explicitly requests analysis, recommendations, or advice on their inventory, use the provided data\n"
+                "- Adapt your detail level to the question: simple question = short answer, analysis requested = details with numbers\n\n"
+                "WHEN ANALYZING DATA:\n"
+                "- Cite concrete SKUs from the table\n"
+                "- Propose quantified amounts\n"
+                "- Mention priority suppliers\n"
+                "- Suggest levers (credit, promo clearance, ABC/XYZ categories)\n"
+                "- Be action-oriented with precise recommendations"
             )
-            ctx = (f"Context (JSON excerpt <=80 rows): {json.dumps(table_json, ensure_ascii=False)[:12000]}\n" +
-                   (f"KPI: median coverage ≈ {cov_med:.1f} d\n" if cov_med is not None else ""))
+
+            ctx = f"Available data (use ONLY if user requests analysis):\n"
+            ctx += f"- Product excerpt (JSON): {json.dumps(table_json, ensure_ascii=False)[:8000]}\n"
+            if cov_med is not None:
+                ctx += f"- Global KPI: median coverage ≈ {cov_med:.1f} days\n"
             if rows_digest:
-                ctx += "Priorities (excerpt): " + "; ".join(
+                ctx += "- Priority products: " + "; ".join(
                     [
-                        f"{d['name']} (sup {d['sup']}) cov {d['cov']:.1f}d, LT {d['lt']}d, credit {d['cred']}d, {d['abc']}{d['xyz']}"
-                        for d in rows_digest]
+                        f"{d['name']} (supplier {d['sup']}, coverage {d['cov']:.1f}d, lead time {d['lt']}d, credit {d['cred']}d, category {d['abc']}{d['xyz']})"
+                        for d in rows_digest[:3]]
                 ) + "\n"
+
             user_q = f"User question: {user_text.strip()}"
 
-        hist = [{"role": "assistant" if m.get("role") == "assistant" else "user", "content": m.get("text", "")} for m in
-                (history_messages or [])]
-        messages = [{"role": "system", "content": system_msg}] + hist + [
-            {"role": "user", "content": ctx + "\n" + user_q}]
+        # Construction de l'historique complet
+        hist = [{"role": "assistant" if m.get("role") == "assistant" else "user", "content": m.get("text", "")}
+                for m in (history_messages or [])]
+
+        messages = [
+                       {"role": "system", "content": system_msg},
+                       {"role": "system", "content": ctx}  # Contexte séparé pour clarté
+                   ] + hist + [
+                       {"role": "user", "content": user_q}
+                   ]
 
         try:
             resp = openai_client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=messages, temperature=0.4, max_tokens=600
+                messages=messages,
+                temperature=0.7,  # ✅ Augmenté de 0.4 à 0.7 pour conversation plus naturelle
+                max_tokens=800  # ✅ Augmenté de 600 à 800 pour réponses plus détaillées
             )
             out = (resp.choices[0].message.content or "").strip()
             return out if out else _chatbot_fallback(user_text, view)
+
         except Exception as api_err:
-            return _chatbot_fallback(user_text, view, prefix=f"⚠️ IA: {type(api_err).__name__} ")
+            print(f"[Chatbot] Erreur OpenAI: {type(api_err).__name__}: {api_err}")
+            return _chatbot_fallback(user_text, view, prefix=f"⚠️ API indisponible. ")
 
     except Exception as e:
         import traceback
         print(f"[Chatbot] Erreur _chatbot_reply: {traceback.format_exc()}")
-        return f"⚠️ Erreur inattendue: {type(e).__name__}: {e}"
+        return f"⚠️ Erreur technique : {type(e).__name__}"
 
 
 def _chatbot_fallback(user_text: str, df: pd.DataFrame, prefix: str = "") -> str:

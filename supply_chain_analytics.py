@@ -1454,41 +1454,53 @@ def page_overview(master_df: pd.DataFrame = None):
 
     # Boutons d’actions globales
     action_buttons = dbc.ButtonGroup([
-        dbc.Button("📥 Export CSV", id="btn-export", className="btn-outline-primary", size="sm"),
+        #dbc.Button("📥 Export CSV", id="btn-export", className="btn-outline-primary", size="sm"),
         dbc.Button("🔄 Actualiser", id="btn-refresh", className="btn-outline-secondary", size="sm"),
         dbc.Button("➕ Ajouter une ligne", id="btn-add-row", className="btn-primary", size="sm"),
     ])
 
     # ✅ Modal pour édition
+    # Dans page_overview(), remplacez le bloc edit_modal par :
     edit_modal = dbc.Modal(
         [
-            dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
+            dbc.ModalHeader(dbc.ModalTitle("Ajouter un produit")),
             dbc.ModalBody([
-                html.Div("Formulaire d’édition à implémenter ici…"),
-                dcc.Input(id="edit-input", type="text", placeholder="Modifier la valeur")
+                dbc.Label("Nom du produit"),
+                dbc.Input(id="edit-product", type="text", placeholder="Ex: Lait 400g"),  # ✅ Pas "edit-input"
+                html.Br(),
+                dbc.Label("Fournisseur"),
+                dbc.Input(id="edit-supplier", type="text", placeholder="Ex: Carrefour"),
+                html.Br(),
+                dbc.Label("Catégorie"),
+                dcc.Dropdown(
+                    id="edit-category",
+                    options=[
+                        {"label": cat, "value": cat}
+                        for cat in ["AX", "AY", "AZ", "BX", "BY", "BZ", "CX", "CY", "CZ"]
+                    ],
+                    value="CX"
+                ),
+                html.Br(),
+                dbc.Label("Stock initial"),
+                dbc.Input(id="edit-stock", type="number", value=0, min=0),
             ]),
-            dbc.ModalFooter(
-                dbc.Button("Fermer", id="close-edit", className="ms-auto", n_clicks=0)
-            ),
+            dbc.ModalFooter([
+                dbc.Button("Annuler", id="edit-cancel", className="btn-secondary"),
+                dbc.Button("Enregistrer", id="edit-save", className="btn-primary"),
+            ]),
         ],
         id="edit-modal",
         is_open=False,
     )
-
-    return html.Div(className="content", children=[
-        header_row,
-        html.Div(kpi_cards),
-        html.Br(),
-        html.Div(className="soft-card", children=[
-            html.Div(dbc.Row([
-                dbc.Col(html.Div(f"Détails Produits - {len(available_cols)} colonnes", className="section-title"), md=8),
-                dbc.Col(html.Div(action_buttons, style={"textAlign": "right"}), md=4)
-            ])),
-            html.Br(),
-            table,
-            edit_modal  # ✅ ajout modal
-        ])
-    ])
+@app.callback(
+    Output("edit-modal", "is_open", allow_duplicate=True),
+    Input("edit-cancel", "n_clicks"),
+    prevent_initial_call=True
+)
+def close_modal(n_clicks):
+    if n_clicks:
+        return False
+    return no_update
 
 from dash import callback_context
 
@@ -2269,6 +2281,34 @@ def apply_filters(search, sup, cat, need, options, master_json):
     banner = " "
     fdf_actions = add_action_cols(fdf)
     return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
+
+
+@app.callback(
+    [Output("master-data", "data", allow_duplicate=True),
+     Output("filtered-data", "data", allow_duplicate=True),
+     Output("main-table", "data", allow_duplicate=True),
+     Output("risk-banner", "children", allow_duplicate=True)],
+    Input("btn-refresh", "n_clicks"),
+    prevent_initial_call=True
+)
+def refresh_data(n_clicks):
+    """Recharge les données depuis les sources Google Sheets"""
+    if not n_clicks:
+        return no_update, no_update, no_update, no_update
+
+    print("[Refresh] Rechargement des données...")
+
+    # Forcer le rechargement en invalidant le cache
+    cache.clear()
+
+    # Recharger les données
+    df = get_df_cached()
+    df = validate_core_columns(df)
+
+    print(f"[Refresh] {len(df)} produits rechargés")
+
+    banner = " "
+    return df.to_json(orient="records"), df.to_json(orient="records"), df.to_dict("records"), banner
 # ------------------------------ Export CSV ---------------------------------------
 @app.callback(
     Output("download-data","data"),
@@ -2535,98 +2575,85 @@ def debug_selection(active_cell, selected_rows, data):
 """)
 # ------------------------------ Edit/Add/Delete rows ------------------------------
 @app.callback(
-    Output("edit-modal","is_open"),
-    Output("edit-input", "value"),
-    Output("edit-supplier","value"),
-    Output("edit-category","value"),
-    Output("edit-stock","value"),
-    Output("main-table","active_cell"),
-    Input("btn-add-row","n_clicks"),
-    Input("main-table","active_cell"),
-    State("main-table","data"),
+    [Output("edit-modal", "is_open"),
+     Output("edit-product", "value"),  # ✅ Corrigé de "edit-input"
+     Output("edit-supplier", "value"),
+     Output("edit-category", "value"),
+     Output("edit-stock", "value")],
+    Input("btn-add-row", "n_clicks"),
     prevent_initial_call=True
 )
-def open_edit_modal(n_add, active_cell, data):
-    ctx = dash.callback_context
-    if not ctx.triggered:
-        return False, None, None, None, None, None
-    trig = ctx.triggered[0]["prop_id"].split(".")[0]
-    if trig == "btn-add-row":
-        return True, "", "", "", 0, None
-    if trig == "main-table" and active_cell:
-        col = active_cell.get("column_id")
-        row = active_cell.get("row")
-        if col == "✏️ Edit" and data and 0 <= row < len(data):
-            r = data[row]
-            return True, r.get("product_name",""), r.get("Supplier",""), r.get("Product Category",""), r.get("total_stock",0), None
-    return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+def open_edit_modal(n_add):
+    """Ouvre le modal pour ajouter une nouvelle ligne"""
+    if not n_add:
+        return no_update, no_update, no_update, no_update, no_update
+
+    # Ouvrir le modal avec des champs vides
+    return True, "", "", "CX", 0
 
 @app.callback(
-    Output("master-data","data", allow_duplicate=True),
-    Output("filtered-data","data", allow_duplicate=True),
-    Output("main-table","data", allow_duplicate=True),
-    Output("risk-banner","children", allow_duplicate=True),  # ✅ Décommenté
-    Output("edit-modal","is_open", allow_duplicate=True),
-    Input("edit-save","n_clicks"),
-    State("edit-product","value"),
-    State("edit-supplier","value"),
-    State("edit-category","value"),
-    State("edit-stock","value"),
-    State("main-table","active_cell"),
-    State("main-table","data"),
-    State("search-input","value"),
-    State("filter-supplier","value"),
-    State("filter-status","value"),
-    State("filter-category","value"),
-    State("toggle-options","value"),
-    State("master-data","data"),
+    Output("edit-modal", "is_open", allow_duplicate=True),
+    Input("edit-cancel", "n_clicks"),
     prevent_initial_call=True
 )
-def save_edit(n, prod, sup, cat, stock, active_cell, table_data, q, fs, fst, fc, opts, master_json):
+def close_edit_modal(n_clicks):
+    """Ferme le modal sans sauvegarder"""
+    if n_clicks:
+        return False
+    return no_update
+
+
+@app.callback(
+    [Output("master-data", "data", allow_duplicate=True),
+     Output("filtered-data", "data", allow_duplicate=True),
+     Output("main-table", "data", allow_duplicate=True),
+     Output("edit-modal", "is_open", allow_duplicate=True)],
+    Input("edit-save", "n_clicks"),
+    State("edit-product", "value"),  # ✅ Pas "edit-input"
+    State("edit-supplier", "value"),
+    State("edit-category", "value"),
+    State("edit-stock", "value"),
+    State("master-data", "data"),
+    prevent_initial_call=True
+)
+def save_edit(n, prod, sup, cat, stock, master_json):
+    if not n:
+        return no_update, no_update, no_update, no_update
+
     base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
     df = base.copy()
 
-    if active_cell and active_cell.get("column_id") == "✏️ Edit" and active_cell.get("row") is not None and table_data:
-        row = active_cell["row"]
-        r = table_data[row]
-        key_p = r.get("product_name")
-        key_s = r.get("Supplier")
-        idx = df[(df["product_name"].astype(str)==str(key_p)) & (df["Supplier"].astype(str)==str(key_s))].index
-        if len(idx)>0:
-            i = idx[0]
-            if prod is not None: df.at[i,"product_name"] = prod
-            if sup is not None: df.at[i,"Supplier"] = sup
-            if cat is not None: df.at[i,"Product Category"] = cat
-            if stock is not None:
-                try: df.at[i,"total_stock"] = float(stock)
-                except: pass
-    else:
-        new_row = {c: np.nan for c in df.columns}
-        new_row["product_name"] = prod or ""
-        new_row["Supplier"] = sup or ""
-        new_row["Product Category"] = cat or ""
-        try:
-            new_row["total_stock"] = float(stock or 0)
-        except:
-            new_row["total_stock"] = 0.0
-        for c in ["Optimal Stock (Reorder Point)", "Max Lead Time", "Max Avg Daily Sales", "Max Coverage Day",
-                  "Daily OOS Rate (30d)", "Predicted Order Quantity"]:
-            if c in df.columns and pd.isna(new_row.get(c)):
-                new_row[c] = 0.0
-        if "Predicted Stockout" in df.columns and pd.isna(new_row.get("Predicted Stockout")):
-            new_row["Predicted Stockout"] = False
-        if "Stock Status" in df.columns and pd.isna(new_row.get("Stock Status")):
-            new_row["Stock Status"] = "Order Soon" if new_row["total_stock"] else "Out of Stock"
-        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    # Créer une nouvelle ligne
+    new_row = {}
+    for c in df.columns:
+        new_row[c] = np.nan
 
-    sup_list = fs or []; stat_list = fst or []; cat_list = fc or []; options = opts or []
-    fdf = filter_dataframe(df, q, sup_list, stat_list, cat_list, options)
-    risk_count = int((fdf['Stock Status'].isin(['Out of Stock','Predicted Stockout Soon']).sum())) if 'Stock Status' in fdf.columns else 0
-    #banner = [html.B("Alerte Rupture : "), f"{risk_count} SKU(s) à risque dans la vue filtrée — ",
-            #  html.Span("OOS", className="badge badge-danger"), " / ", html.Span("Rupture imminente", className="badge-warn")]
-    fdf_actions = add_action_cols(fdf)
-    return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), False
+    new_row["product_name"] = prod or ""
+    new_row["Supplier"] = sup or ""
+    new_row["Product Category"] = cat or "CX"
 
+    try:
+        new_row["total_stock"] = float(stock or 0)
+    except:
+        new_row["total_stock"] = 0.0
+
+    # Valeurs par défaut
+    new_row["Recalculated Average Daily Sales"] = 0.1
+    new_row["Optimal Stock (Reorder Point)"] = 0.0
+    new_row["Max Coverage Day"] = 0.0
+    new_row["Predicted Order Quantity"] = 0.0
+    new_row["purchase_need"] = 0.0
+    new_row["Predicted Stockout"] = False
+    new_row["Stock Status"] = "Stock OK" if new_row["total_stock"] > 0 else "Out of Stock"
+    new_row["Ajusted_total_need"] = "NO NEED"
+    new_row["delisting_status"] = "Not Delisted"
+
+    # Ajouter
+    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+    print(f"[Edit] Produit ajouté : {prod}")
+
+    return df.to_json(orient="records"), df.to_json(orient="records"), df.to_dict("records"), False
 @app.callback(
     Output("master-data","data", allow_duplicate=True),
     Output("filtered-data","data", allow_duplicate=True),

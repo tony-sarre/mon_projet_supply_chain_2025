@@ -436,7 +436,15 @@
       <option name="project" value="LOCAL" />
       <updated>1759192966117</updated>
     </task>
-    <option name="localTasksCounter" value="46" />
+    <task id="LOCAL-00046" summary="Fix: rename procfile to Procfile">
+      <option name="closed" value="true" />
+      <created>1759226583569</created>
+      <option name="number" value="00046" />
+      <option name="presentableId" value="LOCAL-00046" />
+      <option name="project" value="LOCAL" />
+      <updated>1759226583569</updated>
+    </task>
+    <option name="localTasksCounter" value="47" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">

@@ -1938,10 +1938,16 @@ def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> 
         if openai_client is None:
             return _chatbot_fallback(user_text, view)
 
-        # ✅ NOUVEAU PROMPT SYSTÈME CONVERSATIONNEL
+        # ✅ DÉTECTION SI ANALYSE DEMANDÉE
+        needs_analysis = any(keyword in user_text.lower() for keyword in [
+            'analyse', 'recommande', 'conseil', 'rupture', 'commande', 'stock',
+            'produit', 'quels', 'combien', 'urgent', 'priorité', 'fournisseur',
+            'risque', 'order', 'achat', 'besoin', 'coverage', 'lead time'
+        ])
+
         if lang == "fr":
             system_msg = (
-                "Tu es Maad_assistante, expert Supply Chain avec 15 ans d'expérience. Tu es conversationnel et réponds naturellement aux questions.\n\n"
+                "Tu es Tony, expert Supply Chain avec 15 ans d'expérience. Tu es conversationnel et réponds naturellement aux questions.\n\n"
                 "RÈGLES DE CONVERSATION :\n"
                 "- Si l'utilisateur te salue ou discute, réponds de manière amicale et naturelle\n"
                 "- Si l'utilisateur pose une question générale sur la supply chain, explique clairement sans forcer une analyse de données\n"
@@ -1955,23 +1961,25 @@ def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> 
                 "- Sois orienté action avec des recommandations précises"
             )
 
-            # Contexte données (toujours disponible mais pas forcé)
-            ctx = f"Données disponibles (utilise-les SEULEMENT si l'utilisateur demande une analyse) :\n"
-            ctx += f"- Extrait produits (JSON) : {json.dumps(table_json, ensure_ascii=False)[:8000]}\n"
-            if cov_med is not None:
-                ctx += f"- KPI global : couverture médiane ≈ {cov_med:.1f} jours\n"
-            if rows_digest:
-                ctx += "- Produits prioritaires : " + "; ".join(
-                    [
-                        f"{d['name']} (fournisseur {d['sup']}, couverture {d['cov']:.1f}j, lead time {d['lt']}j, crédit {d['cred']}j, catégorie {d['abc']}{d['xyz']})"
-                        for d in rows_digest[:3]]  # Limité à 3 pour pas surcharger
-                ) + "\n"
+            # ✅ CONTEXTE RÉDUIT : Envoyer données SEULEMENT si nécessaire
+            if needs_analysis and table_json:
+                ctx = f"Données disponibles pour analyse :\n"
+                ctx += f"- Extrait produits (20 premiers) : {json.dumps(table_json[:20], ensure_ascii=False)}\n"
+                if cov_med is not None:
+                    ctx += f"- KPI global : couverture médiane ≈ {cov_med:.1f} jours\n"
+                if rows_digest:
+                    ctx += "- Produits prioritaires : " + "; ".join(
+                        [f"{d['name']} (fournisseur {d['sup']}, couverture {d['cov']:.1f}j, lead time {d['lt']}j)"
+                         for d in rows_digest[:3]]
+                    ) + "\n"
+            else:
+                ctx = "Conversation générale. Données disponibles si besoin d'analyse détaillée.\n"
 
-            user_q = f"Question de l'utilisateur : {user_text.strip()}"
+            user_q = f"Question : {user_text.strip()}"
 
         else:  # English
             system_msg = (
-                "You are Maad_assistante, a Supply Chain expert with 15 years of experience. You're conversational and respond naturally to questions.\n\n"
+                "You are Tony, a Supply Chain expert with 15 years of experience. You're conversational and respond naturally to questions.\n\n"
                 "CONVERSATION RULES:\n"
                 "- If the user greets you or chats, respond in a friendly and natural way\n"
                 "- If the user asks a general supply chain question, explain clearly without forcing data analysis\n"
@@ -1985,18 +1993,20 @@ def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> 
                 "- Be action-oriented with precise recommendations"
             )
 
-            ctx = f"Available data (use ONLY if user requests analysis):\n"
-            ctx += f"- Product excerpt (JSON): {json.dumps(table_json, ensure_ascii=False)[:8000]}\n"
-            if cov_med is not None:
-                ctx += f"- Global KPI: median coverage ≈ {cov_med:.1f} days\n"
-            if rows_digest:
-                ctx += "- Priority products: " + "; ".join(
-                    [
-                        f"{d['name']} (supplier {d['sup']}, coverage {d['cov']:.1f}d, lead time {d['lt']}d, credit {d['cred']}d, category {d['abc']}{d['xyz']})"
-                        for d in rows_digest[:3]]
-                ) + "\n"
+            if needs_analysis and table_json:
+                ctx = f"Available data for analysis:\n"
+                ctx += f"- Product excerpt (20 first): {json.dumps(table_json[:20], ensure_ascii=False)}\n"
+                if cov_med is not None:
+                    ctx += f"- Global KPI: median coverage ≈ {cov_med:.1f} days\n"
+                if rows_digest:
+                    ctx += "- Priority products: " + "; ".join(
+                        [f"{d['name']} (supplier {d['sup']}, coverage {d['cov']:.1f}d, lead time {d['lt']}d)"
+                         for d in rows_digest[:3]]
+                    ) + "\n"
+            else:
+                ctx = "General conversation. Data available if detailed analysis needed.\n"
 
-            user_q = f"User question: {user_text.strip()}"
+            user_q = f"Question: {user_text.strip()}"
 
         # Construction de l'historique complet
         hist = [{"role": "assistant" if m.get("role") == "assistant" else "user", "content": m.get("text", "")}
@@ -2709,30 +2719,44 @@ def on_upload(contents, filename, history, rendered):
     history.append({"role":"assistant","text":msg,"ts":datetime.now().isoformat()})
     return df_u.to_json(orient="records"), f"✅ {filename} importé.", _render_messages(history), history
 
+
 @app.callback(
-    Output("chat-messages","children", allow_duplicate=True),
-    Output("chat-store","data", allow_duplicate=True),
-    Input("chat-send","n_clicks"),
-    State("chat-input","value"),
-    State("chat-store","data"),
-    State("uploaded-csv","data"),
-    State("master-data","data"),
+    [Output("chat-messages", "children", allow_duplicate=True),
+     Output("chat-store", "data", allow_duplicate=True),
+     Output("chat-input", "value")],  # ✅ Ajout pour vider l'input
+    Input("chat-send", "n_clicks"),
+    State("chat-input", "value"),
+    State("chat-store", "data"),
+    State("uploaded-csv", "data"),
+    State("master-data", "data"),
     prevent_initial_call=True
 )
 def on_chat(n_clicks, user_text, history, uploaded_json, master_json):
+    if not n_clicks:
+        return no_update, no_update, no_update
+
     history = history or []
     user_text = (user_text or "").strip()
+
     if not user_text:
-        return _render_messages(history), history
+        return _render_messages(history), history, ""
+
+    # Préparer les données
     df_up = pd.DataFrame(json.loads(uploaded_json)) if uploaded_json else pd.DataFrame()
-    use_uploaded = ('product_name' in df_up.columns) and len(df_up)>0
+    use_uploaded = ('product_name' in df_up.columns) and len(df_up) > 0
     df_base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
     df = df_up if use_uploaded else df_base
 
-    history.append({"role":"user","text":user_text,"ts":datetime.now().isoformat()})
-    reply = _chatbot_reply(user_text, df, history)
-    history.append({"role":"assistant","text":reply,"ts":datetime.now().isoformat()})
-    return _render_messages(history), history
+    # Ajouter le message utilisateur
+    history.append({"role": "user", "text": user_text, "ts": datetime.now().isoformat()})
+
+    # Obtenir la réponse IA
+    reply = _chatbot_reply(user_text, df, history[:-1])  # Exclut le dernier message pour éviter doublon
+
+    # Ajouter la réponse
+    history.append({"role": "assistant", "text": reply, "ts": datetime.now().isoformat()})
+
+    return _render_messages(history), history, ""  # ✅ Vider l'input
 
 # ------------------------------ Run ----------------------------------------------
 if __name__ == "__main__":

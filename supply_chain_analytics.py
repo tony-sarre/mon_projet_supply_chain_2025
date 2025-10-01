@@ -33,10 +33,6 @@ import warnings
 
 
 from openai import OpenAI
-from dotenv import load_dotenv  # AJOUTER
-
-# Charger le fichier .env
-load_dotenv()  # AJOUTER
 
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
@@ -66,79 +62,6 @@ COMPANY_ADDRESS = os.getenv("COMPANY_ADDRESS", "")
 COMPANY_PHONE = os.getenv("COMPANY_PHONE", "")
 COMPANY_EMAIL = os.getenv("COMPANY_EMAIL", "")
 DEFAULT_TVA_RATE = float(os.getenv("COMPANY_TVA_RATE", "0.18"))  # 18% par défaut
-
-# ------------------------------ Email Configuration -------------------------------
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")  # your-email@gmail.com
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")  # App password
-
-# Mapping des utilisateurs (à personnaliser)
-TEAM_MEMBERS = {
-    "tony": {"name": "Tony SARRE", "email": "ton.sarrey@maad.io"},
-    "Samuel": {"name": "Essodeke Samuel", "email": "essodeke@maad.io"},
-    "Maimouna": {"name": "Maimouna Dagois", "email": "maimouna@maad.io"},
-    "Seydouna": {"name": "Seydouna Oumar Niang", "email": "seydouna@maad.io"},
-}
-
-
-def send_notification_email(to_email: str, to_name: str, product_name: str, author: str, message: str):
-    """Envoie un email de notification"""
-    if not SMTP_USER or not SMTP_PASSWORD:
-        print("⚠️ Email non configuré (SMTP_USER/SMTP_PASSWORD manquants)")
-        return False
-
-    try:
-        import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
-
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"[Maad SaSu] Nouvelle mention sur {product_name}"
-        msg["From"] = SMTP_USER
-        msg["To"] = to_email
-
-        html = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; color: #333;">
-            <div style="background: #0b1220; padding: 20px; border-radius: 10px;">
-                <h2 style="color: #22d3ee;">📌 Nouvelle mention</h2>
-                <p style="color: #e5e7eb;">Bonjour {to_name},</p>
-                <p style="color: #e5e7eb;">
-                    <strong>{author}</strong> vous a mentionné dans une note sur le produit 
-                    <strong style="color: #22d3ee;">{product_name}</strong> :
-                </p>
-                <blockquote style="background: #1f2937; padding: 15px; border-left: 4px solid #22d3ee; margin: 20px 0;">
-                    <p style="color: #e5e7eb; font-style: italic;">{message}</p>
-                </blockquote>
-                <p style="color: #9ca3af; font-size: 12px;">
-                    Date : {datetime.now().strftime('%d/%m/%Y à %H:%M')}
-                </p>
-                <a href="https://your-dashboard-url.com" 
-                   style="display: inline-block; background: #22d3ee; color: #001018; 
-                          padding: 10px 20px; text-decoration: none; border-radius: 5px; 
-                          font-weight: bold; margin-top: 10px;">
-                    Voir le dashboard
-                </a>
-            </div>
-        </body>
-        </html>
-        """
-
-        part = MIMEText(html, "html")
-        msg.attach(part)
-
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.send_message(msg)
-
-        print(f"✅ Email envoyé à {to_email}")
-        return True
-
-    except Exception as e:
-        print(f"❌ Erreur envoi email: {e}")
-        return False
 def _get_logo_data_uri():
     try:
         logo_path = Path("logo_maad.jpg")
@@ -182,48 +105,6 @@ def get_logo_for_reportlab():
 # ------------------------------ PO Numbering -------------------------------------
 PO_COUNTER_PATH = Path("./po_counter.json")
 PO_LOCK = threading.Lock()
-
-# ------------------------------ Notes System -------------------------------------
-NOTES_DB_PATH = Path("./notes_database.json")
-NOTES_LOCK = threading.Lock()
-
-def _load_notes():
-    """Charge toutes les notes depuis le fichier JSON"""
-    try:
-        if NOTES_DB_PATH.exists():
-            return json.loads(NOTES_DB_PATH.read_text(encoding="utf-8"))
-    except Exception as e:
-        print(f"Erreur chargement notes: {e}")
-    return []
-
-def _save_notes(notes_list: list):
-    """Sauvegarde les notes dans le fichier JSON"""
-    try:
-        with NOTES_LOCK:
-            NOTES_DB_PATH.write_text(json.dumps(notes_list, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception as e:
-        print(f"Erreur sauvegarde notes: {e}")
-
-def add_note(product_name: str, author: str, message: str, mentions: list = None):
-    """Ajoute une nouvelle note"""
-    notes = _load_notes()
-    new_note = {
-        "id": f"note_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(notes)}",
-        "product_name": product_name,
-        "author": author,
-        "message": message,
-        "mentions": mentions or [],
-        "timestamp": datetime.now().isoformat(),
-        "read_by": []
-    }
-    notes.append(new_note)
-    _save_notes(notes)
-    return new_note
-
-def get_notes_for_product(product_name: str):
-    """Récupère toutes les notes d'un produit"""
-    notes = _load_notes()
-    return [n for n in notes if n.get("product_name", "").lower() == product_name.lower()]
 
 def _load_po_state():
     try:
@@ -1471,7 +1352,7 @@ def page_overview(master_df: pd.DataFrame = None):
     # Colonnes prioritaires dans l’ordre
     cols_priority = [
         "product_name", "Supplier", "Suppliers (all)", "Recalculated Average Daily Sales",
-        "Product Category",  "📝 Notes",
+        "Product Category",
         "total_stock", "Avg Daily Sales", "Max Daily Sales (Pikine)",
         "Max Coverage Day", "ADJUSTED_LEADTIME",
         "Optimal Stock (Reorder Point)", "Predicted Stockout",
@@ -1527,7 +1408,7 @@ def page_overview(master_df: pd.DataFrame = None):
         "Daily OOS Rate (30d)_x", "Stockout Probability"
     ]
     available_cols = [c for c in available_cols if c not in cols_to_hide]
-    df["📝 Notes"] = "💬"  # Emoji cliquable
+
     # Tableau principal
     table = dash_table.DataTable(
         id="main-table",
@@ -1579,31 +1460,16 @@ def page_overview(master_df: pd.DataFrame = None):
     ])
 
     # ✅ Modal pour édition
-    # Dans page_overview(), remplacez le bloc edit_modal par :
     edit_modal = dbc.Modal(
         [
-            dbc.ModalHeader(dbc.ModalTitle("Ajouter un produit")),
+            dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
             dbc.ModalBody([
-                dbc.Label("Nom du produit"),
-                dbc.Input(id="edit-input", type="text", placeholder="Ex: Lait concentré 400g"),
-                html.Br(),
-                dbc.Label("Fournisseur"),
-                dbc.Input(id="edit-supplier", type="text", placeholder="Ex: Carrefour"),
-                html.Br(),
-                dbc.Label("Catégorie"),
-                dcc.Dropdown(
-                    id="edit-category",
-                    options=[{"label": c, "value": c} for c in ["AX", "AY", "AZ", "BX", "BY", "BZ", "CX", "CY", "CZ"]],
-                    value="CX"
-                ),
-                html.Br(),
-                dbc.Label("Stock initial"),
-                dbc.Input(id="edit-stock", type="number", value=0, min=0),
+                html.Div("Formulaire d’édition à implémenter ici…"),
+                dcc.Input(id="edit-input", type="text", placeholder="Modifier la valeur")
             ]),
-            dbc.ModalFooter([
-                dbc.Button("Annuler", id="close-edit", className="btn-secondary"),
-                dbc.Button("Enregistrer", id="edit-save", className="btn-primary"),
-            ]),
+            dbc.ModalFooter(
+                dbc.Button("Fermer", id="close-edit", className="ms-auto", n_clicks=0)
+            ),
         ],
         id="edit-modal",
         is_open=False,
@@ -1620,46 +1486,9 @@ def page_overview(master_df: pd.DataFrame = None):
             ])),
             html.Br(),
             table,
-            edit_modal, # ✅ ajout modal
-            notes_modal,
-            dcc.Store(id="selected-product-for-notes")
+            edit_modal  # ✅ ajout modal
         ])
     ])
-
-# Modal pour les notes
-notes_modal = dbc.Modal(
-    [
-        dbc.ModalHeader(dbc.ModalTitle(id="notes-modal-title")),
-        dbc.ModalBody([
-            html.Div(id="notes-list", style={"maxHeight": "300px", "overflowY": "auto", "marginBottom": "20px"}),
-            html.Hr(),
-            html.H6("Ajouter une note :"),
-            dbc.Textarea(
-                id="note-input",
-                placeholder="Votre message... (utilisez @nom pour mentionner un collègue)",
-                rows=3,
-                style={"marginBottom": "10px"}
-            ),
-            dbc.Input(
-                id="note-author",
-                placeholder="Votre nom",
-                type="text",
-                style={"marginBottom": "10px"}
-            ),
-            html.Small("💡 Membres disponibles : @tony, @marie, @ahmed",
-                      style={"color": "#9ca3af", "display": "block", "marginBottom": "10px"}),
-        ]),
-        dbc.ModalFooter([
-            dbc.Button("Fermer", id="notes-close", className="btn-secondary"),
-            dbc.Button("Envoyer", id="notes-send", className="btn-primary"),
-        ]),
-    ],
-    id="notes-modal",
-    size="lg",
-    is_open=False,
-)
-
-
 
 from dash import callback_context
 
@@ -2316,14 +2145,6 @@ app.validation_layout = html.Div([
     dbc.Input(id="edit-supplier"),
     dbc.Input(id="edit-category"),
     dbc.Input(id="edit-stock"),
-    dbc.Modal(id="notes-modal"),
-    html.Div(id="notes-modal-title"),
-    html.Div(id="notes-list"),
-    dbc.Textarea(id="note-input"),
-    dbc.Input(id="note-author"),
-    dbc.Button(id="notes-send"),
-    dbc.Button(id="notes-close"),
-    dcc.Store(id="selected-product-for-notes"),
 ])
 
 # ------------------------------ Routing ------------------------------------------
@@ -2448,184 +2269,6 @@ def apply_filters(search, sup, cat, need, options, master_json):
     banner = " "
     fdf_actions = add_action_cols(fdf)
     return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
-
-
-@app.callback(
-    [Output("master-data", "data", allow_duplicate=True),
-     Output("filtered-data", "data", allow_duplicate=True),
-     Output("main-table", "data", allow_duplicate=True),
-     Output("risk-banner", "children", allow_duplicate=True)],
-    Input("btn-refresh", "n_clicks"),
-    prevent_initial_call=True
-)
-def refresh_data(n_clicks):
-    """Recharge les données depuis les sources Google Sheets"""
-    if not n_clicks:
-        return no_update, no_update, no_update, no_update
-
-    print("[Refresh] Rechargement des données...")
-
-    # Forcer le rechargement en invalidant le cache
-    cache.clear()
-
-    # Recharger les données
-    df = get_df_cached()
-    df = validate_core_columns(df)
-
-    print(f"[Refresh] {len(df)} produits rechargés")
-
-    banner = " "
-    return df.to_json(orient="records"), df.to_json(orient="records"), df.to_dict("records"), banner
-
-
-@app.callback(
-    [Output("edit-modal", "is_open", allow_duplicate=True),
-     Output("edit-input", "value", allow_duplicate=True),
-     Output("edit-supplier", "value", allow_duplicate=True),
-     Output("edit-category", "value", allow_duplicate=True),
-     Output("edit-stock", "value", allow_duplicate=True)],
-    Input("btn-add-row", "n_clicks"),
-    prevent_initial_call=True
-)
-def open_add_row_modal(n_clicks):
-    """Ouvre le modal pour ajouter une nouvelle ligne"""
-    if not n_clicks:
-        return no_update, no_update, no_update, no_update, no_update
-
-    # Ouvrir le modal avec des champs vides
-    return True, "", "", "CX", 0
-
-
-@app.callback(
-    Output("edit-modal", "is_open", allow_duplicate=True),
-    Input("close-edit", "n_clicks"),
-    prevent_initial_call=True
-)
-def close_modal(n_clicks):
-    """Ferme le modal sans sauvegarder"""
-    if n_clicks:
-        return False
-    return no_update
-
-
-# ------------------------------ Notes System Callbacks ----------------------------
-@app.callback(
-    [Output("notes-modal", "is_open"),
-     Output("notes-modal-title", "children"),
-     Output("notes-list", "children"),
-     Output("selected-product-for-notes", "data")],
-    Input("main-table", "active_cell"),
-    State("main-table", "data"),
-    prevent_initial_call=True
-)
-def open_notes_modal(active_cell, table_data):
-    """Ouvre le modal des notes quand on clique sur la colonne Notes"""
-    if not active_cell or not table_data:
-        return False, "", [], None
-
-    col = active_cell.get("column_id")
-    row = active_cell.get("row")
-
-    if col != "📝 Notes" or row is None or row >= len(table_data):
-        return no_update, no_update, no_update, no_update
-
-    product_name = table_data[row].get("product_name", "")
-    if not product_name:
-        return False, "", [], None
-
-    # Charger les notes existantes
-    notes = get_notes_for_product(product_name)
-
-    # Créer l'affichage des notes
-    if notes:
-        notes_display = []
-        for note in reversed(notes):  # Plus récentes en premier
-            timestamp = datetime.fromisoformat(note["timestamp"]).strftime("%d/%m/%Y %H:%M")
-            notes_display.append(
-                html.Div([
-                    html.Div([
-                        html.Strong(note["author"], style={"color": "#22d3ee"}),
-                        html.Span(f" · {timestamp}", style={"color": "#9ca3af", "fontSize": "12px"}),
-                    ]),
-                    html.P(note["message"], style={"marginTop": "5px", "color": "#e5e7eb"}),
-                    html.Hr(style={"borderColor": "#1f2937"})
-                ], style={"marginBottom": "15px"})
-            )
-    else:
-        notes_display = [html.P("Aucune note pour ce produit.", style={"color": "#9ca3af"})]
-
-    title = f"Notes : {product_name}"
-
-    return True, title, notes_display, product_name
-
-
-@app.callback(
-    Output("notes-modal", "is_open", allow_duplicate=True),
-    Input("notes-close", "n_clicks"),
-    prevent_initial_call=True
-)
-def close_notes_modal(n_clicks):
-    if n_clicks:
-        return False
-    return no_update
-
-
-@app.callback(
-    [Output("notes-list", "children", allow_duplicate=True),
-     Output("note-input", "value"),
-     Output("note-author", "value")],
-    Input("notes-send", "n_clicks"),
-    State("note-input", "value"),
-    State("note-author", "value"),
-    State("selected-product-for-notes", "data"),
-    prevent_initial_call=True
-)
-def send_note(n_clicks, message, author, product_name):
-    """Envoie une note et notifie les personnes mentionnées"""
-    if not n_clicks or not message or not author or not product_name:
-        return no_update, no_update, no_update
-
-    # Détecter les mentions (@nom)
-    mentions = []
-    import re
-    mentioned_users = re.findall(r'@(\w+)', message)
-
-    for username in mentioned_users:
-        username_lower = username.lower()
-        if username_lower in TEAM_MEMBERS:
-            mentions.append(username_lower)
-
-            # Envoyer l'email
-            user_info = TEAM_MEMBERS[username_lower]
-            send_notification_email(
-                to_email=user_info["email"],
-                to_name=user_info["name"],
-                product_name=product_name,
-                author=author,
-                message=message
-            )
-
-    # Sauvegarder la note
-    add_note(product_name, author, message, mentions)
-
-    # Recharger les notes
-    notes = get_notes_for_product(product_name)
-    notes_display = []
-    for note in reversed(notes):
-        timestamp = datetime.fromisoformat(note["timestamp"]).strftime("%d/%m/%Y %H:%M")
-        notes_display.append(
-            html.Div([
-                html.Div([
-                    html.Strong(note["author"], style={"color": "#22d3ee"}),
-                    html.Span(f" · {timestamp}", style={"color": "#9ca3af", "fontSize": "12px"}),
-                ]),
-                html.P(note["message"], style={"marginTop": "5px", "color": "#e5e7eb"}),
-                html.Hr(style={"borderColor": "#1f2937"})
-            ], style={"marginBottom": "15px"})
-        )
-
-    # Vider les champs
-    return notes_display, "", author  # Garde le nom de l'auteur
 # ------------------------------ Export CSV ---------------------------------------
 @app.callback(
     Output("download-data","data"),
@@ -2684,8 +2327,6 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
 
     r = table_data[row_idx]
     print(f"✅ Generating PDF for row {row_idx}: {r.get('product_name')}")
-
-
 
     # ============= BLOC 3 : Extraction des données (VOTRE CODE ORIGINAL) =============
     prod_name = str(r.get("product_name", "")).strip()
@@ -3121,19 +2762,3 @@ def on_chat(n_clicks, user_text, history, uploaded_json, master_json):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
     app.run(debug=True, host="0.0.0.0", port=port)
-
-# TEST EMAIL (à supprimer après)
-#if __name__ == "__main__":
-    #from dotenv import load_dotenv
-
-    #load_dotenv()
-
-    #print("Test envoi email...")
-    #result = send_notification_email(
-    #    to_email=os.getenv("SMTP_USER"),  # S'envoyer à soi-même
-   #     to_name="Test",
-      #  product_name="Produit Test",
-     #   author="Système",
-    #    message="Test de configuration email"
-   # )
-  #  print(f"Résultat : {'Succès' if result else 'Échec'}")

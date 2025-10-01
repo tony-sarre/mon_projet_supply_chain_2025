@@ -2719,7 +2719,6 @@ def on_upload(contents, filename, history, rendered):
     history.append({"role":"assistant","text":msg,"ts":datetime.now().isoformat()})
     return df_u.to_json(orient="records"), f"✅ {filename} importé.", _render_messages(history), history
 
-
 @app.callback(
     [Output("chat-messages", "children", allow_duplicate=True),
      Output("chat-store", "data", allow_duplicate=True),

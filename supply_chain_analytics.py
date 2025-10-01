@@ -50,12 +50,12 @@ except Exception:
 
 # ----------------------------- Brand & Meta --------------------------------------
 APP_TITLE = "Supply Chain Command Center"
-APP_BRAND = "Maad SaS"
+APP_BRAND = "Maad SaSu"
 AUTHOR = "Tony SARRE"
 THEME = dbc.themes.CYBORG  # sobre & premium
 
 # ------------------------------ Company / Branding -------------------------------
-COMPANY_NAME = "Maad SaS"
+COMPANY_NAME = "Maad SaSu"
 COMPANY_CAPITAL = os.getenv("COMPANY_CAPITAL", "")
 COMPANY_RCS = os.getenv("COMPANY_RCS", "")
 COMPANY_ADDRESS = os.getenv("COMPANY_ADDRESS", "")

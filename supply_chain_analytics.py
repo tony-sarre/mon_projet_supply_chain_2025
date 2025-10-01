@@ -1460,16 +1460,31 @@ def page_overview(master_df: pd.DataFrame = None):
     ])
 
     # ✅ Modal pour édition
+    # Dans page_overview(), remplacez le bloc edit_modal par :
     edit_modal = dbc.Modal(
         [
-            dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
+            dbc.ModalHeader(dbc.ModalTitle("Ajouter un produit")),
             dbc.ModalBody([
-                html.Div("Formulaire d’édition à implémenter ici…"),
-                dcc.Input(id="edit-input", type="text", placeholder="Modifier la valeur")
+                dbc.Label("Nom du produit"),
+                dbc.Input(id="edit-input", type="text", placeholder="Ex: Lait concentré 400g"),
+                html.Br(),
+                dbc.Label("Fournisseur"),
+                dbc.Input(id="edit-supplier", type="text", placeholder="Ex: Carrefour"),
+                html.Br(),
+                dbc.Label("Catégorie"),
+                dcc.Dropdown(
+                    id="edit-category",
+                    options=[{"label": c, "value": c} for c in ["AX", "AY", "AZ", "BX", "BY", "BZ", "CX", "CY", "CZ"]],
+                    value="CX"
+                ),
+                html.Br(),
+                dbc.Label("Stock initial"),
+                dbc.Input(id="edit-stock", type="number", value=0, min=0),
             ]),
-            dbc.ModalFooter(
-                dbc.Button("Fermer", id="close-edit", className="ms-auto", n_clicks=0)
-            ),
+            dbc.ModalFooter([
+                dbc.Button("Annuler", id="close-edit", className="btn-secondary"),
+                dbc.Button("Enregistrer", id="edit-save", className="btn-primary"),
+            ]),
         ],
         id="edit-modal",
         is_open=False,
@@ -2269,6 +2284,64 @@ def apply_filters(search, sup, cat, need, options, master_json):
     banner = " "
     fdf_actions = add_action_cols(fdf)
     return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
+
+
+@app.callback(
+    [Output("master-data", "data", allow_duplicate=True),
+     Output("filtered-data", "data", allow_duplicate=True),
+     Output("main-table", "data", allow_duplicate=True),
+     Output("risk-banner", "children", allow_duplicate=True)],
+    Input("btn-refresh", "n_clicks"),
+    prevent_initial_call=True
+)
+def refresh_data(n_clicks):
+    """Recharge les données depuis les sources Google Sheets"""
+    if not n_clicks:
+        return no_update, no_update, no_update, no_update
+
+    print("[Refresh] Rechargement des données...")
+
+    # Forcer le rechargement en invalidant le cache
+    cache.clear()
+
+    # Recharger les données
+    df = get_df_cached()
+    df = validate_core_columns(df)
+
+    print(f"[Refresh] {len(df)} produits rechargés")
+
+    banner = " "
+    return df.to_json(orient="records"), df.to_json(orient="records"), df.to_dict("records"), banner
+
+
+@app.callback(
+    [Output("edit-modal", "is_open", allow_duplicate=True),
+     Output("edit-input", "value", allow_duplicate=True),
+     Output("edit-supplier", "value", allow_duplicate=True),
+     Output("edit-category", "value", allow_duplicate=True),
+     Output("edit-stock", "value", allow_duplicate=True)],
+    Input("btn-add-row", "n_clicks"),
+    prevent_initial_call=True
+)
+def open_add_row_modal(n_clicks):
+    """Ouvre le modal pour ajouter une nouvelle ligne"""
+    if not n_clicks:
+        return no_update, no_update, no_update, no_update, no_update
+
+    # Ouvrir le modal avec des champs vides
+    return True, "", "", "CX", 0
+
+
+@app.callback(
+    Output("edit-modal", "is_open", allow_duplicate=True),
+    Input("close-edit", "n_clicks"),
+    prevent_initial_call=True
+)
+def close_modal(n_clicks):
+    """Ferme le modal sans sauvegarder"""
+    if n_clicks:
+        return False
+    return no_update
 # ------------------------------ Export CSV ---------------------------------------
 @app.callback(
     Output("download-data","data"),

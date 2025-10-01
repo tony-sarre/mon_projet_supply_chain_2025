@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="Fix: rename procfile to Procfile" />
+    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="Merge remote-tracking branch 'origin/main'" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -72,30 +72,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00011" summary="supply chain">
-      <option name="closed" value="true" />
-      <created>1758918801994</created>
-      <option name="number" value="00011" />
-      <option name="presentableId" value="LOCAL-00011" />
-      <option name="project" value="LOCAL" />
-      <updated>1758918801994</updated>
-    </task>
-    <task id="LOCAL-00012" summary="supply chain">
-      <option name="closed" value="true" />
-      <created>1758918831001</created>
-      <option name="number" value="00012" />
-      <option name="presentableId" value="LOCAL-00012" />
-      <option name="project" value="LOCAL" />
-      <updated>1758918831004</updated>
-    </task>
-    <task id="LOCAL-00013" summary="supply chain">
-      <option name="closed" value="true" />
-      <created>1758920042038</created>
-      <option name="number" value="00013" />
-      <option name="presentableId" value="LOCAL-00013" />
-      <option name="project" value="LOCAL" />
-      <updated>1758920042038</updated>
     </task>
     <task id="LOCAL-00014" summary="supply chain">
       <option name="closed" value="true" />
@@ -465,7 +441,31 @@
       <option name="project" value="LOCAL" />
       <updated>1759330930409</updated>
     </task>
-    <option name="localTasksCounter" value="60" />
+    <task id="LOCAL-00060" summary="Fix: rename procfile to Procfile">
+      <option name="closed" value="true" />
+      <created>1759331025614</created>
+      <option name="number" value="00060" />
+      <option name="presentableId" value="LOCAL-00060" />
+      <option name="project" value="LOCAL" />
+      <updated>1759331025614</updated>
+    </task>
+    <task id="LOCAL-00061" summary="Fix: rename procfile to Procfile">
+      <option name="closed" value="true" />
+      <created>1759331131185</created>
+      <option name="number" value="00061" />
+      <option name="presentableId" value="LOCAL-00061" />
+      <option name="project" value="LOCAL" />
+      <updated>1759331131185</updated>
+    </task>
+    <task id="LOCAL-00062" summary="Merge remote-tracking branch 'origin/main'">
+      <option name="closed" value="true" />
+      <created>1759331274639</created>
+      <option name="number" value="00062" />
+      <option name="presentableId" value="LOCAL-00062" />
+      <option name="project" value="LOCAL" />
+      <updated>1759331274639</updated>
+    </task>
+    <option name="localTasksCounter" value="63" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -483,6 +483,7 @@
     <MESSAGE value="supply chain" />
     <MESSAGE value="pythondash" />
     <MESSAGE value="Fix: rename procfile to Procfile" />
-    <option name="LAST_COMMIT_MESSAGE" value="Fix: rename procfile to Procfile" />
+    <MESSAGE value="Merge remote-tracking branch 'origin/main'" />
+    <option name="LAST_COMMIT_MESSAGE" value="Merge remote-tracking branch 'origin/main'" />
   </component>
 </project>

@@ -614,16 +614,18 @@ def load_supply_data() -> pd.DataFrame:
         final_stock_sales_df.apply(calc_recalculated_ads, axis=1)
     )
 
-    print(f"✅ Recalculated ADS - Stats:")
-    print(f"   Min: {final_stock_sales_df['Recalculated Average Daily Sales'].min():.2f}")
-    print(f"   Max: {final_stock_sales_df['Recalculated Average Daily Sales'].max():.2f}")
-    print(f"   Médiane: {final_stock_sales_df['Recalculated Average Daily Sales'].median():.2f}")
-    print(f"   Moyenne: {final_stock_sales_df['Recalculated Average Daily Sales'].mean():.2f}")
+    # ✅ Renommer immédiatement après le calcul
+    final_stock_sales_df.rename(columns={"Recalculated Average Daily Sales": "Average Daily Sales"}, inplace=True)
 
+    print(f"✅ Average Daily Sales - Stats:")
+    print(f"   Min: {final_stock_sales_df['Average Daily Sales'].min():.2f}")
+    print(f"   Max: {final_stock_sales_df['Average Daily Sales'].max():.2f}")
+    print(f"   Médiane: {final_stock_sales_df['Average Daily Sales'].median():.2f}")
+    print(f"   Moyenne: {final_stock_sales_df['Average Daily Sales'].mean():.2f}")
     # Max Coverage Day
     final_stock_sales_df["Max Coverage Day"] = np.minimum(
         safe_numeric(final_stock_sales_df["total_stock"], 0) /
-        np.maximum(safe_numeric(final_stock_sales_df["Recalculated Average Daily Sales"], 0.01), 0.01),
+        np.maximum(safe_numeric(final_stock_sales_df["Average Daily Sales"], 0.01), 0.01),
         365
     )
 
@@ -770,14 +772,14 @@ def load_supply_data() -> pd.DataFrame:
 
     # 3. Calculer optimal stock (MAINTENANT on peut l'utiliser)
     final_stock_sales_df["Max Daily Sales (Pikine)"] = safe_numeric(final_stock_sales_df["Max Daily Sales (Pikine)"], 0)
-    final_stock_sales_df["Recalculated Average Daily Sales"] = safe_numeric(
-        final_stock_sales_df["Recalculated Average Daily Sales"], 0.1)
+    final_stock_sales_df["Average Daily Sales"] = safe_numeric(
+        final_stock_sales_df["Average Daily Sales"], 0.1)
     final_stock_sales_df["AJUSTER_BUFFER"] = safe_numeric(final_stock_sales_df["AJUSTER_BUFFER"], 0)
 
     final_stock_sales_df["optimal stock (Reorder Point)"] = final_stock_sales_df.apply(
         lambda r: max(
             r["Max Daily Sales (Pikine)"],
-            (r["Max Daily Sales (Pikine)"] / 2.0) + (r["AJUSTER_BUFFER"] * r["Recalculated Average Daily Sales"])
+            (r["Max Daily Sales (Pikine)"] / 2.0) + (r["AJUSTER_BUFFER"] * r["Average Daily Sales"])
         ),
         axis=1,
     )
@@ -832,13 +834,13 @@ def load_supply_data() -> pd.DataFrame:
     #)
 
     final_stock_sales_df["MOQ MAAD"] = (safe_numeric(final_stock_sales_df["ADJUSTED_LEADTIME"], 0) + 3) * safe_numeric(
-        final_stock_sales_df["Recalculated Average Daily Sales"], 0.1)
+        final_stock_sales_df["Average Daily Sales"], 0.1)
 
     if "Param_Supplier_Factor" not in final_stock_sales_df.columns:
         final_stock_sales_df["Param_Supplier_Factor"] = 0.0
 
     # Purchase Need
-    req_cols = ["total_stock", "Max Daily Sales (Pikine)", "Recalculated Average Daily Sales",
+    req_cols = ["total_stock", "Max Daily Sales (Pikine)", "Average Daily Sales",
                 "optimal stock", "Param_Buffer_Value_Lookup", "Param_Supplier_Factor"]
     if all(c in final_stock_sales_df.columns for c in req_cols):
         for c in req_cols:
@@ -847,7 +849,7 @@ def load_supply_data() -> pd.DataFrame:
         def calculate_purchase_need(row):
             total_stock = row["total_stock"]
             max_daily_sales = row["Max Daily Sales (Pikine)"]
-            avg_daily_sales = row["Recalculated Average Daily Sales"]
+            avg_daily_sales = row["Average Daily Sales"]
             optimal_stock = row["optimal stock"]
             param_buffer_value = row["Param_Buffer_Value_Lookup"]
             param_supplier_factor = row["Param_Supplier_Factor"]
@@ -869,7 +871,7 @@ def load_supply_data() -> pd.DataFrame:
     )
 
     # Predicted Order Quantity
-    need_cols = ["total_stock", "optimal stock", "Recalculated Average Daily Sales", "credit_days",
+    need_cols = ["total_stock", "optimal stock", "Average Daily Sales", "credit_days",
                  "ADJUSTED_LEADTIME"]
     if all(c in final_stock_sales_df.columns for c in need_cols):
         for c in need_cols:
@@ -878,7 +880,7 @@ def load_supply_data() -> pd.DataFrame:
         def calc_poq(row):
             stock = row["total_stock"]
             rp = row["optimal stock"]
-            ads = row["Recalculated Average Daily Sales"]
+            ads = row["Average Daily Sales"]
             credit_days = row["credit_days"]
             alt = row["ADJUSTED_LEADTIME"]
             demand_period = alt + credit_days
@@ -898,7 +900,7 @@ def load_supply_data() -> pd.DataFrame:
         mcd = float(row.get("Max Coverage Day", 0))
         alt = float(row.get("ADJUSTED_LEADTIME", 0))
         opt = float(row.get("optimal stock", 0))
-        ads = float(row.get("Recalculated Average Daily Sales", 0.1))
+        ads = float(row.get("Average Daily Sales", 0.1))
         optimal_days = (opt / ads) if ads > 0 else 0
         if mcd <= alt + 3:
             return "ORDER NOW"
@@ -917,7 +919,7 @@ def load_supply_data() -> pd.DataFrame:
         stock = float(row.get("total_stock", 0))
         reorder_point = float(row.get("optimal stock", 0))
         alt = float(row.get("ADJUSTED_LEADTIME", 0))
-        ads = float(row.get("Recalculated Average Daily Sales", 0))
+        ads = float(row.get("Average Daily Sales", 0))
         if stock <= 0:
             return "Out of Stock"
         elif stock <= reorder_point:
@@ -929,13 +931,13 @@ def load_supply_data() -> pd.DataFrame:
     final_stock_sales_df["Stock Status"] = final_stock_sales_df.apply(get_stock_status, axis=1)
 
     # Credit Adequacy
-    for c in ["total_stock","Recalculated Average Daily Sales","ADJUSTED_LEADTIME","credit_days","Predicted Order Quantity"]:
+    for c in ["total_stock","Average Daily Sales","ADJUSTED_LEADTIME","credit_days","Predicted Order Quantity"]:
         if c not in final_stock_sales_df.columns:
             final_stock_sales_df[c] = 0.0
         final_stock_sales_df[c] = safe_numeric(final_stock_sales_df[c], 0)
 
     cds = final_stock_sales_df["credit_days"].clip(lower=0)
-    ads = final_stock_sales_df["Recalculated Average Daily Sales"].clip(lower=0)
+    ads = final_stock_sales_df["Average Daily Sales"].clip(lower=0)
     alt = final_stock_sales_df["ADJUSTED_LEADTIME"].clip(lower=0)
     s0  = final_stock_sales_df["total_stock"].clip(lower=0)
     q   = final_stock_sales_df["Predicted Order Quantity"].clip(lower=0)
@@ -987,7 +989,7 @@ def load_supply_data() -> pd.DataFrame:
     # =========================
     try:
         feature_cols = [
-            "total_stock", "Recalculated Average Daily Sales",
+            "total_stock", "Average Daily Sales",
             "Max Daily Sales (Pikine)", "optimal stock",
             "ADJUSTED_LEADTIME", "MAX_CREDIT_BUFFER", "AJUSTER_BUFFER"
         ]
@@ -1036,17 +1038,17 @@ def load_supply_data() -> pd.DataFrame:
     else:
         final_stock_sales_df["Supplier"] = _ensure_not_empty_string(final_stock_sales_df["Supplier"], "unknown")
 
-    if "Recalculated Average Daily Sales" not in final_stock_sales_df.columns:
-        final_stock_sales_df["Recalculated Average Daily Sales"] = 0.1
+    if "Average Daily Sales" not in final_stock_sales_df.columns:
+        final_stock_sales_df["Average Daily Sales"] = 0.1
 
-    final_stock_sales_df["Recalculated Average Daily Sales"] = (
-        pd.to_numeric(final_stock_sales_df["Recalculated Average Daily Sales"], errors="coerce")
+    final_stock_sales_df["Average Daily Sales"] = (
+        pd.to_numeric(final_stock_sales_df["Average Daily Sales"], errors="coerce")
         .fillna(0.1)
         .clip(lower=0.1)
     )
 
     # Colonnes en tête pour visibilité
-    _front = ["product_name", "Supplier", "Recalculated Average Daily Sales"]
+    _front = ["product_name", "Supplier", "Average Daily Sales"]
     final_stock_sales_df = final_stock_sales_df[
         [c for c in _front if c in final_stock_sales_df.columns] +
         [c for c in final_stock_sales_df.columns if c not in _front]
@@ -1058,7 +1060,7 @@ def load_supply_data() -> pd.DataFrame:
     print("\n========== VÉRIFICATION FINALE RECALCULATED ADS ==========")
     sample = final_stock_sales_df[["product_name", "Average Daily Sales (7d)",
                                     "Average Daily Sales (30d)", "Daily OOS Rate (7d)",
-                                    "Recalculated Average Daily Sales"]].head(10)
+                                    "Average Daily Sales"]].head(10)
     print("Échantillon (10 premiers produits) :")
     print(sample.to_string())
 
@@ -1534,7 +1536,7 @@ def page_overview(master_df: pd.DataFrame = None):
     # Colonnes prioritaires dans l’ordre
     cols_priority = [
         "product_id",  # ✅ AJOUTÉ EN PREMIER
-        "product_name", "Supplier", "Suppliers (all)", "Recalculated Average Daily Sales",
+        "product_name", "Supplier", "Suppliers (all)", "Average Daily Sales",
         "Product Category","📝 Notes",
         "total_stock", "Avg Daily Sales", "Max Daily Sales (Pikine)",
         "Max Coverage Day", "ADJUSTED_LEADTIME",
@@ -1545,7 +1547,7 @@ def page_overview(master_df: pd.DataFrame = None):
         "delisting_status"
     ]
     # Forcer ces colonnes à être prioritaires et visibles
-    for must in ["Supplier", "Recalculated Average Daily Sales"]:
+    for must in ["Supplier", "Average Daily Sales"]:
         if must not in cols_priority:
             # les mettre très haut (après product_name)
             insert_at = 1 if "product_name" in cols_priority else 0
@@ -1556,7 +1558,7 @@ def page_overview(master_df: pd.DataFrame = None):
     available_cols = available_priority + extra_cols
 
     # 🔒 Double sécurité : garantir Supplier et Recalculated ADS
-    for col in ["Supplier", "Recalculated Average Daily Sales"]:
+    for col in ["Supplier", "Average Daily Sales"]:
         if col not in available_cols:
             available_cols.insert(1, col)
 
@@ -1778,7 +1780,7 @@ def page_analytics(master_df: pd.DataFrame = None):
     # Colonnes nécessaires
     cols_to_keep = [
         "product_name", "Supplier", "Product Category",
-        "total_stock", "Recalculated Average Daily Sales",
+        "total_stock", "Average Daily Sales",
         "Max Coverage Day", "ADJUSTED_LEADTIME",
         "Ajusted_total_need", "purchase_need",
         "QAC", "optimal stock"
@@ -1816,9 +1818,9 @@ def page_analytics(master_df: pd.DataFrame = None):
     fig_box_category = px.box(
         analytics_df,
         x="Product Category",
-        y="Recalculated Average Daily Sales",
+        y="Average Daily Sales",
         title="Distribution des ventes moyennes par catégorie",
-        labels={"Recalculated Average Daily Sales": "Ventes moyennes recalculées"}
+        labels={"Average Daily Sales": "Ventes moyennes recalculées"}
     )
 
     # Bar chart besoin d'achat par fournisseur
@@ -1911,7 +1913,7 @@ def page_predictive(master_df: pd.DataFrame = None):
 
     cols_to_keep = [
         "product_name", "Supplier", "Product Category",
-        "total_stock", "Recalculated Average Daily Sales",
+        "total_stock", "Average Daily Sales",
         "Predicted Stockout", "Predicted Order Quantity",
         "purchase_need", "QAC", "Ajusted_total_need",
         "ADJUSTED_LEADTIME", "Max Coverage Day"
@@ -2003,7 +2005,7 @@ def update_predictive_table(supplier_value, category_value):
     df = get_df_cached()
 
     cols = ["product_name", "Supplier", "Product Category",
-            "total_stock", "Recalculated Average Daily Sales",
+            "total_stock", "Average Daily Sales",
             "Predicted Stockout", "Predicted Order Quantity",
             "purchase_need", "QAC", "Ajusted_total_need",
             "ADJUSTED_LEADTIME", "Max Coverage Day"]
@@ -2048,7 +2050,7 @@ def _clean_df_for_advice(df: pd.DataFrame) -> pd.DataFrame:
     d["abc_class"] = df.get("Product Category", "")
     d["xyz_class"] = ""
     d["current_stock"] = pd.to_numeric(df.get("total_stock", 0), errors="coerce").fillna(0).clip(lower=0)
-    d["avg_daily_sales"] = pd.to_numeric(df.get("Recalculated Average Daily Sales", 0), errors="coerce").fillna(0).clip(
+    d["avg_daily_sales"] = pd.to_numeric(df.get("Average Daily Sales", 0), errors="coerce").fillna(0).clip(
         lower=0)  # ✅ Changé de "Max Avg Daily Sales"
 
     # ✅ CORRECTION : Gestion robuste de coverage_days
@@ -2436,11 +2438,11 @@ def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
     df["Supplier"] = df["Supplier"].fillna("unknown").replace("", "unknown")
 
     # 2. Recalculated Average Daily Sales
-    if "Recalculated Average Daily Sales" not in df.columns:
-        df["Recalculated Average Daily Sales"] = 0.1
+    if "Average Daily Sales" not in df.columns:
+        df["Average Daily Sales"] = 0.1
 
-    df["Recalculated Average Daily Sales"] = pd.to_numeric(
-        df["Recalculated Average Daily Sales"],
+    df["Average Daily Sales"] = pd.to_numeric(
+        df["Average Daily Sales"],
         errors='coerce'
     ).fillna(0.1).clip(lower=0.1)
 

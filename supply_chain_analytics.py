@@ -62,6 +62,80 @@ COMPANY_ADDRESS = os.getenv("COMPANY_ADDRESS", "")
 COMPANY_PHONE = os.getenv("COMPANY_PHONE", "")
 COMPANY_EMAIL = os.getenv("COMPANY_EMAIL", "")
 DEFAULT_TVA_RATE = float(os.getenv("COMPANY_TVA_RATE", "0.18"))  # 18% par défaut
+
+# ------------------------------ Email Configuration -------------------------------
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")  # your-email@gmail.com
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")  # App password
+
+# Mapping des utilisateurs (à personnaliser)
+TEAM_MEMBERS = {
+    "tony": {"name": "Tony SARRE", "email": "tony.sarre@maad.io"},
+    "Samuel": {"name": "Samuel Essodeke", "email": "essodeke@maad.io"},
+    "Maimouna": {"name": "Maimouna Dagois", "email": "maimouna@maad.io"},
+    "Seydouna": {"name": "Seydouna Oumar Niang", "email": "seydouna@maad.io"},
+}
+
+
+def send_notification_email(to_email: str, to_name: str, product_name: str, author: str, message: str):
+    """Envoie un email de notification"""
+    if not SMTP_USER or not SMTP_PASSWORD:
+        print("⚠️ Email non configuré (SMTP_USER/SMTP_PASSWORD manquants)")
+        return False
+
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"[Maad SaSu] Nouvelle mention sur {product_name}"
+        msg["From"] = SMTP_USER
+        msg["To"] = to_email
+
+        html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; color: #333;">
+            <div style="background: #0b1220; padding: 20px; border-radius: 10px;">
+                <h2 style="color: #22d3ee;">📌 Nouvelle mention</h2>
+                <p style="color: #e5e7eb;">Bonjour {to_name},</p>
+                <p style="color: #e5e7eb;">
+                    <strong>{author}</strong> vous a mentionné dans une note sur le produit 
+                    <strong style="color: #22d3ee;">{product_name}</strong> :
+                </p>
+                <blockquote style="background: #1f2937; padding: 15px; border-left: 4px solid #22d3ee; margin: 20px 0;">
+                    <p style="color: #e5e7eb; font-style: italic;">{message}</p>
+                </blockquote>
+                <p style="color: #9ca3af; font-size: 12px;">
+                    Date : {datetime.now().strftime('%d/%m/%Y à %H:%M')}
+                </p>
+                <a href="https://your-dashboard-url.com" 
+                   style="display: inline-block; background: #22d3ee; color: #001018; 
+                          padding: 10px 20px; text-decoration: none; border-radius: 5px; 
+                          font-weight: bold; margin-top: 10px;">
+                    Voir le dashboard
+                </a>
+            </div>
+        </body>
+        </html>
+        """
+
+        part = MIMEText(html, "html")
+        msg.attach(part)
+
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.send_message(msg)
+
+        print(f"✅ Email envoyé à {to_email}")
+        return True
+
+    except Exception as e:
+        print(f"❌ Erreur envoi email: {e}")
+        return False
+
 def _get_logo_data_uri():
     try:
         logo_path = Path("logo_maad.jpg")
@@ -104,6 +178,49 @@ def get_logo_for_reportlab():
 
 # ------------------------------ PO Numbering -------------------------------------
 PO_COUNTER_PATH = Path("./po_counter.json")
+
+# ------------------------------ Notes System -------------------------------------
+NOTES_DB_PATH = Path("./notes_database.json")
+NOTES_LOCK = threading.Lock()
+
+def _load_notes():
+    """Charge toutes les notes depuis le fichier JSON"""
+    try:
+        if NOTES_DB_PATH.exists():
+            return json.loads(NOTES_DB_PATH.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"Erreur chargement notes: {e}")
+    return []
+
+def _save_notes(notes_list: list):
+    """Sauvegarde les notes dans le fichier JSON"""
+    try:
+        with NOTES_LOCK:
+            NOTES_DB_PATH.write_text(json.dumps(notes_list, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        print(f"Erreur sauvegarde notes: {e}")
+
+def add_note(product_name: str, author: str, message: str, mentions: list = None):
+    """Ajoute une nouvelle note"""
+    notes = _load_notes()
+    new_note = {
+        "id": f"note_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(notes)}",
+        "product_name": product_name,
+        "author": author,
+        "message": message,
+        "mentions": mentions or [],
+        "timestamp": datetime.now().isoformat(),
+        "read_by": []
+    }
+    notes.append(new_note)
+    _save_notes(notes)
+    return new_note
+
+def get_notes_for_product(product_name: str):
+    """Récupère toutes les notes d'un produit"""
+    notes = _load_notes()
+    return [n for n in notes if n.get("product_name", "").lower() == product_name.lower()]
+
 PO_LOCK = threading.Lock()
 
 def _load_po_state():
@@ -158,8 +275,8 @@ def train_stockout_model_for_df(df_in: pd.DataFrame, threshold: float = 0.5):
 
     X = df[num_features + cat_features].copy()
     if y.nunique() < 2 or len(df) < 40:
-        if 'Optimal Stock (Reorder Point)' in df.columns:
-            prob = (df['total_stock'] <= df['Optimal Stock (Reorder Point)']).astype(float)
+        if 'optimal stock (Reorder Point)' in df.columns:
+            prob = (df['total_stock'] <= df['optimal stock (Reorder Point)']).astype(float)
         else:
             prob = pd.Series(0.0, index=df.index)
         df['Stockout Probability'] = prob
@@ -192,8 +309,8 @@ def train_stockout_model_for_df(df_in: pd.DataFrame, threshold: float = 0.5):
         return df, model
     except Exception as e:
         print("[Stockout RF] Train error:", repr(e))
-        if 'Optimal Stock (Reorder Point)' in df.columns:
-            prob = (df['total_stock'] <= df['Optimal Stock (Reorder Point)']).astype(float)
+        if 'optimal stock (Reorder Point)' in df.columns:
+            prob = (df['total_stock'] <= df['optimal stock (Reorder Point)']).astype(float)
         else:
             prob = pd.Series(0.0, index=df.index)
         df['Stockout Probability'] = prob
@@ -250,6 +367,8 @@ def load_supply_data() -> pd.DataFrame:
     DELISTING_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQax3ZQW2QhDLE-waDewtdD8x_Q5tpn2FWzVJftr9egik4_JF3s2ytSYJmXh55aUnp79vmF-XtkaTmN/pub?gid=1681543945&single=true&output=csv"
     PARAMETRES_REPLENISH_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRxM2QokFGadTdTRDE2pInLKP57QkwMdSDQS8L5nXoYL0YRu9HSHoFvsnQs_MHjcwXUVUm5puexguy8/pub?gid=1011110883&single=true&output=csv"
     SUPPLIER_CATEGORIZATION_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQax3ZQW2QhDLE-waDewtdD8x_Q5tpn2FWzVJftr9egik4_JF3s2ytSYJmXh55aUnp79vmF-XtkaTmN/pub?gid=1938047484&single=true&output=csv"
+    CATALOG_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRTyAxh6v8o0FXV0r7f6ALPDgmeJNkjTZITjrEoKBHo2gs_f3iyV8sFk8fOzcAsUSkJMXBJCpJnhQKi/pub?gid=751531326&single=true&output=csv"
+
 
     # =========================
     # Load CSV
@@ -280,6 +399,7 @@ def load_supply_data() -> pd.DataFrame:
     except Exception as e:
         print(f"Error loading 'Supplier Categorization' data: {e}")
         supplier_categorization_df = pd.DataFrame()
+
 
     # =========================
     # Harmonisation inventaire
@@ -312,6 +432,34 @@ def load_supply_data() -> pd.DataFrame:
     inventory_pikine_staging_df = inv
     print("Colonnes inventaire après harmonisation:", inventory_pikine_staging_df.columns.tolist())
 
+    try:
+        catalog_df = pd.read_csv(CATALOG_URL, skiprows=1)
+
+        if 'id' in catalog_df.columns and 'product_name' in catalog_df.columns:
+            # Nettoyer les noms de produits
+            catalog_df['product_name_clean'] = (
+                catalog_df['product_name']
+                .astype(str)
+                .str.lower()
+                .str.strip()
+            )
+
+            # Extraire id et product_name
+            product_id_map = catalog_df[['id', 'product_name_clean']].drop_duplicates(subset=['product_name_clean'])
+            product_id_map.columns = ['product_id', 'product_name']
+
+            print(f"Catalogue product_id chargé : {len(product_id_map)} produits avec ID")
+        else:
+            product_id_map = pd.DataFrame(columns=['product_id', 'product_name'])
+            print("⚠️ Colonnes 'id' ou 'product_name' manquantes dans le catalogue")
+
+    except Exception as e:
+        print(f"⚠️ Erreur chargement product_id depuis catalogue : {e}")
+        product_id_map = pd.DataFrame(columns=['product_id', 'product_name'])
+
+
+
+
     # =========================
     # Clean text
     # =========================
@@ -334,6 +482,19 @@ def load_supply_data() -> pd.DataFrame:
         .reset_index()
     )
     print(f"Shape of total_stock_df before merge: {total_stock_df.shape}")
+
+    # ✅ MERGER LES product_id
+    if not product_id_map.empty:
+        total_stock_df = total_stock_df.merge(
+            product_id_map,
+            on="product_name",
+            how="left",
+            validate="m:1"
+        )
+        total_stock_df['product_id'] = total_stock_df['product_id'].fillna(0).astype(int)
+        print(f"product_id ajouté : {(total_stock_df['product_id'] > 0).sum()} produits avec ID valide")
+    else:
+        total_stock_df['product_id'] = 0
 
     # =========================
     # Max sales (unique par produit)
@@ -589,25 +750,41 @@ def load_supply_data() -> pd.DataFrame:
         if "Param_Product_Category" in final_stock_sales_df.columns:
             final_stock_sales_df.drop(columns=["Param_Product_Category"], inplace=True)
         final_stock_sales_df["Param_Buffer_Value_Lookup"] = final_stock_sales_df["Param_Buffer_Value_Lookup"].fillna(0)
-        print("'Param_Buffer_Value_Lookup' merged for Optimal Stock calculation.")
+        print("'Param_Buffer_Value_Lookup' merged for optimal stock calculation.")
     else:
         final_stock_sales_df["Param_Buffer_Value_Lookup"] = 0.0
 
-    # Optimal Stock
+    # 1. Calculer MAX_CREDIT_BUFFER d'abord
+    def calc_max_credit_buffer(row):
+        cd = row["credit_days"]
+        cc = str(row.get("Credit_cumulable", "")).lower()
+        return min(cd, 20) if cc == "oui" else cd
+
+    final_stock_sales_df["MAX_CREDIT_BUFFER"] = final_stock_sales_df.apply(calc_max_credit_buffer, axis=1)
+
+    # 2. Calculer AJUSTER_BUFFER
+    final_stock_sales_df["AJUSTER_BUFFER"] = np.maximum(
+        safe_numeric(final_stock_sales_df["Param_Buffer_Value_Lookup"], 0),
+        safe_numeric(final_stock_sales_df["MAX_CREDIT_BUFFER"], 0),
+    )
+
+    # 3. Calculer optimal stock (MAINTENANT on peut l'utiliser)
     final_stock_sales_df["Max Daily Sales (Pikine)"] = safe_numeric(final_stock_sales_df["Max Daily Sales (Pikine)"], 0)
     final_stock_sales_df["Recalculated Average Daily Sales"] = safe_numeric(
         final_stock_sales_df["Recalculated Average Daily Sales"], 0.1)
-    final_stock_sales_df["Param_Buffer_Value_Lookup"] = safe_numeric(final_stock_sales_df["Param_Buffer_Value_Lookup"],
-                                                                     0)
-    final_stock_sales_df["Optimal Stock (Reorder Point)"] = final_stock_sales_df.apply(
+    final_stock_sales_df["AJUSTER_BUFFER"] = safe_numeric(final_stock_sales_df["AJUSTER_BUFFER"], 0)
+
+    final_stock_sales_df["optimal stock (Reorder Point)"] = final_stock_sales_df.apply(
         lambda r: max(
             r["Max Daily Sales (Pikine)"],
-            (r["Max Daily Sales (Pikine)"] / 2.0) + (
-                        r["Param_Buffer_Value_Lookup"] * r["Recalculated Average Daily Sales"]),
+            (r["Max Daily Sales (Pikine)"] / 2.0) + (r["AJUSTER_BUFFER"] * r["Recalculated Average Daily Sales"])
         ),
         axis=1,
     )
-    print("'Optimal Stock (Reorder Point)' calculated successfully.")
+
+    # Renommer
+    final_stock_sales_df.rename(columns={"optimal stock (Reorder Point)": "optimal stock"}, inplace=True)
+    print("'optimal stock' calculated with AJUSTER_BUFFER.")
 
     # =========================
     # Delisting
@@ -642,17 +819,17 @@ def load_supply_data() -> pd.DataFrame:
 
     final_stock_sales_df["credit_days"] = safe_numeric(final_stock_sales_df["credit_days"], 0)
 
-    def calc_max_credit_buffer(row):
-        cd = row["credit_days"]
-        cc = str(row.get("Credit_cumulable", "")).lower()
-        return min(cd, 20) if cc == "oui" else cd
+    #def calc_max_credit_buffer(row):
+     #   cd = row["credit_days"]
+      #  cc = str(row.get("Credit_cumulable", "")).lower()
+       # return min(cd, 20) if cc == "oui" else cd
 
-    final_stock_sales_df["MAX_CREDIT_BUFFER"] = final_stock_sales_df.apply(calc_max_credit_buffer, axis=1)
+    #final_stock_sales_df["MAX_CREDIT_BUFFER"] = final_stock_sales_df.apply(calc_max_credit_buffer, axis=1)
 
-    final_stock_sales_df["AJUSTER_BUFFER"] = np.maximum(
-        safe_numeric(final_stock_sales_df["Param_Buffer_Value_Lookup"], 0),
-        safe_numeric(final_stock_sales_df["MAX_CREDIT_BUFFER"], 0),
-    )
+    #final_stock_sales_df["AJUSTER_BUFFER"] = np.maximum(
+     #   safe_numeric(final_stock_sales_df["Param_Buffer_Value_Lookup"], 0),
+      #  safe_numeric(final_stock_sales_df["MAX_CREDIT_BUFFER"], 0),
+    #)
 
     final_stock_sales_df["MOQ MAAD"] = (safe_numeric(final_stock_sales_df["ADJUSTED_LEADTIME"], 0) + 3) * safe_numeric(
         final_stock_sales_df["Recalculated Average Daily Sales"], 0.1)
@@ -662,7 +839,7 @@ def load_supply_data() -> pd.DataFrame:
 
     # Purchase Need
     req_cols = ["total_stock", "Max Daily Sales (Pikine)", "Recalculated Average Daily Sales",
-                "Optimal Stock (Reorder Point)", "Param_Buffer_Value_Lookup", "Param_Supplier_Factor"]
+                "optimal stock", "Param_Buffer_Value_Lookup", "Param_Supplier_Factor"]
     if all(c in final_stock_sales_df.columns for c in req_cols):
         for c in req_cols:
             final_stock_sales_df[c] = safe_numeric(final_stock_sales_df[c], 0)
@@ -671,7 +848,7 @@ def load_supply_data() -> pd.DataFrame:
             total_stock = row["total_stock"]
             max_daily_sales = row["Max Daily Sales (Pikine)"]
             avg_daily_sales = row["Recalculated Average Daily Sales"]
-            optimal_stock = row["Optimal Stock (Reorder Point)"]
+            optimal_stock = row["optimal stock"]
             param_buffer_value = row["Param_Buffer_Value_Lookup"]
             param_supplier_factor = row["Param_Supplier_Factor"]
             if total_stock <= 0:
@@ -692,7 +869,7 @@ def load_supply_data() -> pd.DataFrame:
     )
 
     # Predicted Order Quantity
-    need_cols = ["total_stock", "Optimal Stock (Reorder Point)", "Recalculated Average Daily Sales", "credit_days",
+    need_cols = ["total_stock", "optimal stock", "Recalculated Average Daily Sales", "credit_days",
                  "ADJUSTED_LEADTIME"]
     if all(c in final_stock_sales_df.columns for c in need_cols):
         for c in need_cols:
@@ -700,7 +877,7 @@ def load_supply_data() -> pd.DataFrame:
 
         def calc_poq(row):
             stock = row["total_stock"]
-            rp = row["Optimal Stock (Reorder Point)"]
+            rp = row["optimal stock"]
             ads = row["Recalculated Average Daily Sales"]
             credit_days = row["credit_days"]
             alt = row["ADJUSTED_LEADTIME"]
@@ -720,7 +897,7 @@ def load_supply_data() -> pd.DataFrame:
             return "NO NEED"
         mcd = float(row.get("Max Coverage Day", 0))
         alt = float(row.get("ADJUSTED_LEADTIME", 0))
-        opt = float(row.get("Optimal Stock (Reorder Point)", 0))
+        opt = float(row.get("optimal stock", 0))
         ads = float(row.get("Recalculated Average Daily Sales", 0.1))
         optimal_days = (opt / ads) if ads > 0 else 0
         if mcd <= alt + 3:
@@ -733,12 +910,12 @@ def load_supply_data() -> pd.DataFrame:
     final_stock_sales_df["Ajusted_total_need"] = final_stock_sales_df.apply(calc_adjusted_total_need, axis=1)
 
     # Predicted Stockout
-    final_stock_sales_df["Predicted Stockout"] = safe_numeric(final_stock_sales_df["total_stock"], 0) <= safe_numeric(final_stock_sales_df["Optimal Stock (Reorder Point)"], 0)
+    final_stock_sales_df["Predicted Stockout"] = safe_numeric(final_stock_sales_df["total_stock"], 0) <= safe_numeric(final_stock_sales_df["optimal stock"], 0)
 
     # Stock Status
     def get_stock_status(row):
         stock = float(row.get("total_stock", 0))
-        reorder_point = float(row.get("Optimal Stock (Reorder Point)", 0))
+        reorder_point = float(row.get("optimal stock", 0))
         alt = float(row.get("ADJUSTED_LEADTIME", 0))
         ads = float(row.get("Recalculated Average Daily Sales", 0))
         if stock <= 0:
@@ -811,7 +988,7 @@ def load_supply_data() -> pd.DataFrame:
     try:
         feature_cols = [
             "total_stock", "Recalculated Average Daily Sales",
-            "Max Daily Sales (Pikine)", "Optimal Stock (Reorder Point)",
+            "Max Daily Sales (Pikine)", "optimal stock",
             "ADJUSTED_LEADTIME", "MAX_CREDIT_BUFFER", "AJUSTER_BUFFER"
         ]
         feature_cols = [c for c in feature_cols if c in final_stock_sales_df.columns]
@@ -1136,7 +1313,7 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
     # Sécuriser types numériques courants
     numeric_like = [
         'total_stock', 'Predicted Order Quantity', 'purchase_need', 'MOQ MAAD', 'QAC',
-        'Optimal Stock (Reorder Point)', 'Max Lead Time', 'Avg Daily Sales', 'Buffer Value',
+        'optimal stock', 'Max Lead Time', 'Avg Daily Sales', 'Buffer Value',
         'Max Daily Sales (Pikine)', 'Max Coverage Day', 'Daily OOS Rate (7d)',
         'Daily OOS Rate (30d)', 'ADJUSTED_LEADTIME', 'MAX_CREDIT_BUFFER', 'AJUSTER_BUFFER',
         'credit_days'
@@ -1192,7 +1369,7 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
 
     # Max (couverture, LT, OOS, buffers…)
     for c in [
-        'Optimal Stock (Reorder Point)', 'Max Lead Time', 'Avg Daily Sales', 'Buffer Value',
+        'optimal stock', 'Max Lead Time', 'Avg Daily Sales', 'Buffer Value',
         'Max Daily Sales (Pikine)', 'Max Coverage Day', 'Daily OOS Rate (7d)', 'Daily OOS Rate (30d)',
         'ADJUSTED_LEADTIME', 'MAX_CREDIT_BUFFER', 'AJUSTER_BUFFER', 'credit_days'
     ]:
@@ -1329,6 +1506,11 @@ def page_overview(master_df: pd.DataFrame = None):
             .fillna(0.1)
             .clip(lower=0.1)
         )
+
+        if "product_id" not in df.columns:
+            df["product_id"] = 0
+        df["product_id"] = pd.to_numeric(df["product_id"], errors="coerce").fillna(0).astype(int)
+
         return df
 
     df = _ui_harden(df)
@@ -1351,11 +1533,12 @@ def page_overview(master_df: pd.DataFrame = None):
 
     # Colonnes prioritaires dans l’ordre
     cols_priority = [
+        "product_id",  # ✅ AJOUTÉ EN PREMIER
         "product_name", "Supplier", "Suppliers (all)", "Recalculated Average Daily Sales",
-        "Product Category",
+        "Product Category","📝 Notes",
         "total_stock", "Avg Daily Sales", "Max Daily Sales (Pikine)",
         "Max Coverage Day", "ADJUSTED_LEADTIME",
-        "Optimal Stock (Reorder Point)", "Predicted Stockout",
+        "optimal stock", "Predicted Stockout",
         "Predicted Order Quantity", "purchase_need",
         "MOQ MAAD", "QAC", "Ajusted_total_need",
         "credit_days", "Credit_cumulable", "MAX_CREDIT_BUFFER", "AJUSTER_BUFFER",
@@ -1408,6 +1591,7 @@ def page_overview(master_df: pd.DataFrame = None):
         "Daily OOS Rate (30d)_x", "Stockout Probability"
     ]
     available_cols = [c for c in available_cols if c not in cols_to_hide]
+    df["📝 Notes"] = "💬"  # Emoji cliquable
 
     # Tableau principal
     table = dash_table.DataTable(
@@ -1475,6 +1659,39 @@ def page_overview(master_df: pd.DataFrame = None):
         is_open=False,
     )
 
+    # Modal pour les notes
+    notes_modal = dbc.Modal(
+        [
+            dbc.ModalHeader(dbc.ModalTitle(id="notes-modal-title")),
+            dbc.ModalBody([
+                html.Div(id="notes-list", style={"maxHeight": "300px", "overflowY": "auto", "marginBottom": "20px"}),
+                html.Hr(),
+                html.H6("Ajouter une note :"),
+                dbc.Textarea(
+                    id="note-input",
+                    placeholder="Votre message... (utilisez @nom pour mentionner un collègue)",
+                    rows=3,
+                    style={"marginBottom": "10px"}
+                ),
+                dbc.Input(
+                    id="note-author",
+                    placeholder="Votre nom",
+                    type="text",
+                    style={"marginBottom": "10px"}
+                ),
+                html.Small("💡 Membres disponibles : @tony, @marie, @ahmed",
+                           style={"color": "#9ca3af", "display": "block", "marginBottom": "10px"}),
+            ]),
+            dbc.ModalFooter([
+                dbc.Button("Fermer", id="notes-close", className="btn-secondary"),
+                dbc.Button("Envoyer", id="notes-send", className="btn-primary"),
+            ]),
+        ],
+        id="notes-modal",
+        size="lg",
+        is_open=False,
+    )
+
     return html.Div(className="content", children=[
         header_row,
         html.Div(kpi_cards),
@@ -1486,7 +1703,8 @@ def page_overview(master_df: pd.DataFrame = None):
             ])),
             html.Br(),
             table,
-            edit_modal  # ✅ ajout modal
+            edit_modal, # ✅ ajout modal
+            notes_modal,
         ])
     ])
 
@@ -1563,7 +1781,7 @@ def page_analytics(master_df: pd.DataFrame = None):
         "total_stock", "Recalculated Average Daily Sales",
         "Max Coverage Day", "ADJUSTED_LEADTIME",
         "Ajusted_total_need", "purchase_need",
-        "QAC", "Optimal Stock (Reorder Point)"
+        "QAC", "optimal stock"
     ]
     cols_to_keep = [c for c in cols_to_keep if c in df.columns]
     analytics_df = df[cols_to_keep].dropna()
@@ -1616,11 +1834,11 @@ def page_analytics(master_df: pd.DataFrame = None):
         labels={"purchase_need": "Besoin d’achat"}
     )
 
-    # Scatter QAC vs Optimal Stock
+    # Scatter QAC vs optimal stock
     fig_qac_vs_optimal = px.scatter(
         analytics_df,
         x="QAC",
-        y="Optimal Stock (Reorder Point)",
+        y="optimal stock",
         color="Product Category",
         title="Relation QAC vs Stock optimal",
         labels={"QAC": "Quantité ajustée commandée"}
@@ -2145,6 +2363,14 @@ app.validation_layout = html.Div([
     dbc.Input(id="edit-supplier"),
     dbc.Input(id="edit-category"),
     dbc.Input(id="edit-stock"),
+    dbc.Modal(id="notes-modal"),
+    html.Div(id="notes-modal-title"),
+    html.Div(id="notes-list"),
+    dbc.Textarea(id="note-input"),
+    dbc.Input(id="note-author"),
+    dbc.Button(id="notes-send"),
+    dbc.Button(id="notes-close"),
+    dcc.Store(id="selected-product-for-notes"),
 ])
 
 # ------------------------------ Routing ------------------------------------------
@@ -2269,6 +2495,126 @@ def apply_filters(search, sup, cat, need, options, master_json):
     banner = " "
     fdf_actions = add_action_cols(fdf)
     return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
+
+
+# ------------------------------ Notes System Callbacks ----------------------------
+@app.callback(
+    [Output("notes-modal", "is_open"),
+     Output("notes-modal-title", "children"),
+     Output("notes-list", "children"),
+     Output("selected-product-for-notes", "data")],
+    Input("main-table", "active_cell"),
+    State("main-table", "data"),
+    prevent_initial_call=True
+)
+def open_notes_modal(active_cell, table_data):
+    """Ouvre le modal des notes quand on clique sur la colonne Notes"""
+    if not active_cell or not table_data:
+        return False, "", [], None
+
+    col = active_cell.get("column_id")
+    row = active_cell.get("row")
+
+    if col != "📝 Notes" or row is None or row >= len(table_data):
+        return no_update, no_update, no_update, no_update
+
+    product_name = table_data[row].get("product_name", "")
+    if not product_name:
+        return False, "", [], None
+
+    # Charger les notes existantes
+    notes = get_notes_for_product(product_name)
+
+    # Créer l'affichage des notes
+    if notes:
+        notes_display = []
+        for note in reversed(notes):  # Plus récentes en premier
+            timestamp = datetime.fromisoformat(note["timestamp"]).strftime("%d/%m/%Y %H:%M")
+            notes_display.append(
+                html.Div([
+                    html.Div([
+                        html.Strong(note["author"], style={"color": "#22d3ee"}),
+                        html.Span(f" · {timestamp}", style={"color": "#9ca3af", "fontSize": "12px"}),
+                    ]),
+                    html.P(note["message"], style={"marginTop": "5px", "color": "#e5e7eb"}),
+                    html.Hr(style={"borderColor": "#1f2937"})
+                ], style={"marginBottom": "15px"})
+            )
+    else:
+        notes_display = [html.P("Aucune note pour ce produit.", style={"color": "#9ca3af"})]
+
+    title = f"Notes : {product_name}"
+
+    return True, title, notes_display, product_name
+
+
+@app.callback(
+    Output("notes-modal", "is_open", allow_duplicate=True),
+    Input("notes-close", "n_clicks"),
+    prevent_initial_call=True
+)
+def close_notes_modal(n_clicks):
+    if n_clicks:
+        return False
+    return no_update
+
+
+@app.callback(
+    [Output("notes-list", "children", allow_duplicate=True),
+     Output("note-input", "value"),
+     Output("note-author", "value")],
+    Input("notes-send", "n_clicks"),
+    State("note-input", "value"),
+    State("note-author", "value"),
+    State("selected-product-for-notes", "data"),
+    prevent_initial_call=True
+)
+def send_note(n_clicks, message, author, product_name):
+    """Envoie une note et notifie les personnes mentionnées"""
+    if not n_clicks or not message or not author or not product_name:
+        return no_update, no_update, no_update
+
+    # Détecter les mentions (@nom)
+    mentions = []
+    import re
+    mentioned_users = re.findall(r'@(\w+)', message)
+
+    for username in mentioned_users:
+        username_lower = username.lower()
+        if username_lower in TEAM_MEMBERS:
+            mentions.append(username_lower)
+
+            # Envoyer l'email
+            user_info = TEAM_MEMBERS[username_lower]
+            send_notification_email(
+                to_email=user_info["email"],
+                to_name=user_info["name"],
+                product_name=product_name,
+                author=author,
+                message=message
+            )
+
+    # Sauvegarder la note
+    add_note(product_name, author, message, mentions)
+
+    # Recharger les notes
+    notes = get_notes_for_product(product_name)
+    notes_display = []
+    for note in reversed(notes):
+        timestamp = datetime.fromisoformat(note["timestamp"]).strftime("%d/%m/%Y %H:%M")
+        notes_display.append(
+            html.Div([
+                html.Div([
+                    html.Strong(note["author"], style={"color": "#22d3ee"}),
+                    html.Span(f" · {timestamp}", style={"color": "#9ca3af", "fontSize": "12px"}),
+                ]),
+                html.P(note["message"], style={"marginTop": "5px", "color": "#e5e7eb"}),
+                html.Hr(style={"borderColor": "#1f2937"})
+            ], style={"marginBottom": "15px"})
+        )
+
+    # Vider les champs
+    return notes_display, "", author  # Garde le nom de l'auteur
 # ------------------------------ Export CSV ---------------------------------------
 @app.callback(
     Output("download-data","data"),
@@ -2609,7 +2955,7 @@ def save_edit(n, prod, sup, cat, stock, active_cell, table_data, q, fs, fst, fc,
             new_row["total_stock"] = float(stock or 0)
         except:
             new_row["total_stock"] = 0.0
-        for c in ["Optimal Stock (Reorder Point)", "Max Lead Time", "Max Avg Daily Sales", "Max Coverage Day",
+        for c in ["optimal stock ", "Max Lead Time", "Max Avg Daily Sales", "Max Coverage Day",
                   "Daily OOS Rate (30d)", "Predicted Order Quantity"]:
             if c in df.columns and pd.isna(new_row.get(c)):
                 new_row[c] = 0.0
@@ -2718,6 +3064,7 @@ def on_upload(contents, filename, history, rendered):
     msg = f"📥 Fichier chargé : **{filename}** — {len(df_u)} lignes détectées. L’assistant l’utilisera pour ses conseils."
     history.append({"role":"assistant","text":msg,"ts":datetime.now().isoformat()})
     return df_u.to_json(orient="records"), f"✅ {filename} importé.", _render_messages(history), history
+
 
 @app.callback(
     [Output("chat-messages", "children", allow_duplicate=True),

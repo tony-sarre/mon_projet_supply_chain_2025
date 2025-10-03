@@ -359,13 +359,13 @@ def load_supply_data() -> pd.DataFrame:
     # =========================
     SUPPLIERS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRTyAxh6v8o0FXV0r7f6ALPDgmeJNkjTZITjrEoKBHo2gs_f3iyV8sFk8fOzcAsUSkJMXBJCpJnhQKi/pub?gid=1015760114&single=true&output=csv"
     url_leadtime = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0FO0s7-V6uloIHLDB8Nm5TiH-W7q7zJOaA_jnzQtTgMUp-WOOX6CQP33__djc4shJym4r0PSAQF6t/pub?gid=1347877260&single=true&output=csv"
-    inventory_pikine_staging = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1876150276&single=true&output=csv"
-    sales_pikine = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1493123930&single=true&output=csv"
-    Tbh_7dsales = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1080970598&single=true&output=csv"
-    Tbh_30dsales_products = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-503n7w2ixefop7XeUnda3B76ui1jQRZKJHehhJ0WtumnpSzUVYjnvGv-_tFQ6jXayAcjJEAryQMv/pub?gid=1655420642&single=true&output=csv"
+    inventory_pikine_staging = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=1876150276&single=true&output=csv"
+    sales_pikine = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=1493123930&single=true&output=csv"
+    Tbh_7dsales = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=1080970598&single=true&output=csv"
+    Tbh_30dsales_products = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=1655420642&single=true&output=csv"
     Product_category = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbJqHsr6Kifee7I91YD-7-sCZDWgM5GvxCeN0OqUvZhok0j-kDywguqe5I61y97b-uBhHbWraTIrux/pub?gid=803048228&single=true&output=csv"
     DELISTING_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQax3ZQW2QhDLE-waDewtdD8x_Q5tpn2FWzVJftr9egik4_JF3s2ytSYJmXh55aUnp79vmF-XtkaTmN/pub?gid=1681543945&single=true&output=csv"
-    PARAMETRES_REPLENISH_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRxM2QokFGadTdTRDE2pInLKP57QkwMdSDQS8L5nXoYL0YRu9HSHoFvsnQs_MHjcwXUVUm5puexguy8/pub?gid=1011110883&single=true&output=csv"
+    PARAMETRES_REPLENISH_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=1011110883&single=true&output=csv"
     SUPPLIER_CATEGORIZATION_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQax3ZQW2QhDLE-waDewtdD8x_Q5tpn2FWzVJftr9egik4_JF3s2ytSYJmXh55aUnp79vmF-XtkaTmN/pub?gid=1938047484&single=true&output=csv"
     CATALOG_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRTyAxh6v8o0FXV0r7f6ALPDgmeJNkjTZITjrEoKBHo2gs_f3iyV8sFk8fOzcAsUSkJMXBJCpJnhQKi/pub?gid=751531326&single=true&output=csv"
 

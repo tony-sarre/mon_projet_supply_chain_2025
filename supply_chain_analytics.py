@@ -432,34 +432,64 @@ def load_supply_data() -> pd.DataFrame:
     inventory_pikine_staging_df = inv
     print("Colonnes inventaire après harmonisation:", inventory_pikine_staging_df.columns.tolist())
 
+    # Charger le catalogue pour product_id
+    # Charger le catalogue pour product_id ET is_active
     try:
+        # IMPORTANT : skiprows=1 pour sauter la ligne d'en-tête
         catalog_df = pd.read_csv(CATALOG_URL, skiprows=1)
 
-        if 'id' in catalog_df.columns and 'product_name' in catalog_df.columns:
-            # Nettoyer les noms de produits
-            catalog_df['product_name_clean'] = (
-                catalog_df['product_name']
+        print(f"📋 Catalogue chargé : {catalog_df.shape[0]} lignes, {catalog_df.shape[1]} colonnes")
+
+        # Vérifier qu'il y a au moins 8 colonnes (index 0-7)
+        if catalog_df.shape[1] > 7:
+            # Extraire colonnes : A (id), B (name), H (is_active)
+            # Index :              0        1          7
+            catalog_subset = catalog_df.iloc[:, [0, 1, 7]].copy()
+            catalog_subset.columns = ['product_id', 'product_name', 'is_active']
+
+            # Nettoyer product_name
+            catalog_subset['product_name_clean'] = (
+                catalog_subset['product_name']
                 .astype(str)
                 .str.lower()
                 .str.strip()
             )
 
-            # Extraire id et product_name
-            product_id_map = catalog_df[['id', 'product_name_clean']].drop_duplicates(subset=['product_name_clean'])
-            product_id_map.columns = ['product_id', 'product_name']
+            # Nettoyer is_active (TRUE/FALSE depuis Google Sheets)
+            catalog_subset['is_active'] = (
+                    catalog_subset['is_active']
+                    .astype(str)
+                    .str.upper()
+                    .str.strip()
+                    == 'TRUE'
+            )
 
-            print(f"Catalogue product_id chargé : {len(product_id_map)} produits avec ID")
+            # Préparer le mapping
+            product_map = catalog_subset[['product_id', 'product_name_clean', 'is_active']].drop_duplicates(
+                subset=['product_name_clean']
+            )
+            product_map.columns = ['product_id', 'product_name', 'is_active']
+
+            # Convertir product_id en int
+            product_map['product_id'] = pd.to_numeric(product_map['product_id'], errors='coerce').fillna(0).astype(int)
+
+            print(f"✅ Catalogue traité :")
+            print(f"   - Total produits : {len(product_map)}")
+            print(f"   - Actifs (TRUE) : {product_map['is_active'].sum()}")
+            print(f"   - Inactifs (FALSE) : {(~product_map['is_active']).sum()}")
+            print(f"   - Échantillon actifs : {product_map[product_map['is_active']]['product_name'].head(3).tolist()}")
+
+            product_id_map = product_map
+
         else:
-            product_id_map = pd.DataFrame(columns=['product_id', 'product_name'])
-            print("⚠️ Colonnes 'id' ou 'product_name' manquantes dans le catalogue")
+            print(f"⚠️ Catalogue incomplet : {catalog_df.shape[1]} colonnes (8 minimum requis)")
+            product_id_map = pd.DataFrame(columns=['product_id', 'product_name', 'is_active'])
 
     except Exception as e:
-        print(f"⚠️ Erreur chargement product_id depuis catalogue : {e}")
-        product_id_map = pd.DataFrame(columns=['product_id', 'product_name'])
-
-
-
-
+        print(f"❌ Erreur chargement catalogue : {e}")
+        import traceback
+        print(traceback.format_exc())
+        product_id_map = pd.DataFrame(columns=['product_id', 'product_name', 'is_active'])
     # =========================
     # Clean text
     # =========================
@@ -483,18 +513,34 @@ def load_supply_data() -> pd.DataFrame:
     )
     print(f"Shape of total_stock_df before merge: {total_stock_df.shape}")
 
-    # ✅ MERGER LES product_id
+    # ✅ MERGER product_id ET is_active
     if not product_id_map.empty:
+        # Supprimer colonnes existantes si présentes
+        for col in ['product_id', 'is_active']:
+            if col in total_stock_df.columns:
+                print(f"⚠️ Colonne '{col}' déjà présente, elle sera remplacée")
+                total_stock_df.drop(columns=[col], inplace=True)
+
+        # Merge
         total_stock_df = total_stock_df.merge(
             product_id_map,
             on="product_name",
             how="left",
             validate="m:1"
         )
+
+        # Gestion des valeurs manquantes
         total_stock_df['product_id'] = total_stock_df['product_id'].fillna(0).astype(int)
-        print(f"product_id ajouté : {(total_stock_df['product_id'] > 0).sum()} produits avec ID valide")
+        total_stock_df['is_active'] = total_stock_df['is_active'].fillna(False)  # Par défaut inactif si absent
+
+        print(f"✅ Merge catalogue effectué :")
+        print(f"   - Produits avec ID valide : {(total_stock_df['product_id'] > 0).sum()}")
+        print(f"   - Produits actifs : {total_stock_df['is_active'].sum()}")
+        print(f"   - Produits sans match catalogue : {(total_stock_df['product_id'] == 0).sum()}")
     else:
+        print("⚠️ Catalogue vide, product_id=0 et is_active=True par défaut")
         total_stock_df['product_id'] = 0
+        total_stock_df['is_active'] = True
 
     # =========================
     # Max sales (unique par produit)
@@ -646,7 +692,7 @@ def load_supply_data() -> pd.DataFrame:
         final_stock_sales_df["Avg Lead Time"] = np.nan
 
     # =========================
-    # Supplier credit info (AVANT supplier categorization)
+    # ✅ DÉPLACER ICI : Supplier credit info (AVANT supplier categorization)
     # =========================
     if {"Supplier name", "credit_days", "Credit_cumulable"}.issubset(suppliers_df.columns):
         sc = suppliers_df[["Supplier name", "credit_days", "Credit_cumulable"]].copy()
@@ -666,20 +712,21 @@ def load_supply_data() -> pd.DataFrame:
     # =========================
     # SUPPLIER CATEGORIZATION → UPDATE PRODUCT CATEGORY
     # =========================
-    # =========================
-    # SUPPLIER CATEGORIZATION → UPDATE PRODUCT CATEGORY
-    # =========================
     supplier_categorization_lookup_df = pd.DataFrame()
     if not supplier_categorization_df.empty and supplier_categorization_df.shape[1] > 7:
         supplier_categorization_lookup_df = supplier_categorization_df.iloc[:, [0, 7]].copy()
-        supplier_categorization_lookup_df.columns = ['Supplier_Name_Lookup', 'Supplier_Categorization_Lookup']
+        supplier_categorization_lookup_df.columns = ['Supplier_Name_Lookup', 'Supplier_Categorization']
         supplier_categorization_lookup_df['Supplier_Name_Lookup'] = (
             supplier_categorization_lookup_df['Supplier_Name_Lookup'].astype(str).str.lower().str.strip()
         )
         supplier_categorization_lookup_df = supplier_categorization_lookup_df.drop_duplicates(
-            subset=['Supplier_Name_Lookup'])
+            subset=['Supplier_Name_Lookup']
+        )
         print(f"Supplier categorization loaded: {len(supplier_categorization_lookup_df)} suppliers")
+    else:
+        print("Warning: Supplier categorization data incomplete")
 
+    # Merge comme NOUVELLE colonne
     if not supplier_categorization_lookup_df.empty and 'Supplier' in final_stock_sales_df.columns:
         final_stock_sales_df['Supplier'] = final_stock_sales_df['Supplier'].astype(str).str.lower().str.strip()
 
@@ -694,44 +741,67 @@ def load_supply_data() -> pd.DataFrame:
         if 'Supplier_Name_Lookup' in final_stock_sales_df.columns:
             final_stock_sales_df.drop(columns=['Supplier_Name_Lookup'], inplace=True)
 
-        final_stock_sales_df['Supplier_Categorization_Lookup'] = (
-            final_stock_sales_df['Supplier_Categorization_Lookup'].fillna('Unknown')
+        final_stock_sales_df['Supplier_Categorization'] = (
+            final_stock_sales_df['Supplier_Categorization'].fillna('Not Categorized')
         )
 
-        # RÈGLE MÉTIER CRITIQUE: Si credit_days > 0, utiliser supplier categorization
-        if all(col in final_stock_sales_df.columns for col in
-               ['credit_days', 'Product Category', 'Supplier_Categorization_Lookup']):
+        print(f"✅ Supplier_Categorization ajoutée comme colonne séparée")
+        print(f"   Distribution : {final_stock_sales_df['Supplier_Categorization'].value_counts().to_dict()}")
 
-            final_stock_sales_df['credit_days'] = pd.to_numeric(
-                final_stock_sales_df['credit_days'], errors='coerce'
-            ).fillna(0)
+    # ✅ LOGIQUE : Créer colonne hybride intelligente
+    if all(col in final_stock_sales_df.columns for col in
+           ['credit_days', 'Product Category', 'Supplier_Categorization']):
 
-            # AVANT modification
-            original_categories = final_stock_sales_df['Product Category'].copy()
+        final_stock_sales_df['credit_days'] = pd.to_numeric(
+            final_stock_sales_df['credit_days'], errors='coerce'
+        ).fillna(0)
 
-            # APPLICATION DE LA RÈGLE
-            final_stock_sales_df['Product Category'] = final_stock_sales_df.apply(
-                lambda row: row['Supplier_Categorization_Lookup'] if row['credit_days'] > 0 else row[
-                    'Product Category'],
-                axis=1
-            )
+        # Fonction de sélection intelligente
+        def smart_category_selection(row):
+            abc_xyz = row['Product Category']
+            supplier_cat = row['Supplier_Categorization']
+            credit = row['credit_days']
 
-            # LOGGING : compter les modifications
-            modified_count = (final_stock_sales_df['Product Category'] != original_categories).sum()
-            print(f"'Product Category' updated: {modified_count} products modified based on credit_days > 0")
+            # Règle 1 : Si pas de crédit, garder ABC-XYZ
+            if credit <= 0:
+                return abc_xyz
 
-            # Afficher échantillon
-            if modified_count > 0:
-                sample = final_stock_sales_df[final_stock_sales_df['Product Category'] != original_categories][
-                    ['product_name', 'Supplier', 'credit_days', 'Product Category']
-                ].head(5)
-                print("Sample of modified products:")
-                print(sample.to_string(index=False))
+            # Règle 2 : Si fournisseur non catégorisé, garder ABC-XYZ
+            if supplier_cat in ['Not Categorized', 'Unknown', '']:
+                return abc_xyz
 
-        if 'Supplier_Categorization_Lookup' in final_stock_sales_df.columns:
-            final_stock_sales_df.drop(columns=['Supplier_Categorization_Lookup'], inplace=True)
+            # Règle 3 : Combiner les deux
+            return f"{abc_xyz}-{supplier_cat}"
+
+        # 1. Sauvegarder l'originale ABC-XYZ
+        final_stock_sales_df['_Product_Category_ABC_XYZ'] = final_stock_sales_df['Product Category']
+
+        # 2. Créer la version hybride
+        final_stock_sales_df['Product_Category_Final'] = final_stock_sales_df.apply(
+            smart_category_selection, axis=1
+        )
+
+        # 3. Statistiques
+        modified_count = (
+                final_stock_sales_df['_Product_Category_ABC_XYZ'] !=
+                final_stock_sales_df['Product_Category_Final']
+        ).sum()
+
+        print(f"\n✅ Product Category hybride créée:")
+        print(f"   - Produits modifiés : {modified_count}")
+        print(f"   - Distribution : {final_stock_sales_df['Product_Category_Final'].value_counts().head(10).to_dict()}")
+
+        # 4. Remplacer Product Category par la version finale
+        final_stock_sales_df['Product Category'] = final_stock_sales_df['Product_Category_Final']
+        final_stock_sales_df.drop(columns=['Product_Category_Final'], inplace=True)
+
+        # 5. Renommer Supplier_Categorization pour la masquer
+        final_stock_sales_df.rename(columns={
+            'Supplier_Categorization': '_Supplier_Categorization'
+        }, inplace=True)
+
     else:
-        print("Warning: Supplier categorization data unavailable or incomplete.")
+        print("Warning: Colonnes nécessaires manquantes pour catégorisation hybride")
     # =========================
     # Parametres Replenish (Buffer lookup) - APRÈS update Product Category
     # =========================
@@ -1075,6 +1145,49 @@ def load_supply_data() -> pd.DataFrame:
         print(f"\nValeurs uniques de Ajusted_total_need :")
         print(final_stock_sales_df['Ajusted_total_need'].value_counts())
     print("========================================================\n")
+
+    # =========================
+    # ✅ FILTRE FINAL : Produits actifs uniquement
+    # =========================
+    if 'is_active' in final_stock_sales_df.columns:
+        initial_count = len(final_stock_sales_df)
+        active_count = final_stock_sales_df['is_active'].sum()
+
+        # Filtrer
+        final_stock_sales_df = final_stock_sales_df[final_stock_sales_df['is_active'] == True].copy()
+
+        print(f"\n{'=' * 60}")
+        print(f"✅ FILTRE PRODUITS ACTIFS")
+        print(f"{'=' * 60}")
+        print(f"   Avant filtre : {initial_count} produits")
+        print(f"   Actifs détectés : {active_count}")
+        print(f"   Après filtre : {len(final_stock_sales_df)} produits")
+        print(f"   Exclus : {initial_count - len(final_stock_sales_df)} produits")
+        print(f"{'=' * 60}\n")
+    else:
+        print("\n⚠️ Colonne 'is_active' absente, TOUS les produits sont affichés")
+
+    # =========================
+    # ✅ FILTRE : Exclure les produits "cadeau"
+    # =========================
+    if 'product_name' in final_stock_sales_df.columns:
+        before_cadeau = len(final_stock_sales_df)
+
+        # Exclure tout produit contenant "cadeau" (insensible à la casse)
+        cadeau_mask = final_stock_sales_df['product_name'].astype(str).str.lower().str.contains(
+            'cadeau',
+            na=False,
+            regex=False
+        )
+
+        final_stock_sales_df = final_stock_sales_df[~cadeau_mask].copy()
+
+        excluded_count = before_cadeau - len(final_stock_sales_df)
+
+        if excluded_count > 0:
+            print(f"✅ FILTRE CADEAU : {excluded_count} produits exclus")
+        else:
+            print("ℹ️ Aucun produit 'cadeau' détecté")
 
     return final_stock_sales_df
 

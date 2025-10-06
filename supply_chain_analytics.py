@@ -330,6 +330,193 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
+def load_and_prepare_order_history():
+    """
+    Charge l'historique de commandes et prépare pour ML.
+    """
+    urls = [
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=1780929975&single=true&output=csv",
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=996881833&single=true&output=csv",
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=206725107&single=true&output=csv",
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=1984203860&single=true&output=csv",
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=1583176558&single=true&output=csv"
+    ]
+
+    all_orders = []
+
+    for i, url in enumerate(urls, 1):
+        try:
+            df = pd.read_csv(url, skiprows=3)
+
+            # Nettoyer noms colonnes
+            df.columns = df.columns.str.strip()
+
+            # Mapping vers noms standards
+            col_mapping = {
+                'Product name': 'product_name',
+                'Order Quantity': 'quantity_ordered',
+                'Sugg Order Quantity': 'system_suggestion',
+                'Current Stock': 'stock_before_order',
+                'Daily Avg': 'daily_avg_at_order',
+                'Current Coverage': 'coverage_before',
+                'Total Coverage': 'coverage_after',
+                'OOS Rate': 'oos_rate',
+                'OOS Rate L7d': 'oos_rate_7d',
+                'Delisting': 'delisting_status',
+                'Estimated Unit Price': 'unit_price'
+            }
+
+            df_clean = df.rename(columns=col_mapping)
+            df_clean['source_sheet'] = i
+
+            all_orders.append(df_clean)
+
+            print(f"✅ Sheet {i} : {len(df_clean)} commandes")
+
+        except Exception as e:
+            print(f"❌ Erreur sheet {i} : {e}")
+
+    if not all_orders:
+        return pd.DataFrame()
+
+    # Combiner tous les historiques
+    history_df = pd.concat(all_orders, ignore_index=True)
+
+    # Nettoyer
+    history_df['product_name'] = history_df['product_name'].astype(str).str.lower().str.strip()
+
+    for col in ['quantity_ordered', 'stock_before_order', 'daily_avg_at_order',
+                'coverage_before', 'coverage_after', 'oos_rate']:
+        if col in history_df.columns:
+            history_df[col] = pd.to_numeric(history_df[col], errors='coerce')
+
+    # Filtrer commandes valides
+    valid_orders = history_df[
+        (history_df['quantity_ordered'] > 0) &
+        (history_df['daily_avg_at_order'] > 0)
+        ].copy()
+
+    print(f"\n📦 Total commandes historiques valides : {len(valid_orders)}")
+    print(f"   Produits uniques : {valid_orders['product_name'].nunique()}")
+
+    return valid_orders
+
+
+def train_from_real_order_history(current_df: pd.DataFrame, history_df: pd.DataFrame) -> tuple:
+    """
+    Modèle ML qui apprend des VRAIES commandes passées.
+    """
+    from sklearn.ensemble import GradientBoostingRegressor
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import mean_absolute_error, r2_score
+
+    if history_df.empty:
+        print("Pas d'historique, fallback sur formule")
+        current_df['target_quantity'] = calculate_formula_based_target(current_df)
+        return current_df, None
+
+    # Agrégation par produit (moyenne des commandes passées)
+    product_patterns = history_df.groupby('product_name').agg({
+        'quantity_ordered': ['mean', 'std', 'count'],
+        'stock_before_order': 'mean',
+        'daily_avg_at_order': 'mean',
+        'coverage_before': 'mean',
+        'oos_rate': 'mean'
+    }).reset_index()
+
+    product_patterns.columns = [
+        'product_name', 'avg_quantity_ordered', 'std_quantity_ordered', 'order_count',
+        'avg_stock_before', 'avg_daily_sales_history', 'avg_coverage_before', 'avg_oos_rate'
+    ]
+
+    # Merge avec données actuelles
+    df_ml = current_df.merge(
+        product_patterns,
+        on='product_name',
+        how='left'
+    )
+
+    # Features
+    feature_cols = [
+        'total_stock',
+        'Average Daily Sales',
+        'Max Daily Sales (Pikine)',
+        'Max Coverage Day',
+        'credit_days',
+        'ADJUSTED_LEADTIME',
+        'Daily OOS Rate (30d)',
+        'avg_quantity_ordered',  # Moyenne historique commandée
+        'avg_coverage_before',  # Couverture historique
+        'order_count'  # Nombre de fois commandé
+    ]
+
+    # Target = moyenne historique de ce qu'on a commandé
+    df_ml['target_quantity'] = df_ml['avg_quantity_ordered'].fillna(0)
+
+    # Filtrer produits avec historique
+    has_history = df_ml['order_count'].notna() & (df_ml['order_count'] > 0)
+    df_train = df_ml[has_history].copy()
+
+    print(f"\nProduits avec historique : {len(df_train)}")
+
+    if len(df_train) < 50:
+        print("Historique insuffisant")
+        df_ml['target_quantity'] = df_ml['target_quantity'].fillna(
+            calculate_formula_based_target(df_ml)
+        )
+        return df_ml, None
+
+    X = df_train[feature_cols].fillna(0)
+    y = df_train['target_quantity']
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+
+    model = GradientBoostingRegressor(
+        n_estimators=200,
+        max_depth=5,
+        learning_rate=0.1,
+        random_state=42
+    )
+
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+    mae = mean_absolute_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+
+    print(f"\n{'=' * 60}")
+    print(f"ML: target_quantity (apprentissage historique RÉEL)")
+    print(f"{'=' * 60}")
+    print(f"  MAE : {mae:.1f} unités")
+    print(f"  R² : {r2:.3f}")
+    print(f"{'=' * 60}\n")
+
+    # Prédictions
+    X_all = df_ml[feature_cols].fillna(0)
+    predictions = model.predict(X_all).clip(lower=0)
+
+    # Pour produits SANS historique, utiliser formule
+    df_ml['target_quantity'] = np.where(
+        has_history,
+        predictions,
+        calculate_formula_based_target(df_ml)
+    )
+
+    return df_ml, model
+
+
+def calculate_formula_based_target(df):
+    """Fallback pour produits sans historique"""
+    return (
+            df['Average Daily Sales'] *
+            (df['ADJUSTED_LEADTIME'] + df['credit_days']) +
+            df['AJUSTER_BUFFER'] * df['Average Daily Sales'] -
+            df['total_stock']
+    ).clip(lower=0)
+
+
 def load_supply_data() -> pd.DataFrame:
     import numpy as np
     import pandas as pd
@@ -933,29 +1120,22 @@ def load_supply_data() -> pd.DataFrame:
         safe_numeric(final_stock_sales_df["purchase_need"], 0),
     )
 
-    # Predicted Order Quantity
     # =========================
-    # ML: Predicted Order Quantity (NOUVELLE VERSION)
+    # ML: target_quantity (historique réel)
     # =========================
-    print("\n🤖 Entraînement modèle ML pour Predicted Order Quantity...")
-    final_stock_sales_df, poq_model = train_optimal_order_quantity_model(final_stock_sales_df)
+    print("\nChargement historique de commandes...")
+    order_history = load_and_prepare_order_history()
 
-    # Vérification : pas de valeurs aberrantes
-    if 'Predicted Order Quantity' in final_stock_sales_df.columns:
-        # Plafonner à 10x la demande totale période pour éviter les valeurs extrêmes
-        max_reasonable = final_stock_sales_df['Average Daily Sales'] * (
-                final_stock_sales_df['credit_days'] + final_stock_sales_df['ADJUSTED_LEADTIME']
-        ) * 10
+    print("\nEntraînement modèle ML sur historique réel...")
+    final_stock_sales_df, tq_model = train_from_real_order_history(
+        final_stock_sales_df,
+        order_history
+    )
 
-        final_stock_sales_df['Predicted Order Quantity'] = np.minimum(
-            final_stock_sales_df['Predicted Order Quantity'],
-            max_reasonable
-        )
+    if 'target_quantity' in final_stock_sales_df.columns:
+        print(f"  Moyenne : {final_stock_sales_df['target_quantity'].mean():.0f}")
+        print(f"  Médiane : {final_stock_sales_df['target_quantity'].median():.0f}")
 
-        print(f"✅ Predicted Order Quantity - Stats finales :")
-        print(f"   Moyenne : {final_stock_sales_df['Predicted Order Quantity'].mean():.0f}")
-        print(f"   Médiane : {final_stock_sales_df['Predicted Order Quantity'].median():.0f}")
-        print(f"   Max : {final_stock_sales_df['Predicted Order Quantity'].max():.0f}")
 
         # Ajusted_total_need
 
@@ -1196,7 +1376,8 @@ def load_supply_data() -> pd.DataFrame:
                 'frais de transport',
                 'frais de majoration',
                 'remboursement prêt',
-                'rubyx'
+                'rubyx',
+                'cfa - cash'
             ]
 
             # Créer un pattern regex pour matcher n'importe lequel de ces termes
@@ -1829,16 +2010,26 @@ def page_overview(master_df: pd.DataFrame = None):
 
     # Colonnes prioritaires dans l’ordre
     cols_priority = [
-        "product_id",  # ✅ AJOUTÉ EN PREMIER
-        "product_name", "Supplier", "Suppliers (all)", "Average Daily Sales",
-        "Product Category","📝 Notes",
-        "total_stock", "Avg Daily Sales", "Max Daily Sales (Pikine)",
-        "Max Coverage Day", "ADJUSTED_LEADTIME",
-        "optimal stock", "Predicted Stockout",
-        "Predicted Order Quantity", "purchase_need",
-        "MOQ MAAD", "QAC", "Ajusted_total_need",
-        "credit_days", "Credit_cumulable", "MAX_CREDIT_BUFFER", "AJUSTER_BUFFER",
-        "delisting_status"
+        "product_id",
+        "product_name",
+        "Supplier",
+        "total_stock",
+        "Average Daily Sales",
+        "Max Daily Sales (Pikine)",
+        "optimal stock",
+        "Ajusted_total_need",
+        "target_quantity",
+        "Max Coverage Day",
+        "Product Category",
+        "credit_days",
+        "Credit_cumulable",
+        "AJUSTER_BUFFER",
+        "MAX_CREDIT_BUFFER",
+        "ADJUSTED_LEADTIME",
+        "MOQ MAAD",
+        "delisting_status",
+        "Daily OOS Rate (30d)",
+        "📝 Notes"
     ]
     # Forcer ces colonnes à être prioritaires et visibles
     for must in ["Supplier", "Average Daily Sales"]:
@@ -1879,14 +2070,26 @@ def page_overview(master_df: pd.DataFrame = None):
         dbc.Col(html.Div(risk_bell, style={"textAlign": "right"}), md=4),
     ])
 
+    # Masquer colonnes techniques
     cols_to_hide = [
-        "Credit Adequacy Score", "Credit Adequacy Risk", "Stock Status",
-        "Daily OOS Rate (30d)_y", "Avg Lead Time",
-        "Coverage Day (30d)", "Coverage Day (7d)",
-        "Average Daily Sales (30d)", "Average Daily Sales (7d)",
-        "Daily OOS Rate (30d)_x", "Stockout Probability", "_Supplier_Categorization", "_Product_Category_ABC_XYZ"
+        "_Product_Category_ABC_XYZ",
+        "_Supplier_Categorization",
+        "Average Daily Sales (7d)",
+        "Average Daily Sales (30d)",
+        "Daily OOS Rate (7d)",
+        "Stockout Probability",
+        "Credit Adequacy Score",
+        "Stock Status",
+        "is_active",
+        "demand_stability",
+        "oos_risk",
+        "target_quantity_calc",
+        "Predicted Stockout",
+        "replenishment_period",
+        "Predicted Order Quantity",
+        "purchase_need"
     ]
-    available_cols = [c for c in available_cols if c not in cols_to_hide]
+    available_cols = [c for c in available_cols if c not in cols_to_hide and not c.startswith('_')]
     df["📝 Notes"] = "💬"  # Emoji cliquable
 
     # Tableau principal

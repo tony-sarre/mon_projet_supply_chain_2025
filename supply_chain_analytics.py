@@ -934,26 +934,28 @@ def load_supply_data() -> pd.DataFrame:
     )
 
     # Predicted Order Quantity
-    need_cols = ["total_stock", "optimal stock", "Average Daily Sales", "credit_days",
-                 "ADJUSTED_LEADTIME"]
-    if all(c in final_stock_sales_df.columns for c in need_cols):
-        for c in need_cols:
-            final_stock_sales_df[c] = safe_numeric(final_stock_sales_df[c], 0)
+    # =========================
+    # ML: Predicted Order Quantity (NOUVELLE VERSION)
+    # =========================
+    print("\n🤖 Entraînement modèle ML pour Predicted Order Quantity...")
+    final_stock_sales_df, poq_model = train_optimal_order_quantity_model(final_stock_sales_df)
 
-        def calc_poq(row):
-            stock = row["total_stock"]
-            rp = row["optimal stock"]
-            ads = row["Average Daily Sales"]
-            credit_days = row["credit_days"]
-            alt = row["ADJUSTED_LEADTIME"]
-            demand_period = alt + credit_days
-            demand_during_period = ads * demand_period
-            return max(0.0, (rp + demand_during_period) - stock)
+    # Vérification : pas de valeurs aberrantes
+    if 'Predicted Order Quantity' in final_stock_sales_df.columns:
+        # Plafonner à 10x la demande totale période pour éviter les valeurs extrêmes
+        max_reasonable = final_stock_sales_df['Average Daily Sales'] * (
+                final_stock_sales_df['credit_days'] + final_stock_sales_df['ADJUSTED_LEADTIME']
+        ) * 10
 
-        final_stock_sales_df["Predicted Order Quantity"] = final_stock_sales_df.apply(calc_poq, axis=1)
-        print("'Predicted Order Quantity' calculated successfully.")
-    else:
-        final_stock_sales_df["Predicted Order Quantity"] = np.nan
+        final_stock_sales_df['Predicted Order Quantity'] = np.minimum(
+            final_stock_sales_df['Predicted Order Quantity'],
+            max_reasonable
+        )
+
+        print(f"✅ Predicted Order Quantity - Stats finales :")
+        print(f"   Moyenne : {final_stock_sales_df['Predicted Order Quantity'].mean():.0f}")
+        print(f"   Médiane : {final_stock_sales_df['Predicted Order Quantity'].median():.0f}")
+        print(f"   Max : {final_stock_sales_df['Predicted Order Quantity'].max():.0f}")
 
         # Ajusted_total_need
 
@@ -1222,6 +1224,160 @@ def add_action_cols(df: pd.DataFrame) -> pd.DataFrame:
     df2["✏️ Edit"] = "✏️"
     df2["🗑️ Delete"] = "🗑️"
     return df2
+
+
+def train_optimal_order_quantity_model(df: pd.DataFrame) -> tuple:
+    """
+    Entraîne un modèle ML pour prédire la quantité optimale de commande.
+
+    Objectif : Commander juste assez pour couvrir la demande pendant credit_days + lead_time
+    sans rupture ni surstock excessif.
+
+    Returns:
+        (df_with_predictions, model) ou (df_with_predictions, None) si échec
+    """
+    from sklearn.ensemble import GradientBoostingRegressor
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import mean_absolute_error, r2_score
+
+    df_work = df.copy()
+
+    # =========================
+    # Feature Engineering
+    # =========================
+    required_cols = [
+        'credit_days', 'total_stock', 'Average Daily Sales',
+        'Max Daily Sales (Pikine)', 'ADJUSTED_LEADTIME'
+    ]
+
+    # Vérifier colonnes requises
+    missing = [c for c in required_cols if c not in df_work.columns]
+    if missing:
+        print(f"❌ Colonnes manquantes pour ML : {missing}")
+        df_work['Predicted Order Quantity'] = 0
+        return df_work, None
+
+    # Features
+    df_work['demand_during_credit'] = (
+            df_work['Average Daily Sales'] * df_work['credit_days']
+    ).clip(lower=0)
+
+    df_work['demand_during_leadtime'] = (
+            df_work['Average Daily Sales'] * df_work['ADJUSTED_LEADTIME']
+    ).clip(lower=0)
+
+    df_work['total_demand_period'] = (
+            df_work['demand_during_credit'] + df_work['demand_during_leadtime']
+    )
+
+    df_work['stock_coverage_ratio'] = pd.Series(
+        np.where(
+            df_work['Average Daily Sales'] > 0,
+            df_work['total_stock'] / df_work['Average Daily Sales'],
+            0
+        ),
+        index=df_work.index
+    ).clip(upper=365)
+
+    df_work['demand_volatility'] = pd.Series(
+        df_work['Max Daily Sales (Pikine)'] /
+        np.maximum(df_work['Average Daily Sales'], 0.1),
+        index=df_work.index
+    ).clip(upper=10)
+    # =========================
+    # Target : Quantité optimale théorique
+    # =========================
+    def calculate_optimal_quantity(row):
+        """
+        Quantité optimale = demande totale période - stock actuel + buffer sécurité
+        """
+        total_demand = row['total_demand_period']
+        current_stock = row['total_stock']
+        safety_buffer = row['Max Daily Sales (Pikine)'] * 0.5  # 50% du pic comme sécurité
+
+        optimal = total_demand - current_stock + safety_buffer
+        return max(0, optimal)  # Jamais négatif
+
+    df_work['target_quantity'] = df_work.apply(calculate_optimal_quantity, axis=1)
+
+    # =========================
+    # Préparer données d'entraînement
+    # =========================
+    feature_cols = [
+        'credit_days', 'total_stock', 'Average Daily Sales',
+        'Max Daily Sales (Pikine)', 'ADJUSTED_LEADTIME',
+        'demand_during_credit', 'demand_during_leadtime',
+        'stock_coverage_ratio', 'demand_volatility'
+    ]
+
+    # Filtrer données valides
+    valid_mask = (
+            (df_work['target_quantity'] > 0) &
+            (df_work['Average Daily Sales'] > 0) &
+            (df_work[feature_cols].notna().all(axis=1))
+    )
+
+    df_train = df_work[valid_mask].copy()
+
+    if len(df_train) < 50:
+        print(f"⚠️ Données insuffisantes pour ML ({len(df_train)} échantillons)")
+        df_work['Predicted Order Quantity'] = df_work['target_quantity']
+        return df_work, None
+
+    X = df_train[feature_cols].fillna(0)
+    y = df_train['target_quantity']
+
+    # =========================
+    # Entraînement
+    # =========================
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+
+    try:
+        model = GradientBoostingRegressor(
+            n_estimators=300,
+            max_depth=6,
+            learning_rate=0.05,
+            subsample=0.8,
+            min_samples_leaf=5,
+            random_state=42
+        )
+
+        model.fit(X_train, y_train)
+
+        # Évaluation
+        y_pred_test = model.predict(X_test)
+        mae = mean_absolute_error(y_test, y_pred_test)
+        r2 = r2_score(y_test, y_pred_test)
+
+        print(f"\n{'=' * 60}")
+        print(f"✅ MODÈLE ML - PREDICTED ORDER QUANTITY")
+        print(f"{'=' * 60}")
+        print(f"   Échantillons entraînement : {len(X_train)}")
+        print(f"   MAE (test) : {mae:.2f} unités")
+        print(f"   R² score : {r2:.3f}")
+        print(f"   Features importance :")
+
+        importance = sorted(
+            zip(feature_cols, model.feature_importances_),
+            key=lambda x: x[1],
+            reverse=True
+        )[:5]
+        for feat, imp in importance:
+            print(f"      - {feat}: {imp:.3f}")
+        print(f"{'=' * 60}\n")
+
+        # Prédire sur tout le dataset
+        X_all = df_work[feature_cols].fillna(0)
+        df_work['Predicted Order Quantity'] = model.predict(X_all).clip(lower=0)
+
+        return df_work, model
+
+    except Exception as e:
+        print(f"❌ Erreur entraînement ML : {e}")
+        df_work['Predicted Order Quantity'] = df_work['target_quantity']
+        return df_work, None
 
 # ----------------------------- App & Cache ---------------------------------------
 app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True)

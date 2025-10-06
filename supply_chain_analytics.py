@@ -746,9 +746,8 @@ def load_supply_data() -> pd.DataFrame:
         )
 
         print(f"✅ Supplier_Categorization ajoutée comme colonne séparée")
-        print(f"   Distribution : {final_stock_sales_df['Supplier_Categorization'].value_counts().to_dict()}")
 
-    # ✅ LOGIQUE : Créer colonne hybride intelligente
+    # ✅ RÈGLE UNIQUE : Si credit_days > 0, utiliser supplier categorization, sinon garder ABC-XYZ
     if all(col in final_stock_sales_df.columns for col in
            ['credit_days', 'Product Category', 'Supplier_Categorization']):
 
@@ -756,52 +755,33 @@ def load_supply_data() -> pd.DataFrame:
             final_stock_sales_df['credit_days'], errors='coerce'
         ).fillna(0)
 
-        # Fonction de sélection intelligente
-        def smart_category_selection(row):
-            abc_xyz = row['Product Category']
-            supplier_cat = row['Supplier_Categorization']
-            credit = row['credit_days']
-
-            # Règle 1 : Si pas de crédit, garder ABC-XYZ
-            if credit <= 0:
-                return abc_xyz
-
-            # Règle 2 : Si fournisseur non catégorisé, garder ABC-XYZ
-            if supplier_cat in ['Not Categorized', 'Unknown', '']:
-                return abc_xyz
-
-            # Règle 3 : Combiner les deux
-            return f"{abc_xyz}-{supplier_cat}"
-
-        # 1. Sauvegarder l'originale ABC-XYZ
+        # Sauvegarder l'originale ABC-XYZ
         final_stock_sales_df['_Product_Category_ABC_XYZ'] = final_stock_sales_df['Product Category']
 
-        # 2. Créer la version hybride
-        final_stock_sales_df['Product_Category_Final'] = final_stock_sales_df.apply(
-            smart_category_selection, axis=1
+        # Appliquer la règle simple
+        final_stock_sales_df['Product Category'] = final_stock_sales_df.apply(
+            lambda row: row['Supplier_Categorization'] if row['credit_days'] > 0 else row['Product Category'],
+            axis=1
         )
 
-        # 3. Statistiques
+        # Statistiques
         modified_count = (
                 final_stock_sales_df['_Product_Category_ABC_XYZ'] !=
-                final_stock_sales_df['Product_Category_Final']
+                final_stock_sales_df['Product Category']
         ).sum()
 
-        print(f"\n✅ Product Category hybride créée:")
-        print(f"   - Produits modifiés : {modified_count}")
-        print(f"   - Distribution : {final_stock_sales_df['Product_Category_Final'].value_counts().head(10).to_dict()}")
+        print(f"\n✅ Product Category mise à jour :")
+        print(f"   - Produits modifiés (credit_days > 0) : {modified_count}")
+        print(
+            f"   - Distribution finale : {final_stock_sales_df['Product Category'].value_counts().head(10).to_dict()}")
 
-        # 4. Remplacer Product Category par la version finale
-        final_stock_sales_df['Product Category'] = final_stock_sales_df['Product_Category_Final']
-        final_stock_sales_df.drop(columns=['Product_Category_Final'], inplace=True)
-
-        # 5. Renommer Supplier_Categorization pour la masquer
+        # Renommer pour masquer dans l'UI
         final_stock_sales_df.rename(columns={
             'Supplier_Categorization': '_Supplier_Categorization'
         }, inplace=True)
 
     else:
-        print("Warning: Colonnes nécessaires manquantes pour catégorisation hybride")
+        print("Warning: Colonnes nécessaires manquantes pour catégorisation")
     # =========================
     # Parametres Replenish (Buffer lookup) - APRÈS update Product Category
     # =========================
@@ -810,11 +790,14 @@ def load_supply_data() -> pd.DataFrame:
         pr_buf.columns = ["Param_Product_Category", "Param_Buffer_Value_Lookup"]
         pr_buf["Param_Product_Category"] = pr_buf["Param_Product_Category"].astype(str).str.lower().str.strip()
         pr_buf["Param_Buffer_Value_Lookup"] = safe_numeric(pr_buf["Param_Buffer_Value_Lookup"], 0)
+
+        # ✅ IMPORTANT : Normaliser Product Category AVANT le merge
         final_stock_sales_df["Product Category"] = final_stock_sales_df["Product Category"].astype(
             str).str.lower().str.strip()
+
         final_stock_sales_df = final_stock_sales_df.merge(
             pr_buf.drop_duplicates(subset=["Param_Product_Category"]),
-            left_on="Product Category",
+            left_on="Product Category",  # ✅ Utilise bien la Product Category mise à jour
             right_on="Param_Product_Category",
             how="left",
             validate="m:1",
@@ -822,9 +805,14 @@ def load_supply_data() -> pd.DataFrame:
         if "Param_Product_Category" in final_stock_sales_df.columns:
             final_stock_sales_df.drop(columns=["Param_Product_Category"], inplace=True)
         final_stock_sales_df["Param_Buffer_Value_Lookup"] = final_stock_sales_df["Param_Buffer_Value_Lookup"].fillna(0)
-        print("'Param_Buffer_Value_Lookup' merged for optimal stock calculation.")
+        print("✅ 'Param_Buffer_Value_Lookup' mergé basé sur la Product Category mise à jour")
     else:
         final_stock_sales_df["Param_Buffer_Value_Lookup"] = 0.0
+
+    # 1. Calculer MAX_CREDIT_BUFFER d'abord
+    # =========================
+    # Calcul des buffers (ORDRE IMPORTANT)
+    # =========================
 
     # 1. Calculer MAX_CREDIT_BUFFER d'abord
     def calc_max_credit_buffer(row):
@@ -834,17 +822,23 @@ def load_supply_data() -> pd.DataFrame:
 
     final_stock_sales_df["MAX_CREDIT_BUFFER"] = final_stock_sales_df.apply(calc_max_credit_buffer, axis=1)
 
-    # 2. Calculer AJUSTER_BUFFER
+    # 2. Calculer AJUSTER_BUFFER (max entre Param_Buffer_Value_Lookup et MAX_CREDIT_BUFFER)
     final_stock_sales_df["AJUSTER_BUFFER"] = np.maximum(
         safe_numeric(final_stock_sales_df["Param_Buffer_Value_Lookup"], 0),
         safe_numeric(final_stock_sales_df["MAX_CREDIT_BUFFER"], 0),
     )
 
-    # 3. Calculer optimal stock (MAINTENANT on peut l'utiliser)
-    final_stock_sales_df["Max Daily Sales (Pikine)"] = safe_numeric(final_stock_sales_df["Max Daily Sales (Pikine)"], 0)
+    print("✅ 'MAX_CREDIT_BUFFER' et 'AJUSTER_BUFFER' calculés")
+    print(f"   - AJUSTER_BUFFER moyen : {final_stock_sales_df['AJUSTER_BUFFER'].mean():.2f} jours")
+    print(f"   - AJUSTER_BUFFER max : {final_stock_sales_df['AJUSTER_BUFFER'].max():.0f} jours")
+
+    # 3. Calculer optimal stock (utilise AJUSTER_BUFFER)
+    final_stock_sales_df["Max Daily Sales (Pikine)"] = safe_numeric(
+        final_stock_sales_df["Max Daily Sales (Pikine)"], 0
+    )
     final_stock_sales_df["Average Daily Sales"] = safe_numeric(
-        final_stock_sales_df["Average Daily Sales"], 0.1)
-    final_stock_sales_df["AJUSTER_BUFFER"] = safe_numeric(final_stock_sales_df["AJUSTER_BUFFER"], 0)
+        final_stock_sales_df["Average Daily Sales"], 0.1
+    )
 
     final_stock_sales_df["optimal stock (Reorder Point)"] = final_stock_sales_df.apply(
         lambda r: max(
@@ -854,10 +848,9 @@ def load_supply_data() -> pd.DataFrame:
         axis=1,
     )
 
-    # Renommer
+    # Renommer pour cohérence
     final_stock_sales_df.rename(columns={"optimal stock (Reorder Point)": "optimal stock"}, inplace=True)
-    print("'optimal stock' calculated with AJUSTER_BUFFER.")
-
+    print("✅ 'optimal stock' calculé avec AJUSTER_BUFFER")
     # =========================
     # Delisting
     # =========================
@@ -1189,7 +1182,39 @@ def load_supply_data() -> pd.DataFrame:
         else:
             print("ℹ️ Aucun produit 'cadeau' détecté")
 
-    return final_stock_sales_df
+        # =========================
+        # ✅ FILTRE : Exclure les frais (livraison, transport, etc.)
+        # =========================
+        if 'product_name' in final_stock_sales_df.columns:
+            before_frais = len(final_stock_sales_df)
+
+            # Liste des termes à exclure
+            frais_keywords = [
+                'frais de livraison',
+                'frais de transport',
+                'frais de majoration',
+                'remboursement prêt',
+                'rubyx'
+            ]
+
+            # Créer un pattern regex pour matcher n'importe lequel de ces termes
+            pattern = '|'.join(frais_keywords)
+
+            frais_mask = final_stock_sales_df['product_name'].astype(str).str.lower().str.contains(
+                pattern,
+                na=False,
+                regex=True
+            )
+
+            final_stock_sales_df = final_stock_sales_df[~frais_mask].copy()
+
+            excluded_count = before_frais - len(final_stock_sales_df)
+
+            if excluded_count > 0:
+                print(f"✅ FILTRE FRAIS : {excluded_count} produits exclus")
+                print(f"   (livraison, transport, majoration, remboursement)")
+
+        return final_stock_sales_df
 
 # Utility: add Actions columns
 def add_action_cols(df: pd.DataFrame) -> pd.DataFrame:
@@ -1703,7 +1728,7 @@ def page_overview(master_df: pd.DataFrame = None):
         "Daily OOS Rate (30d)_y", "Avg Lead Time",
         "Coverage Day (30d)", "Coverage Day (7d)",
         "Average Daily Sales (30d)", "Average Daily Sales (7d)",
-        "Daily OOS Rate (30d)_x", "Stockout Probability"
+        "Daily OOS Rate (30d)_x", "Stockout Probability", "_Supplier_Categorization", "_Product_Category_ABC_XYZ"
     ]
     available_cols = [c for c in available_cols if c not in cols_to_hide]
     df["📝 Notes"] = "💬"  # Emoji cliquable
@@ -2410,6 +2435,18 @@ def _chatbot_fallback(user_text: str, df: pd.DataFrame, prefix: str = "") -> str
         return prefix + (
             "Recommandation impossible avec les données disponibles." if lang == "fr" else "Unable to compute recommendation with available data.")
 # ------------------------------ Layout root (with floating chat) ------------------
+try:
+    initial_df = get_df_cached()
+    if initial_df is None or initial_df.empty:
+        raise ValueError("DataFrame vide ou None retourné par get_df_cached()")
+    print(f"✅ Application initialisée avec {len(initial_df)} produits")
+except Exception as e:
+    print(f"❌ ERREUR CRITIQUE lors du chargement initial : {e}")
+    import traceback
+    traceback.print_exc()
+    # Créer un DataFrame vide par sécurité
+    initial_df = pd.DataFrame(columns=['product_name', 'Supplier', 'total_stock'])
+
 initial_df = get_df_cached()
 app.layout = html.Div([
     dcc.Location(id="url"),

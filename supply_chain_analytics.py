@@ -249,73 +249,8 @@ def get_next_po_number() -> str:
             st["seq"] = int(st.get("seq", 0)) + 1
         _save_po_state(st)
         return f"PO-{today}-{st['seq']:03d}"
-def train_stockout_model_for_df(df_in: pd.DataFrame, threshold: float = 0.5):
-    from sklearn.ensemble import RandomForestClassifier
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import roc_auc_score
-    from sklearn.preprocessing import OneHotEncoder
-    from sklearn.compose import ColumnTransformer
-    from sklearn.pipeline import Pipeline
-    from sklearn.impute import SimpleImputer
 
-    df = df_in.copy()
-    if 'Stock Status' not in df.columns:
-        df['Stockout Probability'] = np.nan
-        return df, None
 
-    y = (df['Stock Status'].astype(str) == "Out of Stock").astype(int)
-
-    num_features = ['total_stock', 'Avg Daily Sales', 'Max Lead Time',
-                    'Max Coverage Day', 'credit_days', 'Daily OOS Rate (7d)', 'Daily OOS Rate (30d)']
-    cat_features = ['Supplier', 'Product Category']
-    for c in num_features:
-        if c not in df.columns: df[c] = 0
-    for c in cat_features:
-        if c not in df.columns: df[c] = ""
-
-    X = df[num_features + cat_features].copy()
-    if y.nunique() < 2 or len(df) < 40:
-        if 'optimal stock (Reorder Point)' in df.columns:
-            prob = (df['total_stock'] <= df['optimal stock (Reorder Point)']).astype(float)
-        else:
-            prob = pd.Series(0.0, index=df.index)
-        df['Stockout Probability'] = prob
-        df['Predicted Stockout'] = (df['Stockout Probability'] > threshold).astype(bool)
-        return df, None
-
-    preproc = ColumnTransformer([
-        ("num", SimpleImputer(strategy="median"), num_features),
-        ("cat", OneHotEncoder(handle_unknown="ignore"), cat_features)
-    ])
-    clf = RandomForestClassifier(
-        n_estimators=600, max_depth=10, min_samples_leaf=2,
-        class_weight="balanced", random_state=42, n_jobs=-1
-    )
-    model = Pipeline([("prep", preproc), ("clf", clf)])
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, stratify=y, test_size=0.2, random_state=42
-    )
-    try:
-        model.fit(X_train, y_train)
-        proba_test = model.predict_proba(X_test)[:, 1]
-        try:
-            auc = roc_auc_score(y_test, proba_test)
-            print(f"[Stockout RF] AUC hold-out = {auc:.3f} (seuil={threshold})")
-        except Exception:
-            pass
-        df['Stockout Probability'] = model.predict_proba(X)[:, 1]
-        df['Predicted Stockout'] = (df['Stockout Probability'] > threshold).astype(bool)
-        return df, model
-    except Exception as e:
-        print("[Stockout RF] Train error:", repr(e))
-        if 'optimal stock (Reorder Point)' in df.columns:
-            prob = (df['total_stock'] <= df['optimal stock (Reorder Point)']).astype(float)
-        else:
-            prob = pd.Series(0.0, index=df.index)
-        df['Stockout Probability'] = prob
-        df['Predicted Stockout'] = (df['Stockout Probability'] > threshold).astype(bool)
-        return df, None
 
 
 import pandas as pd
@@ -330,191 +265,6 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-def load_and_prepare_order_history():
-    """
-    Charge l'historique de commandes et prépare pour ML.
-    """
-    urls = [
-        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=1780929975&single=true&output=csv",
-        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=996881833&single=true&output=csv",
-        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=206725107&single=true&output=csv",
-        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=1984203860&single=true&output=csv",
-        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=1583176558&single=true&output=csv"
-    ]
-
-    all_orders = []
-
-    for i, url in enumerate(urls, 1):
-        try:
-            df = pd.read_csv(url, skiprows=3)
-
-            # Nettoyer noms colonnes
-            df.columns = df.columns.str.strip()
-
-            # Mapping vers noms standards
-            col_mapping = {
-                'Product name': 'product_name',
-                'Order Quantity': 'quantity_ordered',
-                'Sugg Order Quantity': 'system_suggestion',
-                'Current Stock': 'stock_before_order',
-                'Daily Avg': 'daily_avg_at_order',
-                'Current Coverage': 'coverage_before',
-                'Total Coverage': 'coverage_after',
-                'OOS Rate': 'oos_rate',
-                'OOS Rate L7d': 'oos_rate_7d',
-                'Delisting': 'delisting_status',
-                'Estimated Unit Price': 'unit_price'
-            }
-
-            df_clean = df.rename(columns=col_mapping)
-            df_clean['source_sheet'] = i
-
-            all_orders.append(df_clean)
-
-            print(f"✅ Sheet {i} : {len(df_clean)} commandes")
-
-        except Exception as e:
-            print(f"❌ Erreur sheet {i} : {e}")
-
-    if not all_orders:
-        return pd.DataFrame()
-
-    # Combiner tous les historiques
-    history_df = pd.concat(all_orders, ignore_index=True)
-
-    # Nettoyer
-    history_df['product_name'] = history_df['product_name'].astype(str).str.lower().str.strip()
-
-    for col in ['quantity_ordered', 'stock_before_order', 'daily_avg_at_order',
-                'coverage_before', 'coverage_after', 'oos_rate']:
-        if col in history_df.columns:
-            history_df[col] = pd.to_numeric(history_df[col], errors='coerce')
-
-    # Filtrer commandes valides
-    valid_orders = history_df[
-        (history_df['quantity_ordered'] > 0) &
-        (history_df['daily_avg_at_order'] > 0)
-        ].copy()
-
-    print(f"\n📦 Total commandes historiques valides : {len(valid_orders)}")
-    print(f"   Produits uniques : {valid_orders['product_name'].nunique()}")
-
-    return valid_orders
-
-
-def train_from_real_order_history(current_df: pd.DataFrame, history_df: pd.DataFrame) -> tuple:
-    """
-    Modèle ML qui apprend des VRAIES commandes passées.
-    """
-    from sklearn.ensemble import GradientBoostingRegressor
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import mean_absolute_error, r2_score
-
-    if history_df.empty:
-        print("Pas d'historique, fallback sur formule")
-        current_df['target_quantity'] = calculate_formula_based_target(current_df)
-        return current_df, None
-
-    # Agrégation par produit (moyenne des commandes passées)
-    product_patterns = history_df.groupby('product_name').agg({
-        'quantity_ordered': ['mean', 'std', 'count'],
-        'stock_before_order': 'mean',
-        'daily_avg_at_order': 'mean',
-        'coverage_before': 'mean',
-        'oos_rate': 'mean'
-    }).reset_index()
-
-    product_patterns.columns = [
-        'product_name', 'avg_quantity_ordered', 'std_quantity_ordered', 'order_count',
-        'avg_stock_before', 'avg_daily_sales_history', 'avg_coverage_before', 'avg_oos_rate'
-    ]
-
-    # Merge avec données actuelles
-    df_ml = current_df.merge(
-        product_patterns,
-        on='product_name',
-        how='left'
-    )
-
-    # Features
-    feature_cols = [
-        'total_stock',
-        'Average Daily Sales',
-        'Max Daily Sales (Pikine)',
-        'Max Coverage Day',
-        'credit_days',
-        'ADJUSTED_LEADTIME',
-        'Daily OOS Rate (30d)',
-        'avg_quantity_ordered',  # Moyenne historique commandée
-        'avg_coverage_before',  # Couverture historique
-        'order_count'  # Nombre de fois commandé
-    ]
-
-    # Target = moyenne historique de ce qu'on a commandé
-    df_ml['target_quantity'] = df_ml['avg_quantity_ordered'].fillna(0)
-
-    # Filtrer produits avec historique
-    has_history = df_ml['order_count'].notna() & (df_ml['order_count'] > 0)
-    df_train = df_ml[has_history].copy()
-
-    print(f"\nProduits avec historique : {len(df_train)}")
-
-    if len(df_train) < 50:
-        print("Historique insuffisant")
-        df_ml['target_quantity'] = df_ml['target_quantity'].fillna(
-            calculate_formula_based_target(df_ml)
-        )
-        return df_ml, None
-
-    X = df_train[feature_cols].fillna(0)
-    y = df_train['target_quantity']
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-
-    model = GradientBoostingRegressor(
-        n_estimators=200,
-        max_depth=5,
-        learning_rate=0.1,
-        random_state=42
-    )
-
-    model.fit(X_train, y_train)
-
-    y_pred = model.predict(X_test)
-    mae = mean_absolute_error(y_test, y_pred)
-    r2 = r2_score(y_test, y_pred)
-
-    print(f"\n{'=' * 60}")
-    print(f"ML: target_quantity (apprentissage historique RÉEL)")
-    print(f"{'=' * 60}")
-    print(f"  MAE : {mae:.1f} unités")
-    print(f"  R² : {r2:.3f}")
-    print(f"{'=' * 60}\n")
-
-    # Prédictions
-    X_all = df_ml[feature_cols].fillna(0)
-    predictions = model.predict(X_all).clip(lower=0)
-
-    # Pour produits SANS historique, utiliser formule
-    df_ml['target_quantity'] = np.where(
-        has_history,
-        predictions,
-        calculate_formula_based_target(df_ml)
-    )
-
-    return df_ml, model
-
-
-def calculate_formula_based_target(df):
-    """Fallback pour produits sans historique"""
-    return (
-            df['Average Daily Sales'] *
-            (df['ADJUSTED_LEADTIME'] + df['credit_days']) +
-            df['AJUSTER_BUFFER'] * df['Average Daily Sales'] -
-            df['total_stock']
-    ).clip(lower=0)
 
 
 def load_supply_data() -> pd.DataFrame:
@@ -579,13 +329,6 @@ def load_supply_data() -> pd.DataFrame:
         print("'Parametres Replenish' data loaded successfully.")
     except:
         parametres_replenish_df = pd.DataFrame()
-
-    try:
-        supplier_categorization_df = pd.read_csv(SUPPLIER_CATEGORIZATION_URL)
-        print("'Supplier Categorization' data loaded successfully.")
-    except Exception as e:
-        print(f"Error loading 'Supplier Categorization' data: {e}")
-        supplier_categorization_df = pd.DataFrame()
 
 
     # =========================
@@ -765,6 +508,73 @@ def load_supply_data() -> pd.DataFrame:
     print(f"Shape of final_stock_sales_df after merging product category: {final_stock_sales_df.shape}")
 
     # =========================
+    # SUPPLIER CATEGORIZATION → UPDATE PRODUCT CATEGORY
+    # =========================
+    # SUPPLIER_CATEGORIZATION_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQax3ZQW2QhDLE-waDewtdD8x_Q5tpn2FWzVJftr9egik4_JF3s2ytSYJmXh55aUnp79vmF-XtkaTmN/pub?gid=1938047484&single=true&output=csv"
+
+    try:
+        supplier_categorization_df = pd.read_csv(SUPPLIER_CATEGORIZATION_URL)
+        print("'Supplier Categorization' data loaded successfully.")
+    except Exception as e:
+        print(f"Error loading 'Supplier Categorization' data: {e}")
+        supplier_categorization_df = pd.DataFrame()
+
+    supplier_categorization_lookup_df = pd.DataFrame()
+    if not supplier_categorization_df.empty and supplier_categorization_df.shape[1] > 7:
+        supplier_categorization_lookup_df = supplier_categorization_df.iloc[:, [0, 7]].copy()
+        supplier_categorization_lookup_df.columns = ['Supplier_Name_Lookup', 'Supplier_Categorization_Lookup']
+        supplier_categorization_lookup_df['Supplier_Name_Lookup'] = (
+            supplier_categorization_lookup_df['Supplier_Name_Lookup'].astype(str).str.lower().str.strip()
+        )
+    else:
+        print("Warning: 'Supplier Categorization' data does not have enough columns.")
+
+    # Merge
+    if not supplier_categorization_lookup_df.empty and 'Supplier' in final_stock_sales_df.columns:
+        final_stock_sales_df['Supplier'] = final_stock_sales_df['Supplier'].astype(str).str.lower().str.strip()
+
+        if 'Supplier_Categorization_Lookup' in final_stock_sales_df.columns:
+            final_stock_sales_df.drop(columns=['Supplier_Categorization_Lookup'], inplace=True)
+
+        final_stock_sales_df = pd.merge(
+            final_stock_sales_df,
+            supplier_categorization_lookup_df.drop_duplicates(subset=['Supplier_Name_Lookup']),
+            left_on='Supplier',
+            right_on='Supplier_Name_Lookup',
+            how='left'
+        )
+
+        if 'Supplier_Name_Lookup' in final_stock_sales_df.columns:
+            final_stock_sales_df.drop(columns=['Supplier_Name_Lookup'], inplace=True)
+
+        final_stock_sales_df['Supplier_Categorization_Lookup'] = (
+            final_stock_sales_df['Supplier_Categorization_Lookup'].fillna('Unknown')
+        )
+
+        # RÈGLE : Si credit_days > 0 → supplier categorization, sinon ABC-XYZ
+        if all(col in final_stock_sales_df.columns for col in
+               ['credit_days', 'Product Category', 'Supplier_Categorization_Lookup']):
+
+            final_stock_sales_df['credit_days'] = pd.to_numeric(
+                final_stock_sales_df['credit_days'], errors='coerce'
+            ).fillna(0)
+
+            final_stock_sales_df['Product Category'] = final_stock_sales_df.apply(
+                lambda row: row['Supplier_Categorization_Lookup'] if row['credit_days'] > 0 else row[
+                    'Product Category'],
+                axis=1
+            )
+            print("'Product Category' column updated based on supplier categorization and credit_days.")
+        else:
+            print("Warning: Required columns for updating 'Product Category' are missing.")
+
+        # Nettoyer colonne temporaire
+        if 'Supplier_Categorization_Lookup' in final_stock_sales_df.columns:
+            final_stock_sales_df.drop(columns=['Supplier_Categorization_Lookup'], inplace=True)
+    else:
+        print("Warning: Cannot update 'Product Category' - missing data.")
+
+    # =========================
     # ADS 7d / ADS 30d + OOS 7d / OOS 30d - MERGE UNIQUE
     # =========================
     if {"2", "9"}.issubset(Tbh_7dsales_df.columns):
@@ -896,79 +706,72 @@ def load_supply_data() -> pd.DataFrame:
         final_stock_sales_df["credit_days"] = 0
         final_stock_sales_df["Credit_cumulable"] = "Non"
 
-    # =========================
-    # SUPPLIER CATEGORIZATION → UPDATE PRODUCT CATEGORY
-    # =========================
-    supplier_categorization_lookup_df = pd.DataFrame()
-    if not supplier_categorization_df.empty and supplier_categorization_df.shape[1] > 7:
-        supplier_categorization_lookup_df = supplier_categorization_df.iloc[:, [0, 7]].copy()
-        supplier_categorization_lookup_df.columns = ['Supplier_Name_Lookup', 'Supplier_Categorization']
-        supplier_categorization_lookup_df['Supplier_Name_Lookup'] = (
-            supplier_categorization_lookup_df['Supplier_Name_Lookup'].astype(str).str.lower().str.strip()
-        )
-        supplier_categorization_lookup_df = supplier_categorization_lookup_df.drop_duplicates(
-            subset=['Supplier_Name_Lookup']
-        )
-        print(f"Supplier categorization loaded: {len(supplier_categorization_lookup_df)} suppliers")
-    else:
-        print("Warning: Supplier categorization data incomplete")
+        # =========================
+        # SUPPLIER CATEGORIZATION → UPDATE PRODUCT CATEGORY
+        # =========================
+        # SUPPLIER_CATEGORIZATION_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQax3ZQW2QhDLE-waDewtdD8x_Q5tpn2FWzVJftr9egik4_JF3s2ytSYJmXh55aUnp79vmF-XtkaTmN/pub?gid=1938047484&single=true&output=csv"
 
-    # Merge comme NOUVELLE colonne
-    if not supplier_categorization_lookup_df.empty and 'Supplier' in final_stock_sales_df.columns:
-        final_stock_sales_df['Supplier'] = final_stock_sales_df['Supplier'].astype(str).str.lower().str.strip()
+        try:
+            supplier_categorization_df = pd.read_csv(SUPPLIER_CATEGORIZATION_URL)
+            print("'Supplier Categorization' data loaded successfully.")
+        except Exception as e:
+            print(f"Error loading 'Supplier Categorization' data: {e}")
+            supplier_categorization_df = pd.DataFrame()
 
-        final_stock_sales_df = pd.merge(
-            final_stock_sales_df,
-            supplier_categorization_lookup_df,
-            left_on='Supplier',
-            right_on='Supplier_Name_Lookup',
-            how='left'
-        )
+        supplier_categorization_lookup_df = pd.DataFrame()
+        if not supplier_categorization_df.empty and supplier_categorization_df.shape[1] > 7:
+            supplier_categorization_lookup_df = supplier_categorization_df.iloc[:, [0, 7]].copy()
+            supplier_categorization_lookup_df.columns = ['Supplier_Name_Lookup', 'Supplier_Categorization_Lookup']
+            supplier_categorization_lookup_df['Supplier_Name_Lookup'] = (
+                supplier_categorization_lookup_df['Supplier_Name_Lookup'].astype(str).str.lower().str.strip()
+            )
+        else:
+            print("Warning: 'Supplier Categorization' data does not have enough columns.")
 
-        if 'Supplier_Name_Lookup' in final_stock_sales_df.columns:
-            final_stock_sales_df.drop(columns=['Supplier_Name_Lookup'], inplace=True)
+        # Merge
+        if not supplier_categorization_lookup_df.empty and 'Supplier' in final_stock_sales_df.columns:
+            final_stock_sales_df['Supplier'] = final_stock_sales_df['Supplier'].astype(str).str.lower().str.strip()
 
-        final_stock_sales_df['Supplier_Categorization'] = (
-            final_stock_sales_df['Supplier_Categorization'].fillna('Not Categorized')
-        )
+            if 'Supplier_Categorization_Lookup' in final_stock_sales_df.columns:
+                final_stock_sales_df.drop(columns=['Supplier_Categorization_Lookup'], inplace=True)
 
-        print(f"✅ Supplier_Categorization ajoutée comme colonne séparée")
+            final_stock_sales_df = pd.merge(
+                final_stock_sales_df,
+                supplier_categorization_lookup_df.drop_duplicates(subset=['Supplier_Name_Lookup']),
+                left_on='Supplier',
+                right_on='Supplier_Name_Lookup',
+                how='left'
+            )
 
-    # ✅ RÈGLE UNIQUE : Si credit_days > 0, utiliser supplier categorization, sinon garder ABC-XYZ
-    if all(col in final_stock_sales_df.columns for col in
-           ['credit_days', 'Product Category', 'Supplier_Categorization']):
+            if 'Supplier_Name_Lookup' in final_stock_sales_df.columns:
+                final_stock_sales_df.drop(columns=['Supplier_Name_Lookup'], inplace=True)
 
-        final_stock_sales_df['credit_days'] = pd.to_numeric(
-            final_stock_sales_df['credit_days'], errors='coerce'
-        ).fillna(0)
+            final_stock_sales_df['Supplier_Categorization_Lookup'] = (
+                final_stock_sales_df['Supplier_Categorization_Lookup'].fillna('Unknown')
+            )
 
-        # Sauvegarder l'originale ABC-XYZ
-        final_stock_sales_df['_Product_Category_ABC_XYZ'] = final_stock_sales_df['Product Category']
+            # RÈGLE : Si credit_days > 0 → supplier categorization, sinon ABC-XYZ
+            if all(col in final_stock_sales_df.columns for col in
+                   ['credit_days', 'Product Category', 'Supplier_Categorization_Lookup']):
 
-        # Appliquer la règle simple
-        final_stock_sales_df['Product Category'] = final_stock_sales_df.apply(
-            lambda row: row['Supplier_Categorization'] if row['credit_days'] > 0 else row['Product Category'],
-            axis=1
-        )
+                final_stock_sales_df['credit_days'] = pd.to_numeric(
+                    final_stock_sales_df['credit_days'], errors='coerce'
+                ).fillna(0)
 
-        # Statistiques
-        modified_count = (
-                final_stock_sales_df['_Product_Category_ABC_XYZ'] !=
-                final_stock_sales_df['Product Category']
-        ).sum()
+                final_stock_sales_df['Product Category'] = final_stock_sales_df.apply(
+                    lambda row: row['Supplier_Categorization_Lookup'] if row['credit_days'] > 0 else row[
+                        'Product Category'],
+                    axis=1
+                )
+                print("'Product Category' column updated based on supplier categorization and credit_days.")
+            else:
+                print("Warning: Required columns for updating 'Product Category' are missing.")
 
-        print(f"\n✅ Product Category mise à jour :")
-        print(f"   - Produits modifiés (credit_days > 0) : {modified_count}")
-        print(
-            f"   - Distribution finale : {final_stock_sales_df['Product Category'].value_counts().head(10).to_dict()}")
-
-        # Renommer pour masquer dans l'UI
-        final_stock_sales_df.rename(columns={
-            'Supplier_Categorization': '_Supplier_Categorization'
-        }, inplace=True)
-
-    else:
-        print("Warning: Colonnes nécessaires manquantes pour catégorisation")
+            # Nettoyer colonne temporaire
+            if 'Supplier_Categorization_Lookup' in final_stock_sales_df.columns:
+                final_stock_sales_df.drop(columns=['Supplier_Categorization_Lookup'], inplace=True)
+        else:
+            print("Warning: Cannot update 'Product Category' - missing data.")
     # =========================
     # Parametres Replenish (Buffer lookup) - APRÈS update Product Category
     # =========================
@@ -1121,21 +924,17 @@ def load_supply_data() -> pd.DataFrame:
     )
 
     # =========================
-    # ML: target_quantity (historique réel)
+    # Calcul target_quantity (formule simple)
     # =========================
-    print("\nChargement historique de commandes...")
-    order_history = load_and_prepare_order_history()
-
-    print("\nEntraînement modèle ML sur historique réel...")
-    final_stock_sales_df, tq_model = train_from_real_order_history(
-        final_stock_sales_df,
-        order_history
+    final_stock_sales_df['target_quantity'] = np.maximum(
+        0,
+        final_stock_sales_df['Average Daily Sales'] *
+        (final_stock_sales_df['ADJUSTED_LEADTIME'] + final_stock_sales_df['credit_days']) +
+        final_stock_sales_df['AJUSTER_BUFFER'] * final_stock_sales_df['Average Daily Sales'] -
+        final_stock_sales_df['total_stock']
     )
 
-    if 'target_quantity' in final_stock_sales_df.columns:
-        print(f"  Moyenne : {final_stock_sales_df['target_quantity'].mean():.0f}")
-        print(f"  Médiane : {final_stock_sales_df['target_quantity'].median():.0f}")
-
+    print(f"✅ target_quantity calculée (formule métier)")
 
         # Ajusted_total_need
 
@@ -2018,7 +1817,8 @@ def page_overview(master_df: pd.DataFrame = None):
         "Max Daily Sales (Pikine)",
         "optimal stock",
         "Ajusted_total_need",
-        "target_quantity",
+        "QAC",
+        #"target_quantity",
         "Max Coverage Day",
         "Product Category",
         "credit_days",
@@ -2087,9 +1887,21 @@ def page_overview(master_df: pd.DataFrame = None):
         "Predicted Stockout",
         "replenishment_period",
         "Predicted Order Quantity",
-        "purchase_need"
+        "purchase_need",
+        "target_quantity"
     ]
-    available_cols = [c for c in available_cols if c not in cols_to_hide and not c.startswith('_')]
+    extra_cols = [c for c in extra_cols if c not in cols_to_hide and not c.startswith('_')]
+
+    # Ordre final
+    available_cols = available_priority + extra_cols
+
+    # Vérifier que Product Category est bien présente
+    if "Product Category" not in df.columns:
+        print("⚠️ WARNING: Product Category manquante dans le DataFrame")
+    else:
+        print(f"✅ Product Category présente avec {df['Product Category'].nunique()} valeurs uniques")
+
+
     df["📝 Notes"] = "💬"  # Emoji cliquable
 
     # Tableau principal

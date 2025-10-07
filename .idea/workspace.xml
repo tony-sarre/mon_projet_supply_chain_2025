@@ -76,14 +76,6 @@
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
     </task>
-    <task id="LOCAL-00027" summary="Fix: rename procfile to Procfile">
-      <option name="closed" value="true" />
-      <created>1759113675473</created>
-      <option name="number" value="00027" />
-      <option name="presentableId" value="LOCAL-00027" />
-      <option name="project" value="LOCAL" />
-      <updated>1759113675473</updated>
-    </task>
     <task id="LOCAL-00028" summary="Fix: rename procfile to Procfile">
       <option name="closed" value="true" />
       <created>1759114245811</created>
@@ -468,7 +460,15 @@
       <option name="project" value="LOCAL" />
       <updated>1759720712108</updated>
     </task>
-    <option name="localTasksCounter" value="76" />
+    <task id="LOCAL-00076" summary="Merge remote-tracking branch 'origin/main'">
+      <option name="closed" value="true" />
+      <created>1759786077144</created>
+      <option name="number" value="00076" />
+      <option name="presentableId" value="LOCAL-00076" />
+      <option name="project" value="LOCAL" />
+      <updated>1759786077144</updated>
+    </task>
+    <option name="localTasksCounter" value="77" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">

@@ -129,11 +129,11 @@ def send_notification_email(to_email: str, to_name: str, product_name: str, auth
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.send_message(msg)
 
-        print(f"✅ Email envoyé à {to_email}")
+        print(f" Email envoyé à {to_email}")
         return True
 
     except Exception as e:
-        print(f"❌ Erreur envoi email: {e}")
+        print(f" Erreur envoi email: {e}")
         return False
 
 def _get_logo_data_uri():
@@ -164,16 +164,16 @@ def get_logo_for_reportlab():
             try:
                 b64 = LOGO_DATA_URI.split(",", 1)[1] if LOGO_DATA_URI.startswith("data:") else LOGO_DATA_URI
                 raw = base64.b64decode(b64)
-                print(f"✅ Logo loaded from base64 ({len(raw)} bytes)")
+                print(f" Logo loaded from base64 ({len(raw)} bytes)")
                 return ImageReader(io.BytesIO(raw))
             except Exception as e:
-                print(f"⚠️ Base64 logo decode failed: {e}")
+                print(f" Base64 logo decode failed: {e}")
 
-        print("⚠️ No logo available, continuing without")
+        print(" No logo available, continuing without")
         return None
 
     except Exception as e:
-        print(f"❌ Logo loading error: {e}")
+        print(f" Logo loading error: {e}")
         return None
 
 # ------------------------------ PO Numbering -------------------------------------
@@ -265,6 +265,214 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
+def calculate_formula_based_target(df):
+    """
+    Formule de fallback pour produits sans historique de ventes.
+    Calcule target_quantity basée sur la demande projetée.
+    """
+    # Gérer les colonnes qui peuvent ne pas exister
+    ads = df.get('Average Daily Sales', pd.Series(0, index=df.index))
+    leadtime = df.get('ADJUSTED_LEADTIME', pd.Series(7, index=df.index))
+    credit = df.get('credit_days', pd.Series(14, index=df.index))
+    buffer = df.get('AJUSTER_BUFFER', pd.Series(0, index=df.index))
+    stock = df.get('total_stock', pd.Series(0, index=df.index))
+
+    # Formule : demande × période + buffer - stock
+    target = (
+            ads * (leadtime + credit) +
+            buffer * ads -
+            stock
+    )
+
+    return np.maximum(0, target)
+def load_sales_history():
+    """Charge et nettoie l'historique des ventes Pikine."""
+    SALES_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=1493123930&single=true&output=csv"
+
+    try:
+        # Lire à partir de la ligne 2 (skiprows=1)
+        sales_df = pd.read_csv(SALES_URL, skiprows=1)
+
+        print(f"\nHistorique ventes brut : {len(sales_df)} lignes")
+        print(f"Colonnes : {sales_df.columns.tolist()[:5]}")
+
+        # Extraire colonnes pertinentes (indices 0, 1, 2)
+        sales_clean = sales_df.iloc[:, [0, 1, 2]].copy()
+        sales_clean.columns = ['date', 'product_name', 'quantity_sold']
+
+        # Nettoyer
+        sales_clean['date'] = pd.to_datetime(sales_clean['date'], errors='coerce')
+        sales_clean['product_name'] = sales_clean['product_name'].astype(str).str.lower().str.strip()
+        sales_clean['quantity_sold'] = pd.to_numeric(sales_clean['quantity_sold'], errors='coerce')
+
+        # Filtrer données valides
+        sales_clean = sales_clean[
+            (sales_clean['date'].notna()) &
+            (sales_clean['product_name'].notna()) &
+            (sales_clean['quantity_sold'].notna()) &
+            (sales_clean['quantity_sold'] > 0)
+            ].copy()
+
+        print(f"✅ Ventes valides : {len(sales_clean)} lignes")
+        print(f"   Période : {sales_clean['date'].min()} à {sales_clean['date'].max()}")
+        print(f"   Produits uniques : {sales_clean['product_name'].nunique()}")
+
+        return sales_clean
+
+    except Exception as e:
+        print(f"❌ Erreur chargement ventes : {e}")
+        return pd.DataFrame()
+
+
+def create_supervised_target_from_sales(sales_history_df: pd.DataFrame, current_df: pd.DataFrame) -> tuple:
+    """
+    Entraîne un modèle supervisé basé sur l'historique réel des ventes.
+    """
+    from sklearn.ensemble import GradientBoostingRegressor
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import mean_absolute_error, r2_score
+
+    if sales_history_df.empty:
+        print("Pas d'historique ventes")
+        current_df['target_quantity'] = calculate_formula_based_target(current_df)
+        return current_df, None
+
+    # =========================
+    # Agrégation ventes par produit
+    # =========================
+    max_date = sales_history_df['date'].max()
+
+    # Statistiques globales
+    sales_stats = sales_history_df.groupby('product_name').agg({
+        'quantity_sold': ['sum', 'mean', 'std', 'max', 'count']
+    }).reset_index()
+
+    sales_stats.columns = [
+        'product_name', 'total_sold_30d', 'avg_daily_sold',
+        'std_sold', 'max_daily_sold', 'days_with_sales'
+    ]
+
+    # Calculer trend (15 derniers jours vs 15 précédents)
+    cutoff = max_date - pd.Timedelta(days=15)
+    recent = sales_history_df[sales_history_df['date'] >= cutoff]
+    previous = sales_history_df[sales_history_df['date'] < cutoff]
+
+    recent_avg = recent.groupby('product_name')['quantity_sold'].mean()
+    previous_avg = previous.groupby('product_name')['quantity_sold'].mean()
+
+    trend = (recent_avg / previous_avg).fillna(1.0).clip(0.5, 2.0)  # Limiter variations extrêmes
+    sales_stats['trend_factor'] = sales_stats['product_name'].map(trend).fillna(1.0)
+
+    print(f"\n📊 Statistiques ventes :")
+    print(f"   Produits avec ventes : {len(sales_stats)}")
+    print(f"   Ventes totales 30j : {sales_stats['total_sold_30d'].sum():.0f} unités")
+
+    # =========================
+    # Merge avec données actuelles
+    # =========================
+    df_ml = current_df.merge(sales_stats, on='product_name', how='left')
+
+    # Features
+    feature_cols = [
+        'total_stock',
+        'credit_days',
+        'ADJUSTED_LEADTIME',
+        'AJUSTER_BUFFER',
+        'Daily OOS Rate (30d)',
+        'avg_daily_sold',  # ← Ventes réelles historiques
+        'std_sold',  # ← Volatilité
+        'max_daily_sold',  # ← Pic
+        'trend_factor',  # ← Tendance récente
+        'days_with_sales'  # ← Fréquence vente
+    ]
+
+    # =========================
+    # TARGET : Quantité optimale basée sur ventes réelles
+    # =========================
+    df_ml['replenishment_period'] = df_ml['ADJUSTED_LEADTIME'] + df_ml['credit_days']
+
+    # Demande projetée = ventes moyennes × trend × période
+    df_ml['projected_demand'] = (
+            df_ml['avg_daily_sold'] *
+            df_ml['trend_factor'] *
+            df_ml['replenishment_period']
+    )
+
+    # Buffer sécurité = volatilité × période
+    df_ml['safety_stock'] = df_ml['std_sold'] * np.sqrt(df_ml['replenishment_period'])
+
+    # Target = demande + sécurité - stock actuel
+    df_ml['target_supervised'] = np.maximum(
+        0,
+        df_ml['projected_demand'] + df_ml['safety_stock'] - df_ml['total_stock']
+    )
+
+    # =========================
+    # Entraînement ML
+    # =========================
+    has_history = df_ml['avg_daily_sold'].notna()
+    df_train = df_ml[has_history & df_ml[feature_cols].notna().all(axis=1)].copy()
+
+    if len(df_train) < 50:
+        print(f"Échantillons insuffisants ({len(df_train)}), utilisation target calculée")
+        df_ml['target_quantity'] = df_ml['target_supervised'].fillna(
+            calculate_formula_based_target(df_ml)
+        )
+        return df_ml, None
+
+    X = df_train[feature_cols].fillna(0)
+    y = df_train['target_supervised']
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+
+    model = GradientBoostingRegressor(
+        n_estimators=200,
+        max_depth=5,
+        learning_rate=0.1,
+        subsample=0.8,
+        random_state=42
+    )
+
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+    mae = mean_absolute_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+
+    print(f"\n{'=' * 60}")
+    print(f"ML SUPERVISÉ - Ventes historiques RÉELLES")
+    print(f"{'=' * 60}")
+    print(f"  Produits entraînés : {len(df_train)}")
+    print(f"  MAE (test) : {mae:.1f} unités")
+    print(f"  R² score : {r2:.3f}")
+
+    importance = sorted(
+        zip(feature_cols, model.feature_importances_),
+        key=lambda x: x[1], reverse=True
+    )[:5]
+    print(f"  Top features :")
+    for feat, imp in importance:
+        print(f"    - {feat}: {imp:.3f}")
+    print(f"{'=' * 60}\n")
+
+    # Prédictions
+    X_all = df_ml[feature_cols].fillna(0)
+    predictions = model.predict(X_all)
+
+    # Produits avec historique : prédiction ML
+    # Clipper les prédictions
+    predictions_clipped = np.maximum(predictions, 0)
+
+    # Appliquer selon historique
+    df_ml['target_quantity'] = np.where(
+        has_history,
+        predictions_clipped,  # ✅
+        calculate_formula_based_target(df_ml)
+    )
+
+    return df_ml, model
 
 
 def load_supply_data() -> pd.DataFrame:
@@ -926,15 +1134,39 @@ def load_supply_data() -> pd.DataFrame:
     # =========================
     # Calcul target_quantity (formule simple)
     # =========================
-    final_stock_sales_df['target_quantity'] = np.maximum(
-        0,
-        final_stock_sales_df['Average Daily Sales'] *
-        (final_stock_sales_df['ADJUSTED_LEADTIME'] + final_stock_sales_df['credit_days']) +
-        final_stock_sales_df['AJUSTER_BUFFER'] * final_stock_sales_df['Average Daily Sales'] -
-        final_stock_sales_df['total_stock']
-    )
+    #final_stock_sales_df['target_quantity'] = np.maximum(
+     #   0,
+      ##  final_stock_sales_df['Average Daily Sales'] *
+        #(final_stock_sales_df['ADJUSTED_LEADTIME'] + final_stock_sales_df['credit_days']) +
+        #final_stock_sales_df['AJUSTER_BUFFER'] * final_stock_sales_df['Average Daily Sales'] -
+        #final_stock_sales_df['total_stock']
+    #)
 
-    print(f"✅ target_quantity calculée (formule métier)")
+    #print(f"✅ target_quantity calculée (formule métier)")
+
+    # =========================
+    # ML SUPERVISÉ avec ventes historiques
+    # =========================
+    print("\nChargement ventes historiques Pikine...")
+    sales_history = load_sales_history()
+
+    if not sales_history.empty:
+        print("Entraînement modèle supervisé...")
+        final_stock_sales_df, ml_model = create_supervised_target_from_sales(
+            sales_history,
+            final_stock_sales_df
+        )
+    else:
+        print("Pas d'historique, utilisation formule")
+        final_stock_sales_df['target_quantity'] = calculate_formula_based_target(
+            final_stock_sales_df
+        )
+
+    if 'target_quantity' in final_stock_sales_df.columns:
+        print(f"✅ target_quantity finalisée :")
+        print(f"   Moyenne : {final_stock_sales_df['target_quantity'].mean():.0f}")
+        print(f"   Médiane : {final_stock_sales_df['target_quantity'].median():.0f}")
+
 
         # Ajusted_total_need
 
@@ -1818,7 +2050,7 @@ def page_overview(master_df: pd.DataFrame = None):
         "optimal stock",
         "Ajusted_total_need",
         "QAC",
-        #"target_quantity",
+        "target_quantity",
         "Max Coverage Day",
         "Product Category",
         "credit_days",
@@ -1888,7 +2120,15 @@ def page_overview(master_df: pd.DataFrame = None):
         "replenishment_period",
         "Predicted Order Quantity",
         "purchase_need",
-        "target_quantity"
+        "total_sold_30d",
+        "avg_daily_sold",
+        "std_sold",
+        "max_daily_sold",
+        "days_with_sales",
+        "trend_factor",
+        "projected_demand",
+        "safety_stock",
+        "target_supervised"
     ]
     extra_cols = [c for c in extra_cols if c not in cols_to_hide and not c.startswith('_')]
 
@@ -1926,7 +2166,7 @@ def page_overview(master_df: pd.DataFrame = None):
                       "fontWeight": "700", "textAlign": "center"},
         style_cell={"backgroundColor": "#0b1220", "color": "#e5e7eb",
                     "border": "1px solid #1f2937", "fontSize": 11,
-                    "textAlign": "left", "padding": "6px"},
+                    "textAlign": "center", "padding": "6px"},
         style_data_conditional=[
             {"if": {"filter_query": "{Ajusted_total_need} = 'ORDER NOW'"},
              "backgroundColor": "rgba(239,68,68,.2)", "color": "#fee2e2"},
@@ -2217,40 +2457,103 @@ def update_analytics_scatter(supplier_value, category_value):
     )
     return fig
 
+
 def page_predictive(master_df: pd.DataFrame = None):
     df = master_df if master_df is not None else get_df_cached()
 
+    # ✅ Virgule manquante corrigée
     cols_to_keep = [
-        "product_name", "Supplier", "Product Category",
-        "total_stock", "Average Daily Sales",
-        "Predicted Stockout", "Predicted Order Quantity",
-        "purchase_need", "QAC", "Ajusted_total_need",
-        "ADJUSTED_LEADTIME", "Max Coverage Day"
+        "product_id",
+        "product_name",
+        "Supplier",
+        "total_stock",
+        "Average Daily Sales",
+        "Max Daily Sales (Pikine)",
+        "target_quantity",
+        "Product Category",
+        "total_sold_30d",
+        "avg_daily_sold",
+        "std_sold",
+        "max_daily_sold",
+        "days_with_sales",
+        "trend_factor",
+        "projected_demand",
+        "safety_stock",
+        "target_supervised"
     ]
     cols_to_keep = [c for c in cols_to_keep if c in df.columns]
     pred_df = df[cols_to_keep].copy()
 
-    # KPI : % de stockout prédits
-    if "Predicted Stockout" in pred_df.columns:
-        stockout_rate = pred_df["Predicted Stockout"].mean() * 100
+    # ✅ Calcul stockout_rate corrigé (basé sur données ML)
+    if 'avg_daily_sold' in pred_df.columns and 'total_stock' in pred_df.columns:
+        # Produits avec historique ML
+        pred_df_ml = pred_df[pred_df['avg_daily_sold'].notna()].copy()
+
+        if len(pred_df_ml) > 0:
+            # Calculer couverture en jours
+            pred_df_ml['coverage_days'] = np.where(
+                pred_df_ml['avg_daily_sold'] > 0,
+                pred_df_ml['total_stock'] / pred_df_ml['avg_daily_sold'],
+                999
+            )
+
+            # Période de réapprovisionnement (leadtime + credit)
+            #replenishment = pred_df_ml.get('ADJUSTED_LEADTIME', 7).fillna(7) + pred_df_ml.get('credit_days', 14).fillna(
+             #   14)
+            replenishment = pred_df_ml.get('ADJUSTED_LEADTIME', 7) + pred_df_ml.get('credit_days', 14)
+
+            # Risque si couverture < période réapprovisionnement
+            at_risk = (pred_df_ml['coverage_days'] < replenishment).sum()
+            stockout_rate = (at_risk / len(pred_df_ml)) * 100
+
+            print(f"📊 Stockout analysis : {at_risk}/{len(pred_df_ml)} produits à risque")
+        else:
+            stockout_rate = 0.0
     else:
-        stockout_rate = 0
+        stockout_rate = 0.0
+
+    # Avant de créer le graphique
+    available_hover = []
+    for col in ["Supplier", "total_stock", "avg_daily_sold", "projected_demand"]:
+        if col in pred_df.columns:
+            available_hover.append(col)
+
+    # ✅ Filtrer pour graphique (uniquement produits avec target > 0)
+    pred_df_chart = pred_df[
+        pred_df['target_quantity'] > 0].copy() if 'target_quantity' in pred_df.columns else pred_df.copy()
 
     fig_bar = px.bar(
-        pred_df.sort_values("Predicted Order Quantity", ascending=False).head(20),
+        pred_df_chart.sort_values("target_quantity", ascending=False).head(20),
         x="product_name",
-        y="Predicted Order Quantity",
-        color="Ajusted_total_need",
-        hover_data=["Supplier", "QAC", "purchase_need"],
-        labels={"Predicted Order Quantity": "Qté de commande prédite"},
-        title="Top 20 produits par besoin de commande"
+        y="target_quantity",
+        color="Product Category",
+        hover_data=available_hover,
+        title="Top 20 produits par besoin de commande",
+        labels={"target_quantity": "Quantité à commander", "product_name": "Produit"}
+    )
+
+    # Style du graphique
+    fig_bar.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb"),
+        xaxis=dict(tickangle=-45)
     )
 
     return html.Div(className="content", children=[
         dbc.Row([
-            dbc.Col(html.H2("Prédictions"), md=8),
-            dbc.Col(html.H5(f"Taux de stockout prédit : {stockout_rate:.1f}%", style={"textAlign": "right"}), md=4),
-        ]),
+            dbc.Col(html.H3(" Prédictions ", className="page-title"), md=8),
+            dbc.Col(
+                dbc.Badge(
+                    f"Stockout prédit : {stockout_rate:.1f}%",
+                    color="danger" if stockout_rate > 15 else "warning" if stockout_rate > 5 else "success",
+                    className="ms-auto",
+                    style={"fontSize": "14px", "padding": "8px 15px"}
+                ),
+                md=4,
+                style={"display": "flex", "justifyContent": "flex-end", "alignItems": "center"}
+            )
+        ], className="mb-4"),
         html.Br(),
         html.Div(className="soft-card", children=[
             dcc.Graph(figure=fig_bar, id="predictive-bar")
@@ -2262,10 +2565,29 @@ def page_predictive(master_df: pd.DataFrame = None):
             data=pred_df.to_dict("records"),
             page_size=15,
             filter_action="native",
-            sort_action="native", sort_mode="multi",
+            sort_action="native",
+            sort_mode="multi",
             style_table={"overflowX": "auto"},
-            style_header={"backgroundColor": "#0f1625", "border": "1px solid #1f2937", "fontWeight": "700"},
-            style_cell={"backgroundColor": "#0b1220", "color": "#e5e7eb", "border": "1px solid #1f2937", "fontSize": 12},
+            style_header={
+                "backgroundColor": "#0f1625",
+                "border": "1px solid #1f2937",
+                "fontWeight": "700",
+                "textAlign": "center"
+            },
+            style_cell={
+                "backgroundColor": "#0b1220",
+                "color": "#e5e7eb",
+                "border": "1px solid #1f2937",
+                "fontSize": 12,
+                "textAlign": "center"
+            },
+            style_data_conditional=[
+                {
+                    "if": {"column_id": "target_quantity"},
+                    "fontWeight": "bold",
+                    "color": "#10b981"
+                }
+            ]
         )
     ])
 
@@ -2280,9 +2602,17 @@ def page_predictive(master_df: pd.DataFrame = None):
 def update_predictive_bar(supplier_value, category_value):
     df = get_df_cached()
 
-    cols = ["product_name", "Supplier", "Product Category",
-            "Predicted Stockout", "Predicted Order Quantity",
-            "purchase_need", "QAC", "Ajusted_total_need"]
+    # ✅ Colonnes mises à jour (retirer celles qui n'existent plus)
+    cols = [
+        "product_name",
+        "Supplier",
+        "Product Category",
+        "target_quantity",
+        "Ajusted_total_need",
+        "total_stock",
+        "avg_daily_sold",
+        "projected_demand"
+    ]
     df = df[[c for c in cols if c in df.columns]].copy()
 
     # Filtres
@@ -2291,15 +2621,30 @@ def update_predictive_bar(supplier_value, category_value):
     if category_value and category_value != "Toutes":
         df = df[df["Product Category"] == category_value]
 
+    # ✅ Hover_data avec colonnes existantes
+    available_hover = []
+    for col in ["Supplier", "total_stock", "avg_daily_sold", "projected_demand"]:
+        if col in df.columns:
+            available_hover.append(col)
+
     fig = px.bar(
-        df.sort_values("Predicted Order Quantity", ascending=False).head(20),
+        df.sort_values("target_quantity", ascending=False).head(20),
         x="product_name",
-        y="Predicted Order Quantity",
+        y="target_quantity",
         color="Ajusted_total_need",
-        hover_data=["Supplier", "QAC", "purchase_need"],
-        labels={"Predicted Order Quantity": "Qté de commande prédite"},
+        hover_data=available_hover,  # ✅ Colonnes valides
+        labels={"target_quantity": "Qté de commande prédite"},
         title="Top 20 produits par besoin de commande"
     )
+
+    # Style cohérent avec le reste de l'app
+    fig.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb"),
+        xaxis=dict(tickangle=-45)
+    )
+
     return fig
 
 
@@ -2313,11 +2658,26 @@ def update_predictive_bar(supplier_value, category_value):
 def update_predictive_table(supplier_value, category_value):
     df = get_df_cached()
 
-    cols = ["product_name", "Supplier", "Product Category",
-            "total_stock", "Average Daily Sales",
-            "Predicted Stockout", "Predicted Order Quantity",
-            "purchase_need", "QAC", "Ajusted_total_need",
-            "ADJUSTED_LEADTIME", "Max Coverage Day"]
+    # ✅ Colonnes ML prédictives
+    cols = [
+        "product_id",
+        "product_name",
+        "Supplier",
+        "total_stock",
+        "Average Daily Sales",
+        "Max Daily Sales (Pikine)",
+        "target_quantity",
+        "Product Category",
+        "total_sold_30d",
+        "avg_daily_sold",
+        "std_sold",
+        "max_daily_sold",
+        "days_with_sales",
+        "trend_factor",
+        "projected_demand",
+        "safety_stock",
+        "target_supervised"
+    ]
     df = df[[c for c in cols if c in df.columns]].copy()
 
     # Filtres
@@ -2328,15 +2688,28 @@ def update_predictive_table(supplier_value, category_value):
 
     return df.to_dict("records")
 
+
 def page_about():
     return html.Div(className="content", children=[
-        html.H2("About"),
+        html.H2("À propos", className="page-title"),
         html.Div(className="soft-card", children=[
-            html.H4(APP_BRAND),
-            html.P("Plateforme premium de pilotage Supply Chain : visibilité temps quasi-réel des stocks, risques de rupture, analyses graphiques, et recommandations d’approvisionnement."),
-            html.Hr(),
-            html.H5("Auteur"),
-            html.P(f"{AUTHOR} — Data Scientist / Ph.D / Supply Chain — Dashboard construit avec Dash/Plotly, stylé via Bootstrap (thème {THEME.rsplit('.',1)[-1]}) et CSS custom."),
+            html.H4(APP_BRAND, style={"color": "#10b981", "marginBottom": "15px"}),
+            html.P(
+                "Plateforme premium de pilotage Supply Chain : visibilité temps quasi-réel des stocks, "
+                "risques de rupture, analyses graphiques, et recommandations d'approvisionnement optimisées par ML.",
+                style={"lineHeight": "1.6"}
+            ),
+            html.Hr(style={"borderColor": "#1f2937"}),
+            html.H5("Auteur", style={"color": "#e5e7eb", "marginTop": "20px"}),
+            html.P(
+                f"{AUTHOR} — Data Scientist / Ph.D / Supply Chain Analytics",
+                style={"marginBottom": "10px"}
+            ),
+            html.P(
+                f"Dashboard construit avec Dash/Plotly, stylé via Bootstrap (thème {THEME.rsplit('.', 1)[-1]}) "
+                "et CSS custom. Modèle ML supervisé basé sur Gradient Boosting (R²=0.73).",
+                style={"fontSize": "14px", "color": "#9ca3af"}
+            ),
         ])
     ])
 

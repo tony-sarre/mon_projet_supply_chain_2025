@@ -46,3 +46,96 @@
     color: #10b981 !important;
     font-weight: bold !important;
 }
+
+
+/* ====== App wrapper ====== */
+#app-body {
+  display: block;          /* Sidebar en position fixed */
+  width: 100%;
+  overflow-x: hidden;      /* pas d'overflow horizontal global */
+  box-sizing: border-box;
+}
+
+/* ====== Sidebar à gauche ====== */
+.sidebar {
+  width: 280px;            /* ← adapte ici si besoin */
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+/* ====== Zone de contenu à droite ====== */
+#page-content {
+  margin-left: 280px;                    /* ← même largeur que .sidebar */
+  width: calc(100% - 280px);             /* ← idem */
+  min-width: 0;                          /* 🔑 autorise le shrink */
+  overflow-x: hidden;                    /* coupe tout débordement horizontal */
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+/* Pages (overview/predictive/promotions) */
+.content,
+.promotions-page {
+  max-width: 100%;
+  min-width: 0;                          /* 🔑 crucial */
+  overflow-x: hidden;
+}
+
+/* Cartes/KPIs/sections : jamais au-delà du parent */
+.soft-card, .kpi-card {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* KPIs responsives (wrap si écran étroit) */
+.kpi-row {
+  display: flex;
+  flex-wrap: wrap;       /* 🔑 permet retour à la ligne */
+  gap: 12px;
+}
+.kpi-row > .col, .kpi-row > [class^="col-"] {
+  min-width: 0;
+  flex: 1 1 220px;       /* largeur min pour éviter le débordement */
+}
+
+/* Graphs Plotly fluides */
+.promotions-page .js-plotly-plot,
+.promotions-page .dash-graph {
+  width: 100% !important;
+  max-width: 100%;
+}
+
+/* DataTable : conteneur scrollable horizontal et largeur fluide */
+.promotions-page .dash-table-container {
+  width: 100%;
+  max-width: 100%;
+}
+.promotions-page .dash-table-container .row {
+  margin: 0 !important;  /* évite marges Bootstrap parasites */
+}
+
+/* Media-query : sidebar plus étroit si écran petit (optionnel) */
+@media (max-width: 1200px) {
+  .sidebar { width: 240px; }
+  #page-content { margin-left: 240px; width: calc(100% - 240px); }
+}
+@media (max-width: 992px) {
+  .sidebar { width: 220px; }
+  #page-content { margin-left: 220px; width: calc(100% - 220px); }
+}
+@media (max-width: 768px) {
+  .sidebar { position: static; width: 100%; height: auto; }
+  #page-content { margin-left: 0; width: 100%; }
+}
+/* Taille compacte commune */
+.kpi-card .card-subtitle { font-size: 11px; }
+.kpi-card .card-value { font-size: 20px; }
+
+/* Marges adoucies */
+.section-title { font-size: 14px; margin: 8px 0; }
+.page-title { font-size: 20px; margin-bottom: 8px; }

@@ -475,6 +475,247 @@ def create_supervised_target_from_sales(sales_history_df: pd.DataFrame, current_
     return df_ml, model
 
 
+def load_and_analyze_promotions():
+    """
+    Charge l'historique des promotions et analyse leur statut actuel.
+    """
+    PROMO_URL = "https://data.heroku.com/dataclips/uetqonheumawnovajgbuxrirklmg.csv"
+
+    try:
+        promo_df = pd.read_csv(PROMO_URL)
+        print(f"\n Promotions chargées : {len(promo_df)} lignes")
+
+        # ✅ Renommer 'name' → 'product_name'
+        promo_df.rename(columns={'name': 'product_name'}, inplace=True)
+
+        # Nettoyer
+        promo_df['product_name'] = promo_df['product_name'].astype(str).str.lower().str.strip()
+        promo_df['start_date'] = pd.to_datetime(promo_df['start_date'], errors='coerce')
+        promo_df['end_date'] = pd.to_datetime(promo_df['end_date'], errors='coerce')
+
+        # ✅ Discount par défaut (CSV n'a pas cette colonne)
+        promo_df['discount_pct'] = 15  # 15% par défaut pour les promos
+
+        # Filtrer promos valides uniquement
+        promo_df = promo_df[
+            promo_df['product_name'].notna() &
+            promo_df['start_date'].notna() &
+            promo_df['end_date'].notna()
+            ].copy()
+
+        # Statut actuel
+        today = pd.Timestamp.now()
+        promo_df['promo_status'] = promo_df.apply(
+            lambda row: 'Active' if (row['start_date'] <= today <= row['end_date'])
+            else 'Terminée' if row['end_date'] < today
+            else 'À venir',
+            axis=1
+        )
+
+        promo_df['days_remaining'] = (promo_df['end_date'] - today).dt.days
+        promo_df['days_remaining'] = promo_df['days_remaining'].where(
+            promo_df['promo_status'] == 'Active', 0
+        ).fillna(0).astype(int)
+
+        print(f" Promotions valides : {len(promo_df)}")
+        print(f"   Actives : {(promo_df['promo_status'] == 'Active').sum()}")
+        print(f"   Terminées : {(promo_df['promo_status'] == 'Terminée').sum()}")
+        print(f"   À venir : {(promo_df['promo_status'] == 'À venir').sum()}")
+
+        return promo_df
+
+    except Exception as e:
+        print(f" Erreur promotions : {e}")
+        import traceback
+        traceback.print_exc()
+        return pd.DataFrame()
+
+def calculate_promo_roi_analysis(sales_df: pd.DataFrame, promo_df: pd.DataFrame,
+                                 current_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calcule le ROI réel des promotions en tenant compte :
+    - Uplift des ventes
+    - Perte de marge due au discount
+    - Coûts promotionnels
+    - Profit net généré
+    """
+
+    if sales_df.empty or promo_df.empty:
+        print("Données insuffisantes pour analyse ROI promotions")
+        return pd.DataFrame()
+
+    # =========================
+    # 1. Calculer l'uplift (comme avant)
+    # =========================
+    sales_df['date'] = pd.to_datetime(sales_df['date'])
+
+    sales_with_promo = sales_df.merge(
+        promo_df[['product_name', 'start_date', 'end_date', 'discount_pct']],
+        on='product_name',
+        how='left'
+    )
+
+    sales_with_promo['was_promo'] = (
+            (sales_with_promo['date'] >= sales_with_promo['start_date']) &
+            (sales_with_promo['date'] <= sales_with_promo['end_date'])
+    ).fillna(False)
+
+    # Agrégation ventes avec/sans promo
+    promo_stats = sales_with_promo.groupby(['product_name', 'was_promo']).agg({
+        'quantity_sold': ['mean', 'sum', 'count']
+    }).reset_index()
+
+    promo_stats.columns = ['product_name', 'was_promo', 'avg_sales', 'total_sales', 'days_count']
+
+    # Pivot pour avoir une ligne par produit
+    promo_pivot = promo_stats.pivot(index='product_name', columns='was_promo', values='avg_sales').reset_index()
+    promo_pivot.columns = ['product_name', 'sales_without_promo', 'sales_with_promo']
+    promo_pivot = promo_pivot.fillna(0)
+
+    # Uplift en %
+    promo_pivot['uplift_pct'] = np.where(
+        promo_pivot['sales_without_promo'] > 0,
+        ((promo_pivot['sales_with_promo'] - promo_pivot['sales_without_promo']) /
+         promo_pivot['sales_without_promo'] * 100),
+        0
+    )
+
+    # =========================
+    # 2. Récupérer prix et marges depuis current_df
+    # =========================
+    # Merger avec données produit actuelles
+    roi_df = promo_pivot.merge(
+        current_df[['product_name', 'product_id']],
+        on='product_name',
+        how='left'
+    )
+
+    # Supposons qu'on a ces colonnes (ajustez selon vos données)
+    # Si pas disponibles, utiliser des estimations
+    if 'unit_price' in current_df.columns:
+        roi_df = roi_df.merge(
+            current_df[['product_name', 'unit_price']],
+            on='product_name',
+            how='left'
+        )
+    else:
+        # Estimation prix moyen par catégorie ou fixe
+        roi_df['unit_price'] = 5000  # CFA - À ajuster
+
+    if 'margin_pct' in current_df.columns:
+        roi_df = roi_df.merge(
+            current_df[['product_name', 'margin_pct']],
+            on='product_name',
+            how='left'
+        )
+    else:
+        # Estimation marge standard
+        roi_df['margin_pct'] = 25  # 25% de marge - À ajuster
+
+    # Récupérer discount moyen pratiqué
+    avg_discount = promo_df.groupby('product_name')['discount_pct'].mean().reset_index()
+    roi_df = roi_df.merge(avg_discount, on='product_name', how='left')
+    roi_df['discount_pct'] = roi_df['discount_pct'].fillna(10)  # Défaut 10%
+
+    # =========================
+    # 3. CALCUL DU ROI RÉEL
+    # =========================
+    def calculate_net_roi(row):
+        """
+        Calcule le profit net et ROI d'une promotion.
+        """
+        baseline_sales = row['sales_without_promo']  # Ventes journalières moyennes sans promo
+        uplift_pct = row['uplift_pct']
+        unit_price = row['unit_price']
+        margin_pct = row['margin_pct'] / 100
+        discount_pct = row['discount_pct'] / 100
+
+        if baseline_sales == 0 or uplift_pct <= 0:
+            return {
+                'additional_sales': 0,
+                'revenue_loss': 0,
+                'additional_profit': 0,
+                'net_profit': 0,
+                'roi_pct': 0
+            }
+
+        # Ventes additionnelles générées
+        additional_sales = baseline_sales * (uplift_pct / 100)
+
+        # COÛT 1 : Perte de marge sur ventes de base (qui auraient eu lieu de toute façon)
+        revenue_loss_baseline = baseline_sales * unit_price * discount_pct * margin_pct
+
+        # REVENUS : Profit sur ventes additionnelles (après discount)
+        revenue_additional = additional_sales * unit_price * (1 - discount_pct)
+        profit_additional = revenue_additional * margin_pct
+
+        # PROFIT NET = Gain sur ventes additionnelles - Perte sur ventes de base
+        net_profit = profit_additional - revenue_loss_baseline
+
+        # ROI = (Profit net / Coût) × 100
+        roi = (net_profit / revenue_loss_baseline * 100) if revenue_loss_baseline > 0 else 0
+
+        return {
+            'additional_sales_per_day': additional_sales,
+            'revenue_loss_per_day': revenue_loss_baseline,
+            'additional_profit_per_day': profit_additional,
+            'net_profit_per_day': net_profit,
+            'roi_pct': roi
+        }
+
+    # Appliquer calcul
+    roi_results = roi_df.apply(calculate_net_roi, axis=1, result_type='expand')
+    roi_df = pd.concat([roi_df, roi_results], axis=1)
+
+    # =========================
+    # 4. RECOMMANDATION BASÉE SUR ROI
+    # =========================
+    def recommend_frequency(roi_pct, uplift_pct):
+        """
+        Recommande fréquence promo basée sur ROI ET uplift.
+        """
+        if roi_pct > 100 and uplift_pct > 30:
+            return 'Mensuelle'  # Très rentable
+        elif roi_pct > 50 and uplift_pct > 20:
+            return 'Bimensuelle'  # Rentable
+        elif roi_pct > 20 and uplift_pct > 10:
+            return 'Trimestrielle'  # Modérément rentable
+        elif roi_pct > 0:
+            return 'Semestrielle'  # Faiblement rentable
+        else:
+            return 'Non rentable'  # Perte d\'argent
+
+    roi_df['promo_recommendation'] = roi_df.apply(
+        lambda row: recommend_frequency(row['roi_pct'], row['uplift_pct']),
+        axis=1
+    )
+
+    # Priorité stratégique
+    roi_df['promo_priority'] = roi_df.apply(
+        lambda row: 'Haute' if row['roi_pct'] > 100
+        else 'Moyenne' if row['roi_pct'] > 50
+        else 'Faible' if row['roi_pct'] > 0
+        else 'Éviter',
+        axis=1
+    )
+
+    # =========================
+    # 5. STATS FINALES
+    # =========================
+    print(f"\n{'=' * 60}")
+    print(f"ANALYSE ROI PROMOTIONS")
+    print(f"{'=' * 60}")
+    print(f"  Produits analysés : {len(roi_df)}")
+    print(f"  ROI moyen : {roi_df['roi_pct'].mean():.1f}%")
+    print(f"  Promos rentables (ROI > 0) : {(roi_df['roi_pct'] > 0).sum()}")
+    print(f"  Promos très rentables (ROI > 100) : {(roi_df['roi_pct'] > 100).sum()}")
+    print(f"  Promos non rentables : {(roi_df['roi_pct'] <= 0).sum()}")
+    print(f"\nRecommandations :")
+    print(roi_df['promo_recommendation'].value_counts().to_string())
+    print(f"{'=' * 60}\n")
+
+    return roi_df
+
 def load_supply_data() -> pd.DataFrame:
     import numpy as np
     import pandas as pd
@@ -1167,6 +1408,47 @@ def load_supply_data() -> pd.DataFrame:
         print(f"   Moyenne : {final_stock_sales_df['target_quantity'].mean():.0f}")
         print(f"   Médiane : {final_stock_sales_df['target_quantity'].median():.0f}")
 
+    # ✅ PROMOTIONS avec analyse ROI
+    print("\nChargement et analyse des promotions...")
+    promo_history = load_and_analyze_promotions()
+
+    if not sales_history.empty and not promo_history.empty:
+        print("Calcul ROI des promotions...")
+        promo_roi = calculate_promo_roi_analysis(
+            sales_history,
+            promo_history,
+            final_stock_sales_df
+        )
+
+        if not promo_roi.empty:
+            # Merger avec données principales
+            final_stock_sales_df = final_stock_sales_df.merge(
+                promo_roi[[
+                    'product_name',
+                    'uplift_pct',
+                    'roi_pct',
+                    'net_profit_per_day',
+                    'promo_recommendation',
+                    'promo_priority'
+                ]],
+                on='product_name',
+                how='left'
+            )
+
+            # Statut promo actuel
+            promo_active = promo_history[promo_history['promo_status'] == 'Active'][
+                ['product_name', 'promo_status', 'days_remaining', 'discount_pct']
+            ].drop_duplicates()
+
+            final_stock_sales_df = final_stock_sales_df.merge(
+                promo_active,
+                on='product_name',
+                how='left'
+            )
+
+            final_stock_sales_df['promo_status'] = final_stock_sales_df['promo_status'].fillna('Pas de promo')
+
+            print(f"✅ Analyse ROI promotions intégrée")
 
         # Ajusted_total_need
 
@@ -1428,6 +1710,15 @@ def load_supply_data() -> pd.DataFrame:
                 print(f"✅ FILTRE FRAIS : {excluded_count} produits exclus")
                 print(f"   (livraison, transport, majoration, remboursement)")
 
+            if not promo_roi.empty:
+                # Debug : vérifier colonnes créées
+                print(f"\n✅ Colonnes promo ajoutées :")
+                for col in ['uplift_pct', 'roi_pct', 'promo_recommendation', 'promo_priority']:
+                    if col in final_stock_sales_df.columns:
+                        print(f"   ✓ {col}")
+                    else:
+                        print(f"   ✗ {col} MANQUANTE")
+
         return final_stock_sales_df
 
 # Utility: add Actions columns
@@ -1587,7 +1878,7 @@ def train_optimal_order_quantity_model(df: pd.DataFrame) -> tuple:
         return df_work, model
 
     except Exception as e:
-        print(f"❌ Erreur entraînement ML : {e}")
+        print(f" Erreur entraînement ML : {e}")
         df_work['Predicted Order Quantity'] = df_work['target_quantity']
         return df_work, None
 
@@ -1790,6 +2081,7 @@ def make_sidebar():
                 dbc.NavLink("Overview", href="/", id="nav-overview", active="exact"),
                 dbc.NavLink("Analyses", href="/analytics", id="nav-analytics", active="exact"),
                 dbc.NavLink("Prédictions", href="/predictions", id="nav-pred", active="exact"),
+                dbc.NavLink(" Promotions", href="/promotions", active="exact"),  # ✅ Vérifier cette ligne
                 dbc.NavLink("About", href="/about", id="nav-about", active="exact"),
             ], vertical=True, pills=True)
         ]),
@@ -1936,43 +2228,92 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
 
 # ------------------------------ Pages --------------------------------------------
 def make_kpis(df: pd.DataFrame):
+    """Calcule les KPIs pour la page overview"""
+
     # Helper pour format
     def fmt(n):
-        if pd.isna(n): return "-"
+        if pd.isna(n):
+            return "-"
         if isinstance(n, (int, float)):
-            try: return f"{n:,.0f}".replace(",", " ")
-            except Exception: return str(n)
+            try:
+                return f"{n:,.0f}".replace(",", " ")
+            except Exception:
+                return str(n)
         return str(n)
 
     # Nettoyage : exclure delisted
-    mask_valid = df['delisting_status'].str.lower().ne('delisted') if 'delisting_status' in df.columns else [True] * len(df)
+    mask_valid = df['delisting_status'].str.lower().ne('delisted') if 'delisting_status' in df.columns else [
+                                                                                                                True] * len(
+        df)
     df_valid = df[mask_valid].copy()
 
+    # SKUs total
     total_skus = df_valid['product_name'].nunique() if 'product_name' in df_valid.columns else len(df_valid)
 
-    # Rupture réelle (constaté dans le tableau)
-    out_of_stock = int((df_valid['Stock Status'] == 'Out of Stock').sum()) if 'Stock Status' in df_valid.columns else 0
+    # ✅ RUPTURE RÉELLE : Plusieurs méthodes selon colonnes disponibles
+    out_of_stock = 0
+
+    # Méthode 1 : Via Stock Status (si disponible)
+    if 'Stock Status' in df_valid.columns:
+        out_of_stock = int((df_valid['Stock Status'] == 'Out of Stock').sum())
+
+    # Méthode 2 : Calculer directement depuis total_stock
+    elif 'total_stock' in df_valid.columns:
+        out_of_stock = int((df_valid['total_stock'] <= 0).sum())
+
+    # Méthode 3 : Via Ajusted_total_need
+    elif 'Ajusted_total_need' in df_valid.columns:
+        out_of_stock = int((df_valid['Ajusted_total_need'] == 'ORDER NOW').sum())
 
     # Fournisseurs
-    suppliers = df_valid['Suppliers (all)'].nunique() if 'Suppliers (all)' in df_valid.columns else (
-        df_valid['Supplier'].nunique() if 'Supplier' in df_valid.columns else 0
-    )
+    suppliers = 0
+    if 'Suppliers (all)' in df_valid.columns:
+        suppliers = df_valid['Suppliers (all)'].nunique()
+    elif 'Supplier' in df_valid.columns:
+        suppliers = df_valid['Supplier'].nunique()
 
-    # Risque de rupture (ML)
+    # ✅ RISQUE DE RUPTURE : Produits avec faible couverture
     risk_count = 0
+
+    # Méthode 1 : Via ML (Predicted Stockout + Score < 0.5)
     if 'Predicted Stockout' in df_valid.columns and 'Credit Adequacy Score' in df_valid.columns:
         risk_count = int((
-            (df_valid['Predicted Stockout'] == True) &
-            (df_valid['Credit Adequacy Score'] < 0.5)
-        ).sum())
+                                 (df_valid['Predicted Stockout'] == True) &
+                                 (df_valid['Credit Adequacy Score'] < 0.5)
+                         ).sum())
+
+    # Méthode 2 : Via couverture en jours (< lead time + crédit)
+    elif 'Max Coverage Day' in df_valid.columns and 'ADJUSTED_LEADTIME' in df_valid.columns and 'credit_days' in df_valid.columns:
+        df_valid['replenishment_days'] = df_valid['ADJUSTED_LEADTIME'].fillna(7) + df_valid['credit_days'].fillna(14)
+        risk_count = int((
+                                 (df_valid['Max Coverage Day'] > 0) &  # Pas en rupture totale
+                                 (df_valid['Max Coverage Day'] < df_valid['replenishment_days'])
+                         ).sum())
+
+    # Méthode 3 : Via Ajusted_total_need
+    elif 'Ajusted_total_need' in df_valid.columns:
+        risk_count = int((df_valid['Ajusted_total_need'].isin(['ORDER NOW', 'ORDER NOT URGENT'])).sum())
+
 
     # Cartes KPI
     cards = dbc.Row([
-        dbc.Col(html.Div(className="kpi", children=[html.Small("SKUs"), html.H3(fmt(total_skus))]), md=4),
-        dbc.Col(html.Div(className="kpi", children=[html.Small("Produits en rupture"), html.H3(fmt(out_of_stock))]), md=4),
-        dbc.Col(html.Div(className="kpi", children=[html.Small("Fournisseurs actifs"), html.H3(fmt(suppliers))]), md=4),
+        dbc.Col(html.Div(className="kpi", children=[
+            html.Small("SKUs"),
+            html.H3(fmt(total_skus))
+        ]), md=4),
+
+        dbc.Col(html.Div(className="kpi", children=[
+            html.Small("Produits en rupture"),
+            html.H3(fmt(out_of_stock), style={"color": "#ef4444" if out_of_stock > 0 else "#10b981"})
+        ]), md=4),
+
+        dbc.Col(html.Div(className="kpi", children=[
+            html.Small("Fournisseurs actifs"),
+            html.H3(fmt(suppliers))
+        ]), md=4),
     ], className="gy-3")
 
+    # Cloche d'alerte
     # Cloche d’alerte basée uniquement sur ML
     bell = html.Div(
         className="pill",
@@ -1984,8 +2325,9 @@ def make_kpis(df: pd.DataFrame):
         style={"display": "inline-block", "marginTop": "10px"}
     )
 
-    return cards, bell
+    print(f"📊 KPIs calculés : SKUs={total_skus}, Ruptures={out_of_stock}, Risques={risk_count}")
 
+    return cards, bell
 def page_overview(master_df: pd.DataFrame = None):
     # Charger les données
     df = master_df if master_df is not None else get_df_cached()
@@ -2005,12 +2347,12 @@ def page_overview(master_df: pd.DataFrame = None):
                 .astype(str).str.strip()
             )
 
-        # Recalculated ADS non vide et numérique
-        if "Recalculated Average Daily Sales" not in df.columns:
-            df["Recalculated Average Daily Sales"] = 0.1
+        # Average Daily Sales non vide et numérique
+        if "Average Daily Sales" not in df.columns:
+            df["Average Daily Sales"] = 0.1
 
-        df["Recalculated Average Daily Sales"] = (
-            pd.to_numeric(df["Recalculated Average Daily Sales"], errors="coerce")
+        df["Average Daily Sales"] = (
+            pd.to_numeric(df["Average Daily Sales"], errors="coerce")
             .fillna(0.1)
             .clip(lower=0.1)
         )
@@ -2023,14 +2365,10 @@ def page_overview(master_df: pd.DataFrame = None):
 
     df = _ui_harden(df)
 
-    # ✅ Harmoniser quelques alias pour l’UI
-    # Ici, on NE recopie PAS bêtement product_category
+    # ✅ Harmoniser quelques alias pour l'UI
     if "supplier_categorization" in df.columns and "Product Category" not in df.columns:
-        # Respecter la règle métier → prendre supplier_categorization comme référence
         df["Product Category"] = df["supplier_categorization"]
-
     elif "product_category" in df.columns and "Product Category" not in df.columns:
-        # Fallback si la catégorisation fournisseur n’existe pas encore
         df["Product Category"] = df["product_category"]
 
     if "credit_cumulable" in df.columns and "Credit_cumulable" not in df.columns:
@@ -2039,8 +2377,8 @@ def page_overview(master_df: pd.DataFrame = None):
     if "supplier" in df.columns and "Supplier" not in df.columns:
         df["Supplier"] = df["supplier"]
 
-    # Colonnes prioritaires dans l’ordre
-    cols_priority = [
+    # ✅ 1. DÉFINIR colonnes prioritaires overview
+    cols_priority_overview = [
         "product_id",
         "product_name",
         "Supplier",
@@ -2063,47 +2401,9 @@ def page_overview(master_df: pd.DataFrame = None):
         "Daily OOS Rate (30d)",
         "📝 Notes"
     ]
-    # Forcer ces colonnes à être prioritaires et visibles
-    for must in ["Supplier", "Average Daily Sales"]:
-        if must not in cols_priority:
-            # les mettre très haut (après product_name)
-            insert_at = 1 if "product_name" in cols_priority else 0
-            cols_priority.insert(insert_at, must)
 
-    available_priority = [c for c in cols_priority if c in df.columns]
-    extra_cols = [c for c in df.columns if c not in cols_priority]
-    available_cols = available_priority + extra_cols
-
-    # 🔒 Double sécurité : garantir Supplier et Recalculated ADS
-    for col in ["Supplier", "Average Daily Sales"]:
-        if col not in available_cols:
-            available_cols.insert(1, col)
-
-            # ➕ Nouvelle colonne Actions
-    # ➕ Colonne Actions avec vrais boutons Dash
-    #df["Actions"] = [
-     #   html.Div([
-      #      html.Button("✏️", id={"type": "edit-btn", "index": i}, n_clicks=0,
-       #                 className="btn btn-sm btn-warning", style={"marginRight": "4px"}),
-        #    html.Button("🗑️", id={"type": "delete-btn", "index": i}, n_clicks=0,
-         #               className="btn btn-sm btn-danger", style={"marginRight": "4px"}),
-          #  html.Button("➕", id={"type": "add-btn", "index": i}, n_clicks=0,
-           #             className="btn btn-sm btn-success")
-        #], style={"display": "flex", "gap": "4px"})
-        #for i in range(len(df))
-    #]
-
-    # KPIs
-    kpi_cards, risk_bell = make_kpis(df)
-
-    # En-tête
-    header_row = dbc.Row([
-        dbc.Col(html.H2("Overview"), md=8),
-        dbc.Col(html.Div(risk_bell, style={"textAlign": "right"}), md=4),
-    ])
-
-    # Masquer colonnes techniques
-    cols_to_hide = [
+    # ✅ 2. Colonnes INTERDITES dans overview (techniques + promo)
+    cols_banned_in_overview = [
         "_Product_Category_ABC_XYZ",
         "_Supplier_Categorization",
         "Average Daily Sales (7d)",
@@ -2111,7 +2411,7 @@ def page_overview(master_df: pd.DataFrame = None):
         "Daily OOS Rate (7d)",
         "Stockout Probability",
         "Credit Adequacy Score",
-        "Stock Status",
+        #"Stock Status",
         "is_active",
         "demand_stability",
         "oos_risk",
@@ -2128,45 +2428,96 @@ def page_overview(master_df: pd.DataFrame = None):
         "trend_factor",
         "projected_demand",
         "safety_stock",
-        "target_supervised"
+        "target_supervised",
+        # ✅ COLONNES PROMO INTERDITES
+        'promo_status',
+        'days_remaining',
+        'uplift_pct',
+        'roi_pct',
+        'promo_recommendation',
+        'promo_priority',
+        'net_profit_per_day',
+        'discount_pct',
+        'sales_with_promo',
+        'sales_without_promo',
+        'additional_sales_per_day',
+        'revenue_loss_per_day',
+        'additional_profit_per_day'
     ]
-    extra_cols = [c for c in extra_cols if c not in cols_to_hide and not c.startswith('_')]
 
-    # Ordre final
+    # ✅ 3. Filtrer colonnes disponibles
+    available_priority = [c for c in cols_priority_overview if c in df.columns]
+    extra_cols = [c for c in df.columns if c not in cols_priority_overview and c not in cols_banned_in_overview]
+
+    # ✅ 4. Supprimer physiquement les colonnes bannies
+    df_overview = df.drop(columns=[c for c in cols_banned_in_overview if c in df.columns], errors='ignore')
+
     available_cols = available_priority + extra_cols
 
-    # Vérifier que Product Category est bien présente
-    if "Product Category" not in df.columns:
-        print("⚠️ WARNING: Product Category manquante dans le DataFrame")
-    else:
-        print(f"✅ Product Category présente avec {df['Product Category'].nunique()} valeurs uniques")
+    # ✅ 5. Garantir colonnes critiques
+    for must in ["Supplier", "Average Daily Sales"]:
+        if must not in available_cols:
+            available_cols.insert(1, must)
+
+    # ✅ 6. Ajouter colonne Notes
+    df_overview["📝 Notes"] = "💬"
+
+    # Vérifier que product_name est dans available_cols
+    if "product_name" not in available_cols and "product_name" in df_overview.columns:
+        available_cols.insert(0, "product_name")
+
+    # Ligne ~145, juste avant make_kpis()
+
+    # ✅ Recalculer Stock Status pour les KPIs (même si masquée du tableau)
+    if 'total_stock' in df_overview.columns and 'optimal stock' in df_overview.columns:
+        df_overview['Stock Status'] = df_overview.apply(
+            lambda row: "Out of Stock" if row['total_stock'] <= 0
+            else "Predicted Stockout Soon" if row['total_stock'] <= row.get('optimal stock', 0)
+            else "Stock OK",
+            axis=1
+        )
 
 
-    df["📝 Notes"] = "💬"  # Emoji cliquable
+    # KPIs
+    kpi_cards, risk_bell = make_kpis(df_overview)
 
-    # Tableau principal
+    # En-tête
+    header_row = dbc.Row([
+        dbc.Col(html.H2("Overview"), md=8),
+        dbc.Col(html.Div(risk_bell, style={"textAlign": "right"}), md=4),
+    ])
+
+    # ✅ 7. Tableau avec df_overview filtré
     table = dash_table.DataTable(
         id="main-table",
         columns=[
-            {"name": c, "id": c, "deletable": False, "hideable": True,
-             "presentation": "component" if c == "Actions" else "input"}
+            {"name": c, "id": c, "deletable": False, "hideable": True}
             for c in available_cols
         ],
-        data=df[available_cols].to_dict("records"),
+        data=df_overview[available_cols].to_dict("records"),  # ✅ df_overview
         page_size=15,
         filter_action="native",
         sort_action="native",
         sort_mode="multi",
         column_selectable="single",
         editable=True,
-        row_selectable="single",  # ✅ UNE SEULE FOIS
+        row_selectable="single",
         selected_rows=[],
         style_table={"overflowX": "auto", "maxWidth": "100%"},
-        style_header={"backgroundColor": "#0f1625", "border": "1px solid #1f2937",
-                      "fontWeight": "700", "textAlign": "center"},
-        style_cell={"backgroundColor": "#0b1220", "color": "#e5e7eb",
-                    "border": "1px solid #1f2937", "fontSize": 11,
-                    "textAlign": "center", "padding": "6px"},
+        style_header={
+            "backgroundColor": "#0f1625",
+            "border": "1px solid #1f2937",
+            "fontWeight": "700",
+            "textAlign": "center"
+        },
+        style_cell={
+            "backgroundColor": "#0b1220",
+            "color": "#e5e7eb",
+            "border": "1px solid #1f2937",
+            "fontSize": 11,
+            "textAlign": "center",
+            "padding": "6px"
+        },
         style_data_conditional=[
             {"if": {"filter_query": "{Ajusted_total_need} = 'ORDER NOW'"},
              "backgroundColor": "rgba(239,68,68,.2)", "color": "#fee2e2"},
@@ -2187,19 +2538,30 @@ def page_overview(master_df: pd.DataFrame = None):
                          "selected_rows", "selected_columns", "hidden_columns"],
     )
 
-    # Boutons d’actions globales
+    # Boutons d'actions globales
     action_buttons = dbc.ButtonGroup([
-        #dbc.Button("📥 Export CSV", id="btn-export", className="btn-outline-primary", size="sm"),
         dbc.Button("🔄 Actualiser", id="btn-refresh", className="btn-outline-secondary", size="sm"),
         dbc.Button("➕ Ajouter une ligne", id="btn-add-row", className="btn-primary", size="sm"),
     ])
 
-    # ✅ Modal pour édition
+    # Dropdown filter-status
+    dcc.Dropdown(
+        id="filter-status",
+        options=[
+            {"label": "Tous", "value": "all"},
+            {"label": "Stock OK", "value": "ok"},
+            {"label": "Rupture", "value": "oos"}
+        ],
+        value="all",
+        className="filter-dropdown"
+    )
+
+    # Modal édition
     edit_modal = dbc.Modal(
         [
             dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
             dbc.ModalBody([
-                html.Div("Formulaire d’édition à implémenter ici…"),
+                html.Div("Formulaire d'édition à implémenter ici…"),
                 dcc.Input(id="edit-input", type="text", placeholder="Modifier la valeur")
             ]),
             dbc.ModalFooter(
@@ -2210,7 +2572,7 @@ def page_overview(master_df: pd.DataFrame = None):
         is_open=False,
     )
 
-    # Modal pour les notes
+    # Modal notes
     notes_modal = dbc.Modal(
         [
             dbc.ModalHeader(dbc.ModalTitle(id="notes-modal-title")),
@@ -2230,7 +2592,7 @@ def page_overview(master_df: pd.DataFrame = None):
                     type="text",
                     style={"marginBottom": "10px"}
                 ),
-                html.Small("💡 Membres disponibles : @tony, @marie, @ahmed",
+                html.Small("💡 Membres disponibles : @tony, @Samuel, @Maimouna, @Seydouna",
                            style={"color": "#9ca3af", "display": "block", "marginBottom": "10px"}),
             ]),
             dbc.ModalFooter([
@@ -2254,73 +2616,10 @@ def page_overview(master_df: pd.DataFrame = None):
             ])),
             html.Br(),
             table,
-            edit_modal, # ✅ ajout modal
+            edit_modal,
             notes_modal,
         ])
     ])
-
-from dash import callback_context
-
-# ✏️ Éditer une ligne
-@app.callback(
-    Output("main-table", "data", allow_duplicate=True),
-    Input({"type": "edit-btn", "index": ALL}, "n_clicks"),
-    State("main-table", "data"),
-    prevent_initial_call=True
-)
-def edit_row(edit_clicks, rows):
-    ctx = callback_context
-    if not ctx.triggered:
-        return rows
-    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
-    triggered = json.loads(triggered_id)
-    index = triggered["index"]
-
-    if 0 <= index < len(rows):
-        rows[index]["product_name"] = str(rows[index].get("product_name", "")) + " (✏️ édité)"
-    return rows
-
-
-# 🗑️ Supprimer une ligne
-@app.callback(
-    Output("main-table", "data", allow_duplicate=True),
-    Input({"type": "delete-btn", "index": ALL}, "n_clicks"),
-    State("main-table", "data"),
-    prevent_initial_call=True
-)
-def delete_row(delete_clicks, rows):
-    ctx = callback_context
-    if not ctx.triggered:
-        return rows
-    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
-    triggered = json.loads(triggered_id)
-    index = triggered["index"]
-
-    if 0 <= index < len(rows):
-        rows.pop(index)
-    return rows
-
-
-# ➕ Ajouter une ligne
-@app.callback(
-    Output("main-table", "data", allow_duplicate=True),
-    Input({"type": "add-btn", "index": ALL}, "n_clicks"),
-    State("main-table", "data"),
-    State("main-table", "columns"),
-    prevent_initial_call=True
-)
-def add_row(add_clicks, rows, columns):
-    ctx = callback_context
-    if not ctx.triggered:
-        return rows
-    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
-    triggered = json.loads(triggered_id)
-    index = triggered["index"]
-
-    # Crée une ligne vide
-    new_row = {c["id"]: "" for c in columns}
-    rows.insert(index + 1, new_row)
-    return rows
 
 
 def page_analytics(master_df: pd.DataFrame = None):
@@ -2713,6 +3012,195 @@ def page_about():
         ])
     ])
 
+
+def page_promotions():
+    """Page dédiée à l'analyse des promotions."""
+    df = get_df_cached()
+
+    if df is None or df.empty:
+        return html.Div("Aucune donnée disponible", className="error-message")
+
+    # ✅ COLONNES AUTORISÉES
+    allowed_columns_promo = [
+        'product_name',
+        'promo_status',
+        'days_remaining',
+        'uplift_pct',
+        'roi_pct',
+        'promo_recommendation',
+        'promo_priority',
+        'avg_daily_sold',
+        'net_profit_per_day',
+        'discount_pct'
+    ]
+
+    # ✅ COLONNES INTERDITES
+    cols_banned_in_promo = [
+        'Average Daily Sales', 'Max Daily Sales (Pikine)', 'optimal stock',
+        'Ajusted_total_need', 'QAC', 'target_quantity', 'Max Coverage Day',
+        'credit_days', 'Credit_cumulable', 'AJUSTER_BUFFER', 'MAX_CREDIT_BUFFER',
+        'ADJUSTED_LEADTIME', 'MOQ MAAD', 'delisting_status', 'Daily OOS Rate (30d)',
+        'total_stock', 'product_id', 'Supplier', 'Product Category',
+        'sales_with_promo', 'sales_without_promo'
+    ]
+
+    # Filtrage
+    available_cols = [c for c in allowed_columns_promo if c in df.columns]
+    available_cols = [c for c in available_cols if c not in cols_banned_in_promo]
+    df_promo = df[available_cols].copy()
+
+    if 'uplift_pct' in df_promo.columns:
+        df_promo = df_promo[df_promo['uplift_pct'].notna()].copy()
+
+    print(f"\n📋 Page Promotions : {len(df_promo)} produits, {len(available_cols)} colonnes")
+
+    # Vérification
+    if df_promo.empty or 'uplift_pct' not in df_promo.columns:
+        return html.Div(className="content", children=[
+            html.H2("📢 Gestion des Promotions", className="page-title"),
+            dbc.Alert("Les données de promotions ne sont pas encore chargées.", color="warning")
+        ])
+
+    # KPIs
+    active_promos = (df_promo['promo_status'] == 'Active').sum() if 'promo_status' in df_promo.columns else 0
+    avg_roi = df_promo['roi_pct'].mean() if 'roi_pct' in df_promo.columns else 0
+    profitable_promos = (df_promo['roi_pct'] > 0).sum() if 'roi_pct' in df_promo.columns else 0
+    high_priority = (df_promo['promo_priority'] == 'Haute').sum() if 'promo_priority' in df_promo.columns else 0
+
+    kpi_cards = dbc.Row([
+        dbc.Col(html.Div(className="kpi", children=[
+            html.Small("🎯 Promos actives"),
+            html.H3(f"{active_promos}")
+        ]), md=3),
+        dbc.Col(html.Div(className="kpi", children=[
+            html.Small("💰 ROI moyen"),
+            html.H3(f"{avg_roi:.1f}%", style={
+                "color": "#10b981" if avg_roi > 50 else "#f59e0b" if avg_roi > 0 else "#ef4444"
+            })
+        ]), md=3),
+        dbc.Col(html.Div(className="kpi", children=[
+            html.Small("✅ Promos rentables"),
+            html.H3(f"{profitable_promos}")
+        ]), md=3),
+        dbc.Col(html.Div(className="kpi", children=[
+            html.Small("⭐ Haute priorité"),
+            html.H3(f"{high_priority}")
+        ]), md=3),
+    ], className="mb-4")
+
+    # Graphique ROI
+    if 'roi_pct' in df_promo.columns and len(df_promo) > 0:
+        fig_roi = px.bar(
+            df_promo.nlargest(20, 'roi_pct'),
+            x='product_name',
+            y='roi_pct',
+            color='promo_priority' if 'promo_priority' in df_promo.columns else None,
+            title="Top 20 produits par ROI",
+            labels={'roi_pct': 'ROI (%)', 'product_name': 'Produit'},
+            color_discrete_map={'Haute': '#10b981', 'Moyenne': '#f59e0b', 'Faible': '#6b7280', 'Éviter': '#ef4444'}
+        )
+        fig_roi.update_layout(
+            plot_bgcolor="#0b1220",
+            paper_bgcolor="#0b1220",
+            font=dict(color="#e5e7eb"),
+            xaxis=dict(tickangle=-45),
+            height=400
+        )
+    else:
+        fig_roi = {'data': [],
+                   'layout': {'title': 'Pas de données ROI', 'plot_bgcolor': '#0b1220', 'paper_bgcolor': '#0b1220',
+                              'font': {'color': '#e5e7eb'}}}
+
+    # Graphique Uplift
+    if 'uplift_pct' in df_promo.columns and len(df_promo) > 0:
+        fig_uplift = px.bar(
+            df_promo.nlargest(20, 'uplift_pct'),
+            x='product_name',
+            y='uplift_pct',
+            title="Top 20 produits par Uplift",
+            labels={'uplift_pct': 'Uplift (%)', 'product_name': 'Produit'}
+        )
+        fig_uplift.update_layout(
+            plot_bgcolor="#0b1220",
+            paper_bgcolor="#0b1220",
+            font=dict(color="#e5e7eb"),
+            xaxis=dict(tickangle=-45),
+            height=400
+        )
+    else:
+        fig_uplift = {'data': [], 'layout': {'title': 'Pas de données Uplift', 'plot_bgcolor': '#0b1220',
+                                             'paper_bgcolor': '#0b1220', 'font': {'color': '#e5e7eb'}}}
+
+    # Layout
+    return html.Div(className="content", children=[
+        html.H2("📢 Gestion des Promotions", className="page-title"),
+        kpi_cards,
+
+        dbc.Row([
+            dbc.Col(html.Div(dcc.Graph(figure=fig_roi), className="soft-card"), md=6),
+            dbc.Col(html.Div(dcc.Graph(figure=fig_uplift), className="soft-card"), md=6)
+        ], className="mb-4"),
+
+        html.Div(className="soft-card", children=[
+            html.H5("Détails par produit", className="section-title"),
+            dash_table.DataTable(
+                id="promo-table",
+                columns=[{"name": c, "id": c} for c in available_cols],
+                data=df_promo.to_dict("records"),
+                page_size=20,
+                filter_action="native",
+                sort_action="native",
+                style_table={"overflowX": "auto"},
+                style_header={
+                    "backgroundColor": "#0f1625",
+                    "color": "white",
+                    "fontWeight": "bold",
+                    "textAlign": "center"
+                },
+                style_cell={
+                    "backgroundColor": "#0b1220",
+                    "color": "#e5e7eb",
+                    "textAlign": "center",
+                    "padding": "8px",
+                    "fontSize": "12px"
+                },
+                style_data_conditional=[
+                    {"if": {"filter_query": "{promo_status} = 'Active'"}, "backgroundColor": "rgba(16,185,129,.2)",
+                     "fontWeight": "bold"},
+                    {"if": {"column_id": "roi_pct"}, "fontWeight": "bold", "color": "#10b981"},
+                    {"if": {"filter_query": "{promo_priority} = 'Éviter'"}, "backgroundColor": "rgba(239,68,68,.15)",
+                     "color": "#fca5a5"},
+                    {"if": {"filter_query": "{promo_priority} = 'Haute'"}, "backgroundColor": "rgba(16,185,129,.15)",
+                     "color": "#86efac"}
+                ]
+            )
+        ])
+    ])
+# =========================
+# ROUTING CALLBACK
+# =========================
+@app.callback(
+    Output("page-content", "children"),
+    Input("url", "pathname")
+)
+def display_page(pathname):
+    """Route vers les différentes pages selon l'URL."""
+    print(f"🔀 Navigation vers : {pathname}")  # Debug
+
+    if pathname == "/":
+        return page_overview()
+    elif pathname == "/predictive":
+        return page_predictive()
+    elif pathname == "/promotions":  # ✅ AJOUTER
+        return page_promotions()
+    elif pathname == "/about":
+        return page_about()
+    else:
+        return html.Div([
+            html.H2("404"),
+            html.P("Page introuvable"),
+            html.A("Retour à l'accueil", href="/")
+        ], className="error-message")
 # ------------------------------ Chatbot helpers ----------------------------------
 def _detect_lang(text: str) -> str:
     if not text: return "fr"
@@ -3073,19 +3561,25 @@ app.validation_layout = html.Div([
 @app.callback(
     Output("page-container", "children"),
     Input("url", "pathname"),
-    State("master-data","data"),
+    State("master-data", "data"),
     prevent_initial_call=False
 )
 def render_page(path, master_json):
+    """Route vers les différentes pages selon l'URL"""
     base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+
+    print(f"🔀 Routing vers : {path}")  # Debug
+
     if path == "/analytics":
         return page_analytics()
     elif path == "/predictions":
         return page_predictive()
+    elif path == "/promotions":  # ✅ AJOUTER CETTE CONDITION
+        return page_promotions()
     elif path == "/about":
         return page_about()
-    return page_overview(base)
-
+    else:  # "/" ou autre
+        return page_overview(base)
 # ------------------------------ Filtering logic ----------------------------------
 def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: list, cats: list, options: list):
     out = df.copy()
@@ -3143,21 +3637,31 @@ def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 # ------------------------------ Callbacks: filtering / banner --------------------
-# Callback 1 : Initialisation (sans allow_duplicate)
 @app.callback(
     [Output("filtered-data", "data"),
      Output("main-table", "data"),
      Output("risk-banner", "children")],
     Input("master-data", "data"),
-    prevent_initial_call=False  # ✅ S'exécute au chargement
+    prevent_initial_call=False
 )
 def initialize_table(master_json):
     """Initialise le tableau au chargement sans filtres"""
     df = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
     df = validate_core_columns(df)
+
+    # ✅ SUPPRIMER COLONNES PROMO dès l'initialisation
+    promo_cols_to_remove = [
+        'promo_status', 'days_remaining', 'uplift_pct', 'roi_pct',
+        'promo_recommendation', 'promo_priority', 'net_profit_per_day',
+        'discount_pct', 'sales_with_promo', 'sales_without_promo'
+    ]
+
+    df = df.drop(columns=[c for c in promo_cols_to_remove if c in df.columns], errors='ignore')
+
+    print(f"[initialize_table] Colonnes disponibles : {df.columns.tolist()[:15]}")
+
     banner = " "
     return df.to_json(orient="records"), df.to_dict("records"), banner
-
 
 # Callback 2 : Filtrage (avec allow_duplicate)
 @app.callback(
@@ -3170,11 +3674,32 @@ def initialize_table(master_json):
      Input("filter-need", "value"),
      Input("toggle-options", "value")],
     State("master-data", "data"),
-    prevent_initial_call=True  # ✅ S'exécute sur interaction
+    prevent_initial_call=True
 )
 def apply_filters(search, sup, cat, need, options, master_json):
     base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
     base = validate_core_columns(base)
+
+    # ✅ SUPPRIMER TOUTES LES COLONNES PROMO AVANT FILTRAGE
+    promo_cols_to_remove = [
+        'promo_status',
+        'days_remaining',
+        'uplift_pct',
+        'roi_pct',
+        'promo_recommendation',
+        'promo_priority',
+        'net_profit_per_day',
+        'discount_pct',
+        'sales_with_promo',
+        'sales_without_promo',
+        'additional_sales_per_day',
+        'revenue_loss_per_day',
+        'additional_profit_per_day'
+    ]
+
+    base = base.drop(columns=[c for c in promo_cols_to_remove if c in base.columns], errors='ignore')
+
+    print(f"[apply_filters] Colonnes après suppression promo : {base.columns.tolist()[:15]}")
 
     sup = sup or []
     cat = cat or []
@@ -3186,13 +3711,16 @@ def apply_filters(search, sup, cat, need, options, master_json):
     if need and len(need) > 0 and 'Ajusted_total_need' in fdf.columns:
         fdf = fdf[fdf['Ajusted_total_need'].isin(need)]
 
-    print(f"[apply_filters] Résultat: {len(fdf)} lignes")
+    print(f"[apply_filters] Résultat: {len(fdf)} lignes, {len(fdf.columns)} colonnes")
 
     banner = " "
     fdf_actions = add_action_cols(fdf)
+
+    # ✅ Vérification finale : s'assurer qu'aucune colonne promo ne subsiste
+    final_cols = [c for c in fdf_actions.columns if c not in promo_cols_to_remove]
+    fdf_actions = fdf_actions[final_cols]
+
     return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
-
-
 # ------------------------------ Notes System Callbacks ----------------------------
 @app.callback(
     [Output("notes-modal", "is_open"),
@@ -3557,24 +4085,7 @@ def toggle_po_button(active_cell, selected_rows, data):
     except (IndexError, KeyError, TypeError):
         return True  # Désactivé en cas d'erreur
 
-@app.callback(
-    Output("debug-info", "children"),  # Ajoutez <div id="debug-info"></div> dans la sidebar
-    [Input("main-table", "active_cell"),
-     Input("main-table", "selected_rows"),
-     Input("main-table", "data")],
-    prevent_initial_call=True
-)
-#def debug_selection(active_cell, selected_rows, data):
- #   return html.Pre(f"""
-#🔍 DEBUG SÉLECTION:
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#- active_cell: {active_cell}
-#- selected_rows: {selected_rows}
-#- Nombre lignes data: {len(data) if data else 0}
 
-#{f"• Ligne sélectionnée: {selected_rows[0] if selected_rows else 'None'}" if selected_rows else ""}
-#{f"• Données ligne: {data[selected_rows[0]] if selected_rows and len(selected_rows) > 0 and len(data) > selected_rows[0] else 'N/A'}" if selected_rows else ""}
-#""")
 # ------------------------------ Edit/Add/Delete rows ------------------------------
 @app.callback(
     Output("edit-modal","is_open"),

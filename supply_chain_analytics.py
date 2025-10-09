@@ -3052,12 +3052,12 @@ def page_promotions():
     if 'uplift_pct' in df_promo.columns:
         df_promo = df_promo[df_promo['uplift_pct'].notna()].copy()
 
-    print(f"\n📋 Page Promotions : {len(df_promo)} produits, {len(available_cols)} colonnes")
+    print(f"\n Page Promotions : {len(df_promo)} produits, {len(available_cols)} colonnes")
 
     # Vérification
     if df_promo.empty or 'uplift_pct' not in df_promo.columns:
         return html.Div(className="content", children=[
-            html.H2("📢 Gestion des Promotions", className="page-title"),
+            html.H2(" Gestion des Promotions", className="page-title"),
             dbc.Alert("Les données de promotions ne sont pas encore chargées.", color="warning")
         ])
 
@@ -3069,21 +3069,21 @@ def page_promotions():
 
     kpi_cards = dbc.Row([
         dbc.Col(html.Div(className="kpi", children=[
-            html.Small("🎯 Promos actives"),
+            html.Small(" Promos actives"),
             html.H3(f"{active_promos}")
         ]), md=3),
         dbc.Col(html.Div(className="kpi", children=[
-            html.Small("💰 ROI moyen"),
+            html.Small(" ROI moyen"),
             html.H3(f"{avg_roi:.1f}%", style={
                 "color": "#10b981" if avg_roi > 50 else "#f59e0b" if avg_roi > 0 else "#ef4444"
             })
         ]), md=3),
         dbc.Col(html.Div(className="kpi", children=[
-            html.Small("✅ Promos rentables"),
+            html.Small(" Promos rentables"),
             html.H3(f"{profitable_promos}")
         ]), md=3),
         dbc.Col(html.Div(className="kpi", children=[
-            html.Small("⭐ Haute priorité"),
+            html.Small(" Haute priorité"),
             html.H3(f"{high_priority}")
         ]), md=3),
     ], className="mb-4")
@@ -3133,7 +3133,7 @@ def page_promotions():
 
     # Layout
     return html.Div(className="content", children=[
-        html.H2("📢 Gestion des Promotions", className="page-title"),
+        html.H2(" Gestion des Promotions", className="page-title"),
         kpi_cards,
 
         dbc.Row([

@@ -4086,7 +4086,7 @@ def toggle_po_button(active_cell, selected_rows, data):
         return True  # Désactivé en cas d'erreur
 
 
-# ------------------------------ Edit/Add/Delete rows ------------------------------
+# ------------------------------ Edit/Add/Delete rows -----------------------------
 @app.callback(
     Output("edit-modal","is_open"),
     Output("edit-input", "value"),

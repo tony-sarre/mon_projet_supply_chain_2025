@@ -38,14 +38,31 @@ warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=D
 
 # ------------- OpenAI client (clé hardcodée à ta demande) ----------------
 #OPENAI_API_KEY_HARDCODED = "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"
+# Ligne ~45 dans votre code
 api_key = os.getenv("OPENAI_API_KEY_HARDCODED")
+
+# AJOUTER CES LIGNES DE DEBUG
+print("=" * 60)
+print("DEBUG OPENAI CLIENT")
+print("=" * 60)
+if api_key:
+    print(f"✅ API Key trouvée : {api_key[:15]}...{api_key[-4:]}")  # Masquer le milieu
+else:
+    print("❌ API Key NON trouvée dans l'environnement")
+print("=" * 60)
 
 openai_client = None
 try:
     if api_key:
+        from openai import OpenAI
         openai_client = OpenAI(api_key=api_key)
-except Exception:
+        print("✅ Client OpenAI initialisé avec succès")
+    else:
+        print("⚠️ Pas de clé API, chatbot utilisera fallback")
+except Exception as e:
+    print(f"❌ Erreur initialisation OpenAI : {type(e).__name__}: {e}")
     openai_client = None
+print("=" * 60)
 # -------------------------------------------------------------------------
 
 # ----------------------------- Brand & Meta --------------------------------------

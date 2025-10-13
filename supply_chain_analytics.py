@@ -4,9 +4,19 @@
 # pip install pandas scikit-learn flask-caching numpy
 # pip install reportlab
 # Optional: pip install openai
+
+
+import os, sys
+print("CWD:", os.getcwd())
+print("Dir files:", os.listdir("."))
+print("sys.path[0]:", sys.path[0])
+
 from dash import Dash
 import dash_bootstrap_components as dbc
 import os
+import google.generativeai as genai
+
+
 
 app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
@@ -23,6 +33,7 @@ import numpy as np
 import pandas as pd
 
 from flask_caching import Cache
+#from dash_extensions import Cache
 import dash
 from dash import Dash, html, dcc, Input, Output, State, dash_table, no_update
 from dash.dependencies import Input, Output, State, ALL
@@ -30,40 +41,137 @@ import dash_bootstrap_components as dbc
 import plotly.express as px
 import warnings
 
-
-
-from openai import OpenAI
+#from openai import OpenAI
 
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
+
+
+# Cache setup
+cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
+
+@cache.memoize()  # Exemple de mise en cache pour la fonction
+def get_df_cached():
+    return load_supply_data()  # Fonction pour charger vos données
 
 # ------------- OpenAI client (clé hardcodée à ta demande) ----------------
 #OPENAI_API_KEY_HARDCODED = "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"
 # Ligne ~45 dans votre code
-api_key = os.getenv("OPENAI_API_KEY_HARDCODED")
+#api_key = os.getenv("OPENAI_API_KEY_HARDCODED")
 
 # AJOUTER CES LIGNES DE DEBUG
-print("=" * 60)
-print("DEBUG OPENAI CLIENT")
-print("=" * 60)
-if api_key:
-    print(f"✅ API Key trouvée : {api_key[:15]}...{api_key[-4:]}")  # Masquer le milieu
-else:
-    print("❌ API Key NON trouvée dans l'environnement")
-print("=" * 60)
+#print("=" * 60)
+#print("DEBUG OPENAI CLIENT")
+#print("=" * 60)
+#if api_key:
+ #   print(f"✅ API Key trouvée : {api_key[:15]}...{api_key[-4:]}")  # Masquer le milieu
+#else:
+ #   print("❌ API Key NON trouvée dans l'environnement")
+#print("=" * 60)
 
-openai_client = None
-try:
-    if api_key:
-        from openai import OpenAI
-        openai_client = OpenAI(api_key=api_key)
-        print("✅ Client OpenAI initialisé avec succès")
-    else:
-        print("⚠️ Pas de clé API, chatbot utilisera fallback")
-except Exception as e:
-    print(f"❌ Erreur initialisation OpenAI : {type(e).__name__}: {e}")
-    openai_client = None
-print("=" * 60)
-# -------------------------------------------------------------------------
+
+#openai_client = None
+#try:
+ #   if api_key:
+  #      from openai import OpenAI
+   #     openai_client = OpenAI(api_key=api_key)
+    #    print("✅ Client OpenAI initialisé avec succès")
+    #else:
+     #   print("⚠️ Pas de clé API, chatbot utilisera fallback")
+#except Exception as e:
+#    print(f"❌ Erreur initialisation OpenAI : {type(e).__name__}: {e}")
+ #   openai_client = None
+#print("=" * 60)
+
+
+# ====== GEMINI: config + client ======
+import os
+import google.generativeai as genai
+from google.api_core.exceptions import ResourceExhausted, DeadlineExceeded, InternalServerError
+import time, json
+from typing import Optional, Dict, Any, List
+
+# Modèles Gemini
+GEMINI_FLASH = "gemini-2.5-flash-lite"
+GEMINI_PRO   = "gemini-1.5-pro"
+
+def configure_gemini():
+    """
+    Configure l’API Gemini depuis la variable d'env GEMINI_API_KEY.
+    """
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY n'est pas défini dans l'environnement.")
+    genai.configure(api_key=api_key)
+    print("✅ Gemini configuré")
+
+# Appelle la configuration
+configure_gemini()
+
+# Client Gemini minimal & robuste
+DEFAULT_SAFETY = None
+
+class GeminiClient:
+    def __init__(self, model: str, system_instruction: Optional[str] = None,
+                 max_output_tokens: int = 2048, temperature: float = 0.2):
+        self.model = genai.GenerativeModel(
+            model_name=model,
+            system_instruction=system_instruction or "Tu es un assistant supply chain francophone, précis et concis."
+        )
+        self.gen_kwargs = dict(
+            generation_config={
+                "temperature": temperature,
+                "max_output_tokens": max_output_tokens,
+            },
+            safety_settings=DEFAULT_SAFETY
+        )
+
+    def generate(self, prompt: str, stream: bool = False) -> str:
+        tries, backoff = 0, 1.0
+        while True:
+            try:
+                if stream:
+                    out = []
+                    for ev in self.model.generate_content([prompt], stream=True, **self.gen_kwargs):
+                        if getattr(ev, "text", None):
+                            out.append(ev.text)
+                    return "".join(out).strip()
+                else:
+                    resp = self.model.generate_content([prompt], **self.gen_kwargs)
+                    return (resp.text or "").strip()
+            except (ResourceExhausted, DeadlineExceeded, InternalServerError):
+                tries += 1
+                if tries >= 3:
+                    raise
+                time.sleep(backoff); backoff *= 2
+
+    def generate_json(self, prompt: str, schema: Dict[str, Any], strict: bool = True) -> Dict[str, Any]:
+        gen_kwargs = dict(self.gen_kwargs)
+        gen_kwargs["generation_config"] = {
+            **gen_kwargs.get("generation_config", {}),
+            "response_mime_type": "application/json",
+            "response_schema": schema,
+        }
+        resp = self.model.generate_content([prompt], **gen_kwargs)
+        raw = resp.text or "{}"
+        try:
+            return json.loads(raw)
+        except Exception:
+            if strict: raise
+            return {}
+
+    def embed(self, texts: List[str]) -> List[List[float]]:
+        emb = genai.embed_content(model="text-embedding-004", content=texts)
+        if isinstance(texts, list) and len(texts) > 1:
+            return [r["values"] for r in emb["embedding"]]
+        return emb["embedding"]["values"]
+
+# Instancier le client (choisis le modèle)
+gemini_client = GeminiClient(
+    model=GEMINI_FLASH,
+    system_instruction="Tu es un assistant supply chain francophone. Sois précis, concis et pragmatique.",
+    max_output_tokens=1024,
+    temperature=0.3
+)
 
 # ----------------------------- Brand & Meta --------------------------------------
 APP_TITLE = "Supply Chain Command Center"
@@ -1707,7 +1815,8 @@ def load_supply_data() -> pd.DataFrame:
                 'frais de majoration',
                 'remboursement prêt',
                 'rubyx',
-                'cfa - cash'
+                'cfa - cash',
+                'affiches'
             ]
 
             # Créer un pattern regex pour matcher n'importe lequel de ces termes
@@ -3219,15 +3328,20 @@ def display_page(pathname):
             html.A("Retour à l'accueil", href="/")
         ], className="error-message")
 # ------------------------------ Chatbot helpers ----------------------------------
+
+# =============================== Chatbot helpers ================================
 def _detect_lang(text: str) -> str:
-    if not text: return "fr"
+    if not text:
+        return "fr"
     t = text.lower()
     fr_markers = ["bonjour","salut","stock","commande","fournisseur","rupture","couverture","jours","crédit","delisting"]
-    if any(w in t for w in fr_markers) or re.search(r"[àâçéèêëîïôùûüœ]", t): return "fr"
+    if any(w in t for w in fr_markers) or re.search(r"[àâçéèêëîïôùûüœ]", t):
+        return "fr"
     return "en"
 
 
 def _clean_df_for_advice(df: pd.DataFrame) -> pd.DataFrame:
+    """Prépare une vue compacte (ne modifie pas la logique métier)."""
     if not isinstance(df, pd.DataFrame) or df.empty:
         return pd.DataFrame()
 
@@ -3237,40 +3351,34 @@ def _clean_df_for_advice(df: pd.DataFrame) -> pd.DataFrame:
     d["abc_class"] = df.get("Product Category", "")
     d["xyz_class"] = ""
     d["current_stock"] = pd.to_numeric(df.get("total_stock", 0), errors="coerce").fillna(0).clip(lower=0)
-    d["avg_daily_sales"] = pd.to_numeric(df.get("Average Daily Sales", 0), errors="coerce").fillna(0).clip(
-        lower=0)  # ✅ Changé de "Max Avg Daily Sales"
+    d["avg_daily_sales"] = pd.to_numeric(df.get("Average Daily Sales", 0), errors="coerce").fillna(0).clip(lower=0)
 
-    # ✅ CORRECTION : Gestion robuste de coverage_days
+    # Coverage days
     with np.errstate(divide='ignore', invalid='ignore'):
-        cov = np.where(d["avg_daily_sales"] > 0, d["current_stock"] / d["avg_daily_sales"], 0)
+        cov_calc = np.where(d["avg_daily_sales"] > 0, d["current_stock"] / d["avg_daily_sales"], 0)
 
     if "Max Coverage Day" in df.columns:
-        # Si la colonne existe, l'utiliser
         d["coverage_days"] = pd.to_numeric(df["Max Coverage Day"], errors="coerce").fillna(0)
     else:
-        # Sinon, utiliser le calcul
-        d["coverage_days"] = cov
-
-    # Convertir explicitement en Series avant clip
+        d["coverage_days"] = cov_calc
     d["coverage_days"] = pd.Series(d["coverage_days"], dtype=float).clip(lower=0, upper=365)
 
-    # ✅ CORRECTION : Lead time avec fallback
+    # Lead time
     if "ADJUSTED_LEADTIME" in df.columns:
         d["leadtime_days"] = pd.to_numeric(df["ADJUSTED_LEADTIME"], errors="coerce").fillna(7)
     elif "Max Lead Time" in df.columns:
         d["leadtime_days"] = pd.to_numeric(df["Max Lead Time"], errors="coerce").fillna(7)
     else:
         d["leadtime_days"] = 7
-
     d["leadtime_days"] = pd.Series(d["leadtime_days"], dtype=float).clip(lower=0, upper=180)
 
-    # ✅ CORRECTION : Crédit
+    # Crédit
     if "credit_days" in df.columns:
         d["credit_days"] = pd.to_numeric(df["credit_days"], errors="coerce").fillna(14)
     else:
         d["credit_days"] = 14
 
-    # Rupture ML
+    # Rupture ML (utilise Predicted Stockout si présent, sinon statut stock)
     if "Predicted Stockout" in df.columns:
         d["rupture_ml"] = np.where(df["Predicted Stockout"], "OUI", "NON")
     else:
@@ -3279,49 +3387,62 @@ def _clean_df_for_advice(df: pd.DataFrame) -> pd.DataFrame:
 
     d["delisting_product"] = "NON"
 
-    # Exclure produits non pertinents
+    # Exclure lignes non pertinentes
     bad = d["product_name_display"].astype(str).str.contains(
-        r'\b(CFA|CASH|CFA\s*-\s*CASH|ESPECES|CAISSE)\b',
-        case=False,
-        na=False
+        r'\b(CFA|CASH|CFA\s*-\s*CASH|ESPECES|CAISSE)\b', case=False, na=False
     )
-    d = d[~bad].copy()  # ✅ Ajout de .copy() pour éviter SettingWithCopyWarning
+    d = d[~bad].copy()
 
     d["risk"] = (d["rupture_ml"].astype(str).str.upper() == "OUI").astype(int)
-
     return d
-
 def _bubble(role: str, text: str):
     is_user = (role == "user")
     return html.Div(className=f"chat-bubble {'user' if is_user else 'bot'}", children=[
         html.Div("🧑" if is_user else "🤖", className=f"chat-avatar {'user' if is_user else ''}"),
-        html.Div(dcc.Markdown(text or "", link_target="_blank", style={"whiteSpace":"pre-wrap","wordBreak":"break-word"}), className="chat-msg")
+        html.Div(dcc.Markdown(text or "", link_target="_blank",
+                              style={"whiteSpace":"pre-wrap","wordBreak":"break-word"}), className="chat-msg")
     ])
 
+
 def _render_messages(msgs: list):
-    return [_bubble(m.get("role","assistant"), m.get("text","")) for m in msgs or []]
+    return [_bubble(m.get("role","assistant"), m.get("text","")) for m in (msgs or [])]
 
+# --- Wrapper simple vers Gemini (utilise l'instance gemini_client déjà créée) ---
+def ask_ai(prompt: str, stream: bool = False) -> str:
+    try:
+        return gemini_client.generate(prompt, stream=stream)
+    except Exception as e:
+        print(f"[Gemini] Erreur: {type(e).__name__}: {e}")
+        return ""
 
-def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> str:
+def chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> str:
+    """
+    Version Gemini – conserve toute la logique métier (détection langue, contexte, fallback).
+    """
     try:
         if not user_text or not str(user_text).strip():
             return "Je peux analyser tes stocks, les risques de rupture et suggérer des quantités à commander."
 
         lang = _detect_lang(user_text)
         sample = _clean_df_for_advice(df if isinstance(df, pd.DataFrame) else pd.DataFrame())
-        fields = ['product_name_display', 'supplier_name', 'abc_class', 'xyz_class', 'current_stock', 'avg_daily_sales',
-                  'coverage_days', 'leadtime_days', 'credit_days', 'rupture_ml', 'delisting_product', 'risk']
+        fields = [
+            'product_name_display','supplier_name','abc_class','xyz_class','current_stock',
+            'avg_daily_sales','coverage_days','leadtime_days','credit_days','rupture_ml',
+            'delisting_product','risk'
+        ]
         view = sample[[c for c in fields if c in sample.columns]].copy() if not sample.empty else pd.DataFrame()
 
-        cov_med = None;
+        cov_med = None
         rows_digest = []
         try:
-            if not view.empty:
-                cov_med = float(view['coverage_days'].median()) if 'coverage_days' in view.columns else None
-                at_risk = view[
-                    view['rupture_ml'].str.upper() == 'OUI'] if 'rupture_ml' in view.columns else pd.DataFrame()
-                top_list = at_risk.sort_values('coverage_days', ascending=True).head(
-                    6) if not at_risk.empty else view.sort_values('coverage_days', ascending=True).head(6)
+            if not view.empty and 'coverage_days' in view.columns:
+                cov_med = float(view['coverage_days'].median())
+                at_risk = view[view['rupture_ml'].str.upper() == 'OUI'] if 'rupture_ml' in view.columns else pd.DataFrame()
+                top_list = (
+                    at_risk.sort_values('coverage_days', ascending=True).head(6)
+                    if not at_risk.empty else
+                    view.sort_values('coverage_days', ascending=True).head(6)
+                )
 
                 for _, r in top_list.iterrows():
                     rows_digest.append({
@@ -3342,19 +3463,17 @@ def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> 
         except Exception:
             pass
 
-        if openai_client is None:
-            return _chatbot_fallback(user_text, view)
-
-        # ✅ DÉTECTION SI ANALYSE DEMANDÉE
+        # Détecte si l'utilisateur demande une analyse
         needs_analysis = any(keyword in user_text.lower() for keyword in [
-            'analyse', 'recommande', 'conseil', 'rupture', 'commande', 'stock',
-            'produit', 'quels', 'combien', 'urgent', 'priorité', 'fournisseur',
-            'risque', 'order', 'achat', 'besoin', 'coverage', 'lead time'
+            'analyse','recommande','conseil','rupture','commande','stock',
+            'produit','quels','combien','urgent','priorité','fournisseur',
+            'risque','order','achat','besoin','coverage','lead time'
         ])
 
         if lang == "fr":
             system_msg = (
-                "Tu es maad_assistante, expert Supply Chain avec 15 ans d'expérience. Tu es conversationnel et réponds naturellement aux questions.\n\n"
+                "Tu es maad_assistante, expert Supply Chain avec 15 ans d'expérience. "
+                "Tu es conversationnel et réponds naturellement aux questions.\n\n"
                 "RÈGLES DE CONVERSATION :\n"
                 "- Si l'utilisateur te salue ou discute, réponds de manière amicale et naturelle\n"
                 "- Si l'utilisateur pose une question générale sur la supply chain, explique clairement sans forcer une analyse de données\n"
@@ -3368,30 +3487,33 @@ def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> 
                 "- Sois orienté action avec des recommandations précises"
             )
 
-            # ✅ CONTEXTE RÉDUIT : Envoyer données SEULEMENT si nécessaire
             if needs_analysis and table_json:
-                ctx = f"Données disponibles pour analyse :\n"
+                ctx = "Données disponibles pour analyse :\n"
                 ctx += f"- Extrait produits (20 premiers) : {json.dumps(table_json[:20], ensure_ascii=False)}\n"
                 if cov_med is not None:
                     ctx += f"- KPI global : couverture médiane ≈ {cov_med:.1f} jours\n"
                 if rows_digest:
                     ctx += "- Produits prioritaires : " + "; ".join(
-                        [f"{d['name']} (fournisseur {d['sup']}, couverture {d['cov']:.1f}j, lead time {d['lt']}j)"
-                         for d in rows_digest[:3]]
+                        [
+                            "{name} (fournisseur {sup}, couverture {cov:.1f}j, lead time {lt}j)".format(**d)
+                            for d in rows_digest[:3]
+                        ]
                     ) + "\n"
-            else:
-                ctx = "Conversation générale. Données disponibles si besoin d'analyse détaillée.\n"
+
+                else:
+                  ctx = "Conversation générale. Données disponibles si besoin d'analyse détaillée.\n"
 
             user_q = f"Question : {user_text.strip()}"
 
-        else:  # English
+        else:
             system_msg = (
-                "You are maad_assistante, a Supply Chain expert with 15 years of experience. You're conversational and respond naturally to questions.\n\n"
+                "You are maad_assistante, a Supply Chain expert with 15 years of experience. "
+                "You're conversational and respond naturally to questions.\n\n"
                 "CONVERSATION RULES:\n"
                 "- If the user greets you or chats, respond in a friendly and natural way\n"
                 "- If the user asks a general supply chain question, explain clearly without forcing data analysis\n"
                 "- ONLY if the user explicitly requests analysis, recommendations, or advice on their inventory, use the provided data\n"
-                "- Adapt your detail level to the question: simple question = short answer, analysis requested = details with numbers\n\n"
+                "- Adapt your detail level to the question: simple question = short answer, analysis requested = detailed with figures\n\n"
                 "WHEN ANALYZING DATA:\n"
                 "- Cite concrete SKUs from the table\n"
                 "- Propose quantified amounts\n"
@@ -3401,44 +3523,45 @@ def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> 
             )
 
             if needs_analysis and table_json:
-                ctx = f"Available data for analysis:\n"
+                ctx = "Available data for analysis:\n"
                 ctx += f"- Product excerpt (20 first): {json.dumps(table_json[:20], ensure_ascii=False)}\n"
                 if cov_med is not None:
                     ctx += f"- Global KPI: median coverage ≈ {cov_med:.1f} days\n"
                 if rows_digest:
-                    ctx += "- Priority products: " + "; ".join(
-                        [f"{d['name']} (supplier {d['sup']}, coverage {d['cov']:.1f}d, lead time {d['lt']}d)"
-                         for d in rows_digest[:3]]
+                    ctx += "- Produits prioritaires : " + "; ".join(
+                        [
+                            "{name} (fournisseur {sup}, couverture {cov:.1f}j, lead time {lt}j)".format(**d)
+                            for d in rows_digest[:3]
+                        ]
                     ) + "\n"
+
             else:
                 ctx = "General conversation. Data available if detailed analysis needed.\n"
 
             user_q = f"Question: {user_text.strip()}"
 
-        # Construction de l'historique complet
-        hist = [{"role": "assistant" if m.get("role") == "assistant" else "user", "content": m.get("text", "")}
-                for m in (history_messages or [])]
+        # ------------------------- Appel Gemini (unique prompt) -------------------------
+        # Historique compact (10 derniers messages)
+        hist_lines = []
+        for m in (history_messages or [])[-10:]:
+            role = "Utilisateur" if m.get("role") == "user" else "Assistant"
+            hist_lines.append(f"{role}: {m.get('text','').strip()}")
+        history_txt = "\n".join(hist_lines) if hist_lines else "—"
 
-        messages = [
-                       {"role": "system", "content": system_msg},
-                       {"role": "system", "content": ctx}  # Contexte séparé pour clarté
-                   ] + hist + [
-                       {"role": "user", "content": user_q}
-                   ]
+        prompt_text = (
+            f"[SYSTEM]\n{system_msg}\n\n"
+            f"[CONTEXTE]\n{ctx}\n\n"
+            f"[HISTORIQUE (dernier·e·s 10)]\n{history_txt}\n\n"
+            f"[QUESTION]\n{user_q}\n\n"
+            f"[INSTRUCTIONS DE SORTIE]\n"
+            f"- Réponds en **{ 'français' if lang=='fr' else 'anglais' }**.\n"
+            f"- Sois concis, clair, structuré en puces si nécessaire.\n"
+            f"- N'invente pas de calculs : appuie-toi uniquement sur les données fournies dans le CONTEXTE.\n"
+        )
 
-        try:
-            resp = openai_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=messages,
-                temperature=0.7,  # ✅ Augmenté de 0.4 à 0.7 pour conversation plus naturelle
-                max_tokens=800  # ✅ Augmenté de 600 à 800 pour réponses plus détaillées
-            )
-            out = (resp.choices[0].message.content or "").strip()
-            return out if out else _chatbot_fallback(user_text, view)
-
-        except Exception as api_err:
-            print(f"[Chatbot] Erreur OpenAI: {type(api_err).__name__}: {api_err}")
-            return _chatbot_fallback(user_text, view, prefix=f"⚠️ API indisponible. ")
+        out = ask_ai(prompt_text).strip()
+        return out if out else _chatbot_fallback(user_text, view)
+        # -------------------------------------------------------------------------------
 
     except Exception as e:
         import traceback
@@ -3447,20 +3570,16 @@ def _chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> 
 
 
 def _chatbot_fallback(user_text: str, df: pd.DataFrame, prefix: str = "") -> str:
-    """
-    df ici est déjà le DataFrame nettoyé (view), pas besoin de re-nettoyer
-    """
+    """Réponse de secours (aucun appel LLM)."""
     lang = _detect_lang(user_text)
 
-    # ✅ NE PAS appeler _clean_df_for_advice ici, df est déjà nettoyé
     if df.empty:
-        return prefix + (
-            "Données insuffisantes. Recharge les sources." if lang == "fr" else "Insufficient data. Please reload sources.")
+        return prefix + ("Données insuffisantes. Recharge les sources." if lang == "fr"
+                         else "Insufficient data. Please reload sources.")
 
     try:
-        # Utiliser directement df (qui est view)
-        top_risk = df.sort_values(['risk', 'coverage_days'], ascending=[False, True]).head(
-            5) if 'risk' in df.columns else df.head(5)
+        top_risk = df.sort_values(['risk', 'coverage_days'], ascending=[False, True]).head(5) \
+                   if 'risk' in df.columns else df.head(5)
         cnt_risk = int(df['risk'].sum()) if 'risk' in df.columns else 0
         cov_med = float(df['coverage_days'].median()) if 'coverage_days' in df.columns else 0
 
@@ -3470,10 +3589,14 @@ def _chatbot_fallback(user_text: str, df: pd.DataFrame, prefix: str = "") -> str
         for _, r in top_risk.iterrows():
             if lang == "fr":
                 lines.append(
-                    f"- {r.get('product_name_display', '?')} · cov {float(r.get('coverage_days', 0)):.1f}j · LT {int(r.get('leadtime_days', 0))}j · crédit {int(r.get('credit_days', 0))}j")
+                    f"- {r.get('product_name_display', '?')} · cov {float(r.get('coverage_days', 0)):.1f}j · "
+                    f"LT {int(r.get('leadtime_days', 0))}j · crédit {int(r.get('credit_days', 0))}j"
+                )
             else:
                 lines.append(
-                    f"- {r.get('product_name_display', '?')} · cov {float(r.get('coverage_days', 0)):.1f}d · LT {int(r.get('leadtime_days', 0))}d · credit {int(r.get('credit_days', 0))}d")
+                    f"- {r.get('product_name_display', '?')} · cov {float(r.get('coverage_days', 0)):.1f}d · "
+                    f"LT {int(r.get('leadtime_days', 0))}d · credit {int(r.get('credit_days', 0))}d"
+                )
 
         lines += [("Cibles: A/AX en Y/Z <7j; crédit>14j si LT>20j; promos classe C." if lang == "fr"
                    else "Focus A/A+ in Y/Z <7d; credit>14d if LT>20d; promo bundles for class C.")]
@@ -3481,8 +3604,47 @@ def _chatbot_fallback(user_text: str, df: pd.DataFrame, prefix: str = "") -> str
 
     except Exception as e:
         print(f"[Chatbot] Erreur fallback: {e}")
-        return prefix + (
-            "Recommandation impossible avec les données disponibles." if lang == "fr" else "Unable to compute recommendation with available data.")
+        return prefix + ("Recommandation impossible avec les données disponibles." if lang == "fr"
+                         else "Unable to compute recommendation with available data.")
+# ===============================================================================
+
+#def _chatbot_fallback(user_text: str, df: pd.DataFrame, prefix: str = "") -> str:
+ #   """
+  #  df ici est déjà le DataFrame nettoyé (view), pas besoin de re-nettoyer
+   # """
+    #lang = _detect_lang(user_text)
+
+    # ✅ NE PAS appeler _clean_df_for_advice ici, df est déjà nettoyé
+    #if df.empty:
+     #   return prefix + (
+      #      "Données insuffisantes. Recharge les sources." if lang == "fr" else "Insufficient data. Please reload sources.")
+
+    #try:
+        # Utiliser directement df (qui est view)
+     #   top_risk = df.sort_values(['risk', 'coverage_days'], ascending=[False, True]).head(
+      #      5) if 'risk' in df.columns else df.head(5)
+       # cnt_risk = int(df['risk'].sum()) if 'risk' in df.columns else 0
+       # cov_med = float(df['coverage_days'].median()) if 'coverage_days' in df.columns else 0
+
+        #lines = [f"{prefix}" + (f"Risque: {cnt_risk} prod. • Couverture médiane ~ {cov_med:.1f} j." if lang == "fr"
+         #                       else f"Risk: {cnt_risk} SKUs • Median coverage ~ {cov_med:.1f}d.")]
+
+        #for _, r in top_risk.iterrows():
+         #   if lang == "fr":
+          #      lines.append(
+           #         f"- {r.get('product_name_display', '?')} · cov {float(r.get('coverage_days', 0)):.1f}j · LT {int(r.get('leadtime_days', 0))}j · crédit {int(r.get('credit_days', 0))}j")
+           # else:
+            #    lines.append(
+             #       f"- {r.get('product_name_display', '?')} · cov {float(r.get('coverage_days', 0)):.1f}d · LT {int(r.get('leadtime_days', 0))}d · credit {int(r.get('credit_days', 0))}d")
+
+        #lines += [("Cibles: A/AX en Y/Z <7j; crédit>14j si LT>20j; promos classe C." if lang == "fr"
+         #          else "Focus A/A+ in Y/Z <7d; credit>14d if LT>20d; promo bundles for class C.")]
+        #return "\n".join(lines)
+
+    #except Exception as e:
+     #   print(f"[Chatbot] Erreur fallback: {e}")
+      #  return prefix + (
+       #     "Recommandation impossible avec les données disponibles." if lang == "fr" else "Unable to compute recommendation with available data.")
 # ------------------------------ Layout root (with floating chat) ------------------
 try:
     initial_df = get_df_cached()
@@ -4232,9 +4394,9 @@ def delete_row(active_cell, table_data, q, fs, fst, fc, opts, master_json):
 
 # ------------------------------ Floating Chat callbacks ---------------------------
 @app.callback(
-    Output("chat-open","data"),
-    [Input("chat-fab","n_clicks"), Input("chat-close","n_clicks")],
-    State("chat-open","data"),
+    Output("chat-open", "data"),
+    [Input("chat-fab", "n_clicks"), Input("chat-close", "n_clicks")],
+    State("chat-open", "data"),
     prevent_initial_call=False
 )
 def toggle_chat(n_fab, n_close, is_open):
@@ -4243,13 +4405,15 @@ def toggle_chat(n_fab, n_close, is_open):
     if not ctx.triggered:
         return is_open
     trig = ctx.triggered[0]["prop_id"].split(".")[0]
-    if trig == "chat-close": return False
-    if trig == "chat-fab": return not is_open
+    if trig == "chat-close":
+        return False
+    if trig == "chat-fab":
+        return not is_open
     return is_open
 
 @app.callback(
-    Output("chat-window","style"),
-    Input("chat-open","data")
+    Output("chat-window", "style"),
+    Input("chat-open", "data")
 )
 def show_hide_chat(is_open):
     return {"display": "flex" if is_open else "none"}
@@ -4267,28 +4431,33 @@ def parse_contents(content):
             return pd.DataFrame()
 
 @app.callback(
-    Output("uploaded-csv","data"),
-    Output("upload-status","children"),
-    Output("chat-messages","children", allow_duplicate=True),
-    Output("chat-store","data", allow_duplicate=True),
-    Input("chat-upload","contents"),
-    State("chat-upload","filename"),
-    State("chat-store","data"),
-    State("chat-messages","children"),
+    Output("uploaded-csv", "data"),
+    Output("upload-status", "children"),
+    Output("chat-messages", "children", allow_duplicate=True),
+    Output("chat-store", "data", allow_duplicate=True),
+    Input("chat-upload", "contents"),
+    State("chat-upload", "filename"),
+    State("chat-store", "data"),
+    State("chat-messages", "children"),
     prevent_initial_call=True
 )
 def on_upload(contents, filename, history, rendered):
     if not contents:
         raise dash.exceptions.PreventUpdate
-    df_u = parse_contents(contents)
-    if df_u.empty:
-        status = f"⚠️ Échec de lecture du fichier {filename or ''}."
-        return no_update, status, rendered, history
-    history = history or []
-    msg = f"📥 Fichier chargé : **{filename}** — {len(df_u)} lignes détectées. L’assistant l’utilisera pour ses conseils."
-    history.append({"role":"assistant","text":msg,"ts":datetime.now().isoformat()})
-    return df_u.to_json(orient="records"), f"✅ {filename} importé.", _render_messages(history), history
 
+    # Validation du fichier
+    try:
+        df_u = parse_contents(contents)
+        if df_u.empty:
+            return no_update, f"⚠️ Échec de lecture du fichier {filename or ''}.", rendered, history
+    except Exception as e:
+        return no_update, f"❌ Erreur lors du téléchargement du fichier : {str(e)}", rendered, history
+
+    # Processus d'upload réussi
+    history = history or []
+    msg = f"📥 Fichier chargé : **{filename}** — {len(df_u)} lignes détectées."
+    history.append({"role": "assistant", "text": msg, "ts": datetime.now().isoformat()})
+    return df_u.to_json(orient="records"), f"✅ {filename} importé.", _render_messages(history), history
 
 @app.callback(
     [Output("chat-messages", "children", allow_duplicate=True),
@@ -4303,7 +4472,7 @@ def on_upload(contents, filename, history, rendered):
 )
 def on_chat(n_clicks, user_text, history, uploaded_json, master_json):
     if not n_clicks:
-        return no_update, no_update, no_update
+        return no_update, no_update, no_update  # Empêche un traitement inutile
 
     history = history or []
     user_text = (user_text or "").strip()
@@ -4321,7 +4490,7 @@ def on_chat(n_clicks, user_text, history, uploaded_json, master_json):
     history.append({"role": "user", "text": user_text, "ts": datetime.now().isoformat()})
 
     # Obtenir la réponse IA
-    reply = _chatbot_reply(user_text, df, history[:-1])  # Exclut le dernier message pour éviter doublon
+    reply = chatbot_reply(user_text, df, history[:-1])  # Exclut le dernier message pour éviter doublon
 
     # Ajouter la réponse
     history.append({"role": "assistant", "text": reply, "ts": datetime.now().isoformat()})

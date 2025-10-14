@@ -23,6 +23,7 @@ app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[db
 # ⚠️ Très important pour Render/Gunicorn
 server = app.server
 import re
+from dotenv import load_dotenv
 import io
 import base64
 from datetime import datetime
@@ -40,9 +41,17 @@ from dash.dependencies import Input, Output, State, ALL
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import warnings
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.utils import ImageReader
+from pathlib import Path
+from reportlab.lib.units import mm
+from reportlab.platypus import Image
 
 #from openai import OpenAI
-
+import requests
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
 
@@ -84,8 +93,7 @@ def get_df_cached():
 
 
 # ====== GEMINI: config + client ======
-import os
-import google.generativeai as genai
+
 from google.api_core.exceptions import ResourceExhausted, DeadlineExceeded, InternalServerError
 import time, json
 from typing import Optional, Dict, Any, List
@@ -93,7 +101,8 @@ from typing import Optional, Dict, Any, List
 # Modèles Gemini
 GEMINI_FLASH = "gemini-2.5-flash-lite"
 GEMINI_PRO   = "gemini-1.5-pro"
-
+# Charger les variables d'environnement depuis le fichier .env
+load_dotenv()
 def configure_gemini():
     """
     Configure l’API Gemini depuis la variable d'env GEMINI_API_KEY.
@@ -2197,7 +2206,11 @@ def make_sidebar():
         html.Br(),
         html.Div([
             html.Span(" "),
-            dbc.Button("Bon de commande PDF", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True),
+            dbc.Button("Bon de commande PDF",
+                       id="btn-po-pdf",
+                       className="btn-primary",
+                       size="sm",
+                       disabled=True),  # Le bouton est désactivé par défaut
             dcc.Download(id="download-data"),
             dcc.Download(id="download-po"),
         ]),
@@ -4033,34 +4046,265 @@ def export_csv(n, data_json):
     return dcc.send_data_frame(df.to_csv, f"supply_filtered_{datetime.now().strftime('%Y%m%d_%H%M')}.csv", index=False)
 
 # ------------------------------ Export Purchase Order PDF ------------------------
+
+
+
+# Fonction pour récupérer les données CSV depuis Google Sheets
+def fetch_product_data_from_csv():
+    url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrpcAiktxAPBiwznGOh35kVetc4O8-z5rQdFDgBaDE4OC3Jnb7JDGm59c55Cwm2pWCktcsBirWT_0b/pub?gid=751531326&single=true&output=csv"
+    response = requests.get(url)
+    if response.status_code == 200:
+        product_data = pd.read_csv(io.StringIO(response.text))
+        print(f"Colonnes du DataFrame : {product_data.columns.tolist()}")  # Afficher les colonnes pour vérifier le nom exact
+        return product_data
+    else:
+        print(f"Erreur lors du téléchargement des données : {response.status_code}")
+        return pd.DataFrame()
+
+# Fonction pour générer un code de référence basé sur le nom du produit
+def ref_from_name(name: str) -> str:
+    """Génère un code de référence basé sur le nom du produit."""
+    if not name:
+        return ""
+    parts = [p for p in str(name).split() if p]
+    if not parts:
+        return str(name)[:6].upper()
+    left = (parts[0][:3] if len(parts[0]) >= 3 else parts[0]).upper()
+    right = (parts[1][:3] if len(parts) > 1 and len(parts[1]) >= 3 else (
+        parts[0][3:6] if len(parts[0]) > 3 else "")).upper()
+    return "-".join([left, right]) if right else left
+
+# Fonction pour calculer la quantité cible
+def calculate_formula_based_target(df):
+    """
+    Formule de fallback pour produits sans historique de ventes.
+    Calcule target_quantity basée sur la demande projetée.
+    """
+    ads = df.get('Average Daily Sales', pd.Series(0, index=df.index))
+    leadtime = df.get('ADJUSTED_LEADTIME', pd.Series(7, index=df.index))
+    credit = df.get('credit_days', pd.Series(14, index=df.index))
+    buffer = df.get('AJUSTER_BUFFER', pd.Series(0, index=df.index))
+    stock = df.get('total_stock', pd.Series(0, index=df.index))
+
+    target = (
+        ads * (leadtime + credit) +
+        buffer * ads -
+        stock
+    )
+
+    return np.maximum(0, target)
+
+# Fonction pour récupérer le logo en base64 ou fichier local
+def _get_logo_data_uri():
+    try:
+        logo_path = Path("logo_maad.jpg")
+        if logo_path.exists():
+            b64 = base64.b64encode(logo_path.read_bytes()).decode("utf-8")
+            return f"data:image/jpeg;base64,{b64}"
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération du logo en base64: {e}")
+    return None
+
+LOGO_DATA_URI = _get_logo_data_uri()
+
+def get_logo_for_reportlab():
+    try:
+        # Priorité 1 : Fichier local
+        logo_path = Path("logo_maad.jpg")
+        if logo_path.exists() and logo_path.stat().st_size > 0:
+            print(f"✅ Logo trouvé : {logo_path.absolute()}")
+            return str(logo_path)
+
+        # Priorité 2 : Base64
+        if LOGO_DATA_URI and "," in LOGO_DATA_URI:
+            try:
+                b64 = LOGO_DATA_URI.split(",", 1)[1] if LOGO_DATA_URI.startswith("data:") else LOGO_DATA_URI
+                raw = base64.b64decode(b64)
+                print(f"Logo chargé depuis base64 ({len(raw)} octets)")
+                return ImageReader(io.BytesIO(raw))
+            except Exception as e:
+                print(f"❌ Échec du décodage base64 du logo : {e}")
+
+        print("❌ Aucun logo disponible, continue sans")
+        return None
+    except Exception as e:
+        print(f"❌ Erreur lors du chargement du logo : {e}")
+        return None
+
+
+# Remplacer TOUTE la section PDF (lignes ~1850-2000) par ceci :
+
 @app.callback(
     Output("download-po", "data"),
     Input("btn-po-pdf", "n_clicks"),
-    State("main-table", "active_cell"),
-    State("main-table", "selected_rows"),
-    State("main-table", "data"),
+    [State("main-table", "active_cell"),
+     State("main-table", "selected_rows"),
+     State("main-table", "data")],
     prevent_initial_call=True
 )
 def export_po_pdf(n, active_cell, selected_rows, table_data):
+    """Génère le bon de commande PDF avec prix depuis le catalogue."""
     if not n or not table_data:
         return no_update
 
-    # ============= BLOC 1 : Import ReportLab avec gestion d'erreur =============
-    try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib import colors
-        from reportlab.platypus import (SimpleDocTemplate, Paragraph, Table,
-                                        TableStyle, Spacer, Image)
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.lib.units import mm
-    except ImportError as e:
-        print(f"❌ ReportLab import error: {e}")
-        print("→ Run: pip install reportlab")
+    # Déterminer la ligne sélectionnée
+    row_idx = None
+    if selected_rows and len(selected_rows) > 0:
+        row_idx = selected_rows[0]
+    elif active_cell and isinstance(active_cell, dict):
+        row_idx = active_cell.get("row")
+
+    if row_idx is None or row_idx < 0 or row_idx >= len(table_data):
         return no_update
 
-    # ============= BLOC 2 : Logique de sélection améliorée =============
-    row_idx = None
+    # Données produit
+    r = table_data[row_idx]
+    prod_name = str(r.get("product_name", "")).strip()
+    supplier = str(r.get("Supplier", "")).strip()
+    qty = float(r.get("target_quantity", 0) or r.get("QAC", 0) or 0)
 
+    if qty <= 0:
+        qty = 1  # Quantité minimale
+
+    # Charger catalogue pour prix
+    try:
+        cat_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrpcAiktxAPBiwznGOh35kVetc4O8-z5rQdFDgBaDE4OC3Jnb7JDGm59c55Cwm2pWCktcsBirWT_0b/pub?gid=751531326&single=true&output=csv"
+        catalog = pd.read_csv(cat_url, skiprows=1)
+
+        # Colonnes attendues : A=id, B=name, D=selling_price, K=purchase_price
+        catalog_subset = catalog.iloc[:, [0, 1, 3, 10]].copy()
+        catalog_subset.columns = ['product_id', 'product_name', 'selling_price', 'purchase_price']
+
+        # Nettoyer
+        catalog_subset['product_name_clean'] = (
+            catalog_subset['product_name']
+            .astype(str)
+            .str.lower()
+            .str.strip()
+        )
+
+        # Chercher le produit
+        prod_match = catalog_subset[
+            catalog_subset['product_name_clean'] == prod_name.lower()
+            ]
+
+        if prod_match.empty:
+            print(f"⚠️ Produit non trouvé dans catalogue : {prod_name}")
+            unit_price = 1000.0  # Prix par défaut
+        else:
+            unit_price = pd.to_numeric(
+                prod_match['purchase_price'].iloc[0],
+                errors='coerce'
+            )
+            if pd.isna(unit_price) or unit_price <= 0:
+                unit_price = 1000.0
+
+    except Exception as e:
+        print(f"❌ Erreur chargement catalogue : {e}")
+        unit_price = 1000.0
+
+    # Calculs financiers
+    TVA_RATE = 0.18
+    total_ht = qty * unit_price
+    total_tva = total_ht * TVA_RATE
+    total_ttc = total_ht + total_tva
+
+    # Générer PDF
+    buf = io.BytesIO()
+    po_number = get_next_po_number()
+    ref_code = ref_from_name(prod_name)
+
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        title=f"Bon de commande {po_number}"
+    )
+
+    styles = getSampleStyleSheet()
+    story = []
+
+    # Logo
+    logo_src = get_logo_for_reportlab()
+    if logo_src:
+        try:
+            from reportlab.platypus import Image
+            logo_img = Image(logo_src)
+            logo_img.drawHeight = 18 * mm
+            logo_img.drawWidth = 18 * mm
+            story.append(logo_img)
+            story.append(Spacer(1, 12))
+        except Exception as e:
+            print(f"⚠️ Logo non ajouté : {e}")
+
+    # En-tête
+    story.append(Paragraph(f"<b>BON DE COMMANDE N° {po_number}</b>", styles["Title"]))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(f"<b>{COMPANY_NAME}</b>", styles["Normal"]))
+    if COMPANY_ADDRESS:
+        story.append(Paragraph(COMPANY_ADDRESS, styles["Normal"]))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(f"Date : {datetime.now().strftime('%d/%m/%Y')}", styles["Normal"]))
+    story.append(Spacer(1, 12))
+
+    story.append(Paragraph(f"<b>Fournisseur :</b> {supplier}", styles["Normal"]))
+    story.append(Spacer(1, 18))
+
+    # Tableau produits
+    headers = ["Réf.", "Désignation", "Qté", "PU HT", "Total HT", "TVA 18%", "Total TTC"]
+    data_tbl = [[
+        ref_code,
+        prod_name[:40],
+        f"{qty:.0f}",
+        f"{unit_price:,.0f}",
+        f"{total_ht:,.0f}",
+        f"{total_tva:,.0f}",
+        f"{total_ttc:,.0f}"
+    ]]
+
+    tbl = Table([headers] + data_tbl, hAlign="LEFT")
+    tbl.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+    ]))
+    story.append(tbl)
+
+    # Totaux
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(f"<b>TOTAL HT :</b> {total_ht:,.0f} FCFA", styles["Normal"]))
+    story.append(Paragraph(f"<b>TVA (18%) :</b> {total_tva:,.0f} FCFA", styles["Normal"]))
+    story.append(Paragraph(f"<b>TOTAL TTC :</b> {total_ttc:,.0f} FCFA", styles["Heading2"]))
+
+    # Pied de page
+    story.append(Spacer(1, 24))
+    story.append(Paragraph("Conditions de livraison : À convenir avec le fournisseur", styles["Normal"]))
+    story.append(Paragraph("Modalités de paiement : Selon termes contractuels", styles["Normal"]))
+
+    # Build
+    doc.build(story)
+    buf.seek(0)
+
+    fname = f"bon_commande_{po_number}_{ref_code}.pdf"
+    print(f"✅ PDF généré : {fname}")
+
+    return dcc.send_bytes(buf.read(), filename=fname)
+
+
+# Activer le bouton PO si une cellule/ligne est sélectionnée et contient product_name + Supplier
+@app.callback(
+    Output("btn-po-pdf", "disabled"),  # Active ou désactive le bouton
+    [Input("main-table", "active_cell"),  # Quand une cellule est activée
+     Input("main-table", "selected_rows"),  # Quand une ligne est sélectionnée
+     Input("main-table", "data")],  # Données du tableau
+    prevent_initial_call=True  # Ne s'exécute que lorsque l'utilisateur interagit
+)
+def toggle_po_button(active_cell, selected_rows, data):
+    if not data or len(data) == 0:  # Si pas de données, désactiver le bouton
+        return True
+
+    row_idx = None
     # Priorité 1 : Ligne explicitement sélectionnée
     if selected_rows and len(selected_rows) > 0:
         row_idx = selected_rows[0]
@@ -4069,201 +4313,20 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
     elif active_cell and isinstance(active_cell, dict):
         row_idx = active_cell.get("row")
 
-    # Validation
-    if row_idx is None or row_idx < 0 or row_idx >= len(table_data):
-        print(f"❌ PDF Error: Invalid row_idx={row_idx}, table length={len(table_data)}")
-        return no_update
-
-    r = table_data[row_idx]
-    print(f"✅ Generating PDF for row {row_idx}: {r.get('product_name')}")
-
-    # ============= BLOC 3 : Extraction des données (VOTRE CODE ORIGINAL) =============
-    prod_name = str(r.get("product_name", "")).strip()
-    supplier = str(r.get("Supplier", "")).strip()
-    qty = r.get("Predicted Order Quantity", 0)
-    unit_ht = r.get("Unit Price HT", 0.0)
-    remise = r.get("Discount", 0.0)
-
-    if not prod_name or not supplier:
-        print(f"❌ Missing required fields: product_name='{prod_name}', supplier='{supplier}'")
-        return no_update
-
-    try:
-        qty = int(pd.to_numeric(qty, errors="coerce") or 0)
-    except Exception:
-        qty = 0
-    try:
-        unit_ht = float(pd.to_numeric(unit_ht, errors="coerce") or 0.0)
-    except Exception:
-        unit_ht = 0.0
-    try:
-        remise = float(pd.to_numeric(remise, errors="coerce") or 0.0)
-    except Exception:
-        remise = 0.0
-
-    if qty <= 0:
-        qty = 1
-
-    taux_tva = DEFAULT_TVA_RATE
-    total_ht = (qty * unit_ht) * (1 - remise / 100.0)
-    total_ttc = total_ht * (1 + taux_tva)
-
-    def ref_from_name(name: str) -> str:
-        if not name: return ""
-        parts = [p for p in str(name).split() if p]
-        if not parts: return str(name)[:6].upper()
-        left = (parts[0][:3] if len(parts[0]) >= 3 else parts[0]).upper()
-        right = (parts[1][:3] if len(parts) > 1 and len(parts[1]) >= 3 else (
-            parts[0][3:6] if len(parts[0]) > 3 else "")).upper()
-        return "-".join([left, right]) if right else left
-
-    ref_code = ref_from_name(prod_name)
-
-    # ============= BLOC 4 : Génération PDF avec gestion d'erreur robuste =============
-    try:
-        buf = io.BytesIO()
-        po_number = get_next_po_number()
-        fname = f"{po_number}_{ref_code}.pdf"
-
-        doc = SimpleDocTemplate(buf, pagesize=A4, title="Bon de commande")
-        styles = getSampleStyleSheet()
-        story = []
-
-        # Header avec logo
-        header_row = []
-        logo_src = get_logo_for_reportlab()
-        if logo_src:
-            try:
-                logo_img = Image(logo_src)
-                logo_img.drawHeight = 18 * mm
-                logo_img.drawWidth = 18 * mm
-                header_row.append(logo_img)
-            except Exception as logo_err:
-                print(f"⚠️ Logo image creation failed: {logo_err}, skipping")
-                header_row.append(Paragraph("", styles["Normal"]))
-        else:
-            header_row.append(Paragraph("", styles["Normal"]))
-
-        # Company info
-        company_lines = [f"<b>{COMPANY_NAME}</b>"]
-        if COMPANY_CAPITAL: company_lines.append(f"Montant du capital social : {COMPANY_CAPITAL}")
-        if COMPANY_RCS:     company_lines.append(f"N° et lieu RCS : {COMPANY_RCS}")
-        if COMPANY_ADDRESS: company_lines.append(f"Adresse du siège : {COMPANY_ADDRESS}")
-        if COMPANY_PHONE:   company_lines.append(f"Téléphone : {COMPANY_PHONE}")
-        if COMPANY_EMAIL:   company_lines.append(f"Email : {COMPANY_EMAIL}")
-        header_row.append(Paragraph("<br/>".join(company_lines), styles["Normal"]))
-
-        header_tbl = Table([header_row], colWidths=[25 * mm, 150 * mm])
-        header_tbl.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ]))
-        story.append(header_tbl)
-        story.append(Spacer(1, 8))
-
-        # Title et metadata
-        story.append(Paragraph("<b>BON DE COMMANDE</b>", styles["Title"]))
-        story.append(Spacer(1, 6))
-
-        meta_left = [
-            f"Bon de commande N° : <b>{po_number}</b>",
-            f"Date : {datetime.now().strftime('%d/%m/%Y')}",
-        ]
-        meta_right = ["Fournisseur :", f"<b>{supplier}</b>"] if supplier else []
-        meta_tbl = Table([[Paragraph("<br/>".join(meta_left), styles["Normal"]),
-                           Paragraph("<br/>".join(meta_right), styles["Normal"])]],
-                         colWidths=[100 * mm, 75 * mm])
-        meta_tbl.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
-        story.append(meta_tbl)
-        story.append(Spacer(1, 10))
-
-        # Tableau produit
-        headers = ["REF", "DESCRIPTION", "QUANTITÉ", "PU HT", "REMISE", "TOTAL HT", "TAUX TVA", "TOTAL TTC"]
-        data_tbl = [
-            headers,
-            [ref_code, prod_name, qty, f"{unit_ht:.2f}", f"{remise:.1f}%",
-             f"{total_ht:.2f}", f"{int(taux_tva * 100)}%", f"{total_ttc:.2f}"],
-            ["", "TOTAL", qty, "", "", f"{total_ht:.2f}", "", f"{total_ttc:.2f}"]
-        ]
-
-        tbl = Table(data_tbl, hAlign="LEFT",
-                    colWidths=[25 * mm, 65 * mm, 20 * mm, 20 * mm, 20 * mm, 25 * mm, 20 * mm, 25 * mm])
-        tbl.setStyle(TableStyle([
-            ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("ALIGN", (2, 1), (2, -1), "RIGHT"),
-            ("ALIGN", (3, 1), (-1, -1), "RIGHT"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
-        ]))
-        story.append(tbl)
-        story.append(Spacer(1, 12))
-
-        # Conditions
-        for title, content in [
-            ("Conditions de livraison :", "À préciser (lieu, délai, incoterm)."),
-            ("Conditions de règlement :", "À préciser (échéance, mode, pénalités)."),
-            ("Délai de rétractation :", "Selon conditions générales applicables."),
-        ]:
-            story.append(Paragraph(f"<b>{title}</b>", styles["Normal"]))
-            story.append(Paragraph(content, styles["Normal"]))
-            story.append(Spacer(1, 6))
-
-        doc.build(story)
-        buf.seek(0)
-
-        print(f"✅ PDF generated successfully: {fname}")
-        return dcc.send_bytes(lambda b: b.write(buf.getvalue()), filename=fname)
-
-    except Exception as e:
-        import traceback
-        print(f"❌ PDF generation failed:")
-        print(f"   Error: {type(e).__name__}: {e}")
-        print(f"   Row data: {r}")
-        print(f"   Traceback:\n{traceback.format_exc()}")
-        return no_update
-
-# Activer le bouton PO si une cellule/ligne est sélectionnée et contient product_name + Supplier
-@app.callback(
-    Output("btn-po-pdf", "disabled"),
-    [Input("main-table", "active_cell"),
-     Input("main-table", "selected_rows"),
-     Input("main-table", "data")],
-    prevent_initial_call=True  # ✅ CRUCIAL : ne s'exécute que sur interaction
-)
-def toggle_po_button(active_cell, selected_rows, data):
-    # Si pas de données, désactiver
-    if not data or len(data) == 0:
-        return True
-
-    # Déterminer quelle ligne est sélectionnée
-    row_idx = None
-
-    # Priorité 1 : selected_rows (clic sur la checkbox)
-    if selected_rows and len(selected_rows) > 0:
-        row_idx = selected_rows[0]
-
-    # Priorité 2 : active_cell (clic sur une cellule)
-    if row_idx is None and active_cell and isinstance(active_cell, dict):
-        row_idx = active_cell.get("row")
-
-    # Vérifier que l'index est valide
+    # Vérification de la validité de l'index de la ligne
     if row_idx is None or row_idx < 0 or row_idx >= len(data):
-        return True  # Désactivé
+        return True  # Si l'index de la ligne est invalide, désactiver le bouton
 
-    # Récupérer la ligne et vérifier les champs obligatoires
+    # Vérification des champs obligatoires
     try:
         r = data[row_idx]
         prod = str(r.get("product_name", "")).strip()
         sup = str(r.get("Supplier", "")).strip()
 
-        # Activer seulement si les deux champs sont présents
+        # Le bouton est activé seulement si les deux champs sont remplis
         return not (prod and sup)  # False = activé, True = désactivé
-
     except (IndexError, KeyError, TypeError):
-        return True  # Désactivé en cas d'erreur
-
+        return True  # Désactive le bouton en cas d'erreur
 
 # ------------------------------ Edit/Add/Delete rows -----------------------------
 @app.callback(

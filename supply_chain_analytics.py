@@ -7,6 +7,7 @@
 
 
 import os, sys
+
 print("CWD:", os.getcwd())
 print("Dir files:", os.listdir("."))
 print("sys.path[0]:", sys.path[0])
@@ -16,9 +17,7 @@ import dash_bootstrap_components as dbc
 import os
 import google.generativeai as genai
 
-
-
-app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP], prevent_initial_callbacks='initial_duplicate')
 
 # ⚠️ Très important pour Render/Gunicorn
 server = app.server
@@ -34,7 +33,7 @@ import numpy as np
 import pandas as pd
 
 from flask_caching import Cache
-#from dash_extensions import Cache
+# from dash_extensions import Cache
 import dash
 from dash import Dash, html, dcc, Input, Output, State, dash_table, no_update
 from dash.dependencies import Input, Output, State, ALL
@@ -52,46 +51,48 @@ from reportlab.platypus import Image
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-#from openai import OpenAI
+# from openai import OpenAI
 import requests
-warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
+warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
 # Cache setup
 cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
+
 
 @cache.memoize()  # Exemple de mise en cache pour la fonction
 def get_df_cached():
     return load_supply_data()  # Fonction pour charger vos données
 
+
 # ------------- OpenAI client (clé hardcodée à ta demande) ----------------
-#OPENAI_API_KEY_HARDCODED = "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"
+# OPENAI_API_KEY_HARDCODED = "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"
 # Ligne ~45 dans votre code
-#api_key = os.getenv("OPENAI_API_KEY_HARDCODED")
+# api_key = os.getenv("OPENAI_API_KEY_HARDCODED")
 
 # AJOUTER CES LIGNES DE DEBUG
-#print("=" * 60)
-#print("DEBUG OPENAI CLIENT")
-#print("=" * 60)
-#if api_key:
- #   print(f"✅ API Key trouvée : {api_key[:15]}...{api_key[-4:]}")  # Masquer le milieu
-#else:
- #   print("❌ API Key NON trouvée dans l'environnement")
-#print("=" * 60)
+# print("=" * 60)
+# print("DEBUG OPENAI CLIENT")
+# print("=" * 60)
+# if api_key:
+#   print(f"✅ API Key trouvée : {api_key[:15]}...{api_key[-4:]}")  # Masquer le milieu
+# else:
+#   print("❌ API Key NON trouvée dans l'environnement")
+# print("=" * 60)
 
 
-#openai_client = None
-#try:
- #   if api_key:
-  #      from openai import OpenAI
-   #     openai_client = OpenAI(api_key=api_key)
-    #    print("✅ Client OpenAI initialisé avec succès")
-    #else:
-     #   print("⚠️ Pas de clé API, chatbot utilisera fallback")
-#except Exception as e:
+# openai_client = None
+# try:
+#   if api_key:
+#      from openai import OpenAI
+#     openai_client = OpenAI(api_key=api_key)
+#    print("✅ Client OpenAI initialisé avec succès")
+# else:
+#   print("⚠️ Pas de clé API, chatbot utilisera fallback")
+# except Exception as e:
 #    print(f"❌ Erreur initialisation OpenAI : {type(e).__name__}: {e}")
- #   openai_client = None
-#print("=" * 60)
+#   openai_client = None
+# print("=" * 60)
 
 
 # ====== GEMINI: config + client ======
@@ -102,9 +103,11 @@ from typing import Optional, Dict, Any, List
 
 # Modèles Gemini
 GEMINI_FLASH = "gemini-2.5-flash-lite"
-GEMINI_PRO   = "gemini-1.5-pro"
+GEMINI_PRO = "gemini-1.5-pro"
 # Charger les variables d'environnement depuis le fichier .env
 load_dotenv()
+
+
 def configure_gemini():
     """
     Configure l’API Gemini depuis la variable d'env GEMINI_API_KEY.
@@ -115,11 +118,13 @@ def configure_gemini():
     genai.configure(api_key=api_key)
     print("✅ Gemini configuré")
 
+
 # Appelle la configuration
 configure_gemini()
 
 # Client Gemini minimal & robuste
 DEFAULT_SAFETY = None
+
 
 class GeminiClient:
     def __init__(self, model: str, system_instruction: Optional[str] = None,
@@ -153,7 +158,8 @@ class GeminiClient:
                 tries += 1
                 if tries >= 3:
                     raise
-                time.sleep(backoff); backoff *= 2
+                time.sleep(backoff);
+                backoff *= 2
 
     def generate_json(self, prompt: str, schema: Dict[str, Any], strict: bool = True) -> Dict[str, Any]:
         gen_kwargs = dict(self.gen_kwargs)
@@ -175,6 +181,7 @@ class GeminiClient:
         if isinstance(texts, list) and len(texts) > 1:
             return [r["values"] for r in emb["embedding"]]
         return emb["embedding"]["values"]
+
 
 # Instancier le client (choisis le modèle)
 gemini_client = GeminiClient(
@@ -290,79 +297,78 @@ TEAM_MEMBERS = {
 }
 
 
-
 # ------------------------------ Email Configuration -------------------------------
-#SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-#SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-#SMTP_USER = os.getenv("SMTP_USER", "")  # your-email@gmail.com
-#SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")  # App password
+# SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+# SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+# SMTP_USER = os.getenv("SMTP_USER", "")  # your-email@gmail.com
+# SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")  # App password
 
 # Mapping des utilisateurs (à personnaliser)
-#TEAM_MEMBERS = {
- #   "tony": {"name": "Tony SARRE", "email": "tony.sarre@maad.io"},
-  #  "Samuel": {"name": "Samuel Essodeke", "email": "essodeke@maad.io"},
-   # "Maimouna": {"name": "Maimouna Dagois", "email": "maimouna@maad.io"},
-    #"Seydouna": {"name": "Seydouna Oumar Niang", "email": "seydouna@maad.io"},
-#}
+# TEAM_MEMBERS = {
+#   "tony": {"name": "Tony SARRE", "email": "tony.sarre@maad.io"},
+#  "Samuel": {"name": "Samuel Essodeke", "email": "essodeke@maad.io"},
+# "Maimouna": {"name": "Maimouna Dagois", "email": "maimouna@maad.io"},
+# "Seydouna": {"name": "Seydouna Oumar Niang", "email": "seydouna@maad.io"},
+# }
 
 
-#def send_notification_email(to_email: str, to_name: str, product_name: str, author: str, message: str):
- #   """Envoie un email de notification"""
-  #  if not SMTP_USER or not SMTP_PASSWORD:
-   #     print("⚠️ Email non configuré (SMTP_USER/SMTP_PASSWORD manquants)")
-    #    return False
+# def send_notification_email(to_email: str, to_name: str, product_name: str, author: str, message: str):
+#   """Envoie un email de notification"""
+#  if not SMTP_USER or not SMTP_PASSWORD:
+#     print("⚠️ Email non configuré (SMTP_USER/SMTP_PASSWORD manquants)")
+#    return False
 
-    #try:
-     #   import smtplib
-      #  from email.mime.text import MIMEText
-       # from email.mime.multipart import MIMEMultipart
+# try:
+#   import smtplib
+#  from email.mime.text import MIMEText
+# from email.mime.multipart import MIMEMultipart
 
-        #msg = MIMEMultipart("alternative")
-        #msg["Subject"] = f"[Maad SaSu] Nouvelle mention sur {product_name}"
-        #msg["From"] = SMTP_USER
-        #msg["To"] = to_email
+# msg = MIMEMultipart("alternative")
+# msg["Subject"] = f"[Maad SaSu] Nouvelle mention sur {product_name}"
+# msg["From"] = SMTP_USER
+# msg["To"] = to_email
 
-        #html = f"""
-        #<html>
-        #<body style="font-family: Arial, sans-serif; color: #333;">
-         #   <div style="background: #0b1220; padding: 20px; border-radius: 10px;">
-          #      <h2 style="color: #22d3ee;">📌 Nouvelle mention</h2>
-           #     <p style="color: #e5e7eb;">Bonjour {to_name},</p>
-            #    <p style="color: #e5e7eb;">
-             #       <strong>{author}</strong> vous a mentionné dans une note sur le produit
-              #      <strong style="color: #22d3ee;">{product_name}</strong> :
-               # </p>
-                #<blockquote style="background: #1f2937; padding: 15px; border-left: 4px solid #22d3ee; margin: 20px 0;">
-                 #   <p style="color: #e5e7eb; font-style: italic;">{message}</p>
-                #</blockquote>
-                #<p style="color: #9ca3af; font-size: 12px;">
-                 #   Date : {datetime.now().strftime('%d/%m/%Y à %H:%M')}
-                #</p>
-                #<a href="https://your-dashboard-url.com"
-                 #  style="display: inline-block; background: #22d3ee; color: #001018;
-                  #        padding: 10px 20px; text-decoration: none; border-radius: 5px;
-                   #       font-weight: bold; margin-top: 10px;">
-                    #Voir le dashboard
-                #</a>
-      #      </div>
-       # </body>
-        #</html>
-       # """
+# html = f"""
+# <html>
+# <body style="font-family: Arial, sans-serif; color: #333;">
+#   <div style="background: #0b1220; padding: 20px; border-radius: 10px;">
+#      <h2 style="color: #22d3ee;">📌 Nouvelle mention</h2>
+#     <p style="color: #e5e7eb;">Bonjour {to_name},</p>
+#    <p style="color: #e5e7eb;">
+#       <strong>{author}</strong> vous a mentionné dans une note sur le produit
+#      <strong style="color: #22d3ee;">{product_name}</strong> :
+# </p>
+# <blockquote style="background: #1f2937; padding: 15px; border-left: 4px solid #22d3ee; margin: 20px 0;">
+#   <p style="color: #e5e7eb; font-style: italic;">{message}</p>
+# </blockquote>
+# <p style="color: #9ca3af; font-size: 12px;">
+#   Date : {datetime.now().strftime('%d/%m/%Y à %H:%M')}
+# </p>
+# <a href="https://your-dashboard-url.com"
+#  style="display: inline-block; background: #22d3ee; color: #001018;
+#        padding: 10px 20px; text-decoration: none; border-radius: 5px;
+#       font-weight: bold; margin-top: 10px;">
+# Voir le dashboard
+# </a>
+#      </div>
+# </body>
+# </html>
+# """
 
-        #part = MIMEText(html, "html")
-        #msg.attach(part)
+# part = MIMEText(html, "html")
+# msg.attach(part)
 
-        #with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-         #   server.starttls()
-          #  server.login(SMTP_USER, SMTP_PASSWORD)
-           # server.send_message(msg)
+# with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+#   server.starttls()
+#  server.login(SMTP_USER, SMTP_PASSWORD)
+# server.send_message(msg)
 
-        #print(f" Email envoyé à {to_email}")
-        #return True
+# print(f" Email envoyé à {to_email}")
+# return True
 
-    #except Exception as e:
-     #   print(f" Erreur envoi email: {e}")
-      #  return False
+# except Exception as e:
+#   print(f" Erreur envoi email: {e}")
+#  return False
 
 def _get_logo_data_uri():
     try:
@@ -373,6 +379,7 @@ def _get_logo_data_uri():
     except Exception:
         pass
     return None
+
 
 LOGO_DATA_URI = _get_logo_data_uri()
 
@@ -404,12 +411,14 @@ def get_logo_for_reportlab():
         print(f" Logo loading error: {e}")
         return None
 
+
 # ------------------------------ PO Numbering -------------------------------------
 PO_COUNTER_PATH = Path("./po_counter.json")
 
 # ------------------------------ Notes System -------------------------------------
 NOTES_DB_PATH = Path("./notes_database.json")
 NOTES_LOCK = threading.Lock()
+
 
 def _load_notes():
     """Charge toutes les notes depuis le fichier JSON"""
@@ -420,6 +429,7 @@ def _load_notes():
         print(f"Erreur chargement notes: {e}")
     return []
 
+
 def _save_notes(notes_list: list):
     """Sauvegarde les notes dans le fichier JSON"""
     try:
@@ -427,6 +437,7 @@ def _save_notes(notes_list: list):
             NOTES_DB_PATH.write_text(json.dumps(notes_list, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception as e:
         print(f"Erreur sauvegarde notes: {e}")
+
 
 def add_note(product_name: str, author: str, message: str, mentions: list = None):
     """Ajoute une nouvelle note"""
@@ -444,12 +455,15 @@ def add_note(product_name: str, author: str, message: str, mentions: list = None
     _save_notes(notes)
     return new_note
 
+
 def get_notes_for_product(product_name: str):
     """Récupère toutes les notes d'un produit"""
     notes = _load_notes()
     return [n for n in notes if n.get("product_name", "").lower() == product_name.lower()]
 
+
 PO_LOCK = threading.Lock()
+
 
 def _load_po_state():
     try:
@@ -460,12 +474,14 @@ def _load_po_state():
         pass
     return {"date": None, "seq": 0}
 
+
 def _save_po_state(state: dict):
     try:
         import json as _json
         PO_COUNTER_PATH.write_text(_json.dumps(state, ensure_ascii=False), encoding="utf-8")
     except Exception:
         pass
+
 
 def get_next_po_number() -> str:
     today = datetime.now().strftime("%Y%m%d")
@@ -477,8 +493,6 @@ def get_next_po_number() -> str:
             st["seq"] = int(st.get("seq", 0)) + 1
         _save_po_state(st)
         return f"PO-{today}-{st['seq']:03d}"
-
-
 
 
 import pandas as pd
@@ -513,6 +527,8 @@ def calculate_formula_based_target(df):
     )
 
     return np.maximum(0, target)
+
+
 def load_sales_history():
     """Charge et nettoie l'historique des ventes Pikine."""
     SALES_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=1493123930&single=true&output=csv"
@@ -758,6 +774,7 @@ def load_and_analyze_promotions():
         traceback.print_exc()
         return pd.DataFrame()
 
+
 def calculate_promo_roi_analysis(sales_df: pd.DataFrame, promo_df: pd.DataFrame,
                                  current_df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -944,6 +961,7 @@ def calculate_promo_roi_analysis(sales_df: pd.DataFrame, promo_df: pd.DataFrame,
 
     return roi_df
 
+
 def load_supply_data() -> pd.DataFrame:
     import numpy as np
     import pandas as pd
@@ -983,7 +1001,6 @@ def load_supply_data() -> pd.DataFrame:
     SUPPLIER_CATEGORIZATION_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQax3ZQW2QhDLE-waDewtdD8x_Q5tpn2FWzVJftr9egik4_JF3s2ytSYJmXh55aUnp79vmF-XtkaTmN/pub?gid=1938047484&single=true&output=csv"
     CATALOG_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRTyAxh6v8o0FXV0r7f6ALPDgmeJNkjTZITjrEoKBHo2gs_f3iyV8sFk8fOzcAsUSkJMXBJCpJnhQKi/pub?gid=751531326&single=true&output=csv"
 
-
     # =========================
     # Load CSV
     # =========================
@@ -1006,7 +1023,6 @@ def load_supply_data() -> pd.DataFrame:
         print("'Parametres Replenish' data loaded successfully.")
     except:
         parametres_replenish_df = pd.DataFrame()
-
 
     # =========================
     # Harmonisation inventaire
@@ -1551,17 +1567,17 @@ def load_supply_data() -> pd.DataFrame:
 
     final_stock_sales_df["credit_days"] = safe_numeric(final_stock_sales_df["credit_days"], 0)
 
-    #def calc_max_credit_buffer(row):
-     #   cd = row["credit_days"]
-      #  cc = str(row.get("Credit_cumulable", "")).lower()
-       # return min(cd, 20) if cc == "oui" else cd
+    # def calc_max_credit_buffer(row):
+    #   cd = row["credit_days"]
+    #  cc = str(row.get("Credit_cumulable", "")).lower()
+    # return min(cd, 20) if cc == "oui" else cd
 
-    #final_stock_sales_df["MAX_CREDIT_BUFFER"] = final_stock_sales_df.apply(calc_max_credit_buffer, axis=1)
+    # final_stock_sales_df["MAX_CREDIT_BUFFER"] = final_stock_sales_df.apply(calc_max_credit_buffer, axis=1)
 
-    #final_stock_sales_df["AJUSTER_BUFFER"] = np.maximum(
-     #   safe_numeric(final_stock_sales_df["Param_Buffer_Value_Lookup"], 0),
-      #  safe_numeric(final_stock_sales_df["MAX_CREDIT_BUFFER"], 0),
-    #)
+    # final_stock_sales_df["AJUSTER_BUFFER"] = np.maximum(
+    #   safe_numeric(final_stock_sales_df["Param_Buffer_Value_Lookup"], 0),
+    #  safe_numeric(final_stock_sales_df["MAX_CREDIT_BUFFER"], 0),
+    # )
 
     final_stock_sales_df["MOQ MAAD"] = (safe_numeric(final_stock_sales_df["ADJUSTED_LEADTIME"], 0) + 3) * safe_numeric(
         final_stock_sales_df["Average Daily Sales"], 0.1)
@@ -1603,15 +1619,15 @@ def load_supply_data() -> pd.DataFrame:
     # =========================
     # Calcul target_quantity (formule simple)
     # =========================
-    #final_stock_sales_df['target_quantity'] = np.maximum(
-     #   0,
-      ##  final_stock_sales_df['Average Daily Sales'] *
-        #(final_stock_sales_df['ADJUSTED_LEADTIME'] + final_stock_sales_df['credit_days']) +
-        #final_stock_sales_df['AJUSTER_BUFFER'] * final_stock_sales_df['Average Daily Sales'] -
-        #final_stock_sales_df['total_stock']
-    #)
+    # final_stock_sales_df['target_quantity'] = np.maximum(
+    #   0,
+    ##  final_stock_sales_df['Average Daily Sales'] *
+    # (final_stock_sales_df['ADJUSTED_LEADTIME'] + final_stock_sales_df['credit_days']) +
+    # final_stock_sales_df['AJUSTER_BUFFER'] * final_stock_sales_df['Average Daily Sales'] -
+    # final_stock_sales_df['total_stock']
+    # )
 
-    #print(f"✅ target_quantity calculée (formule métier)")
+    # print(f"✅ target_quantity calculée (formule métier)")
 
     # =========================
     # ML SUPERVISÉ avec ventes historiques
@@ -1698,7 +1714,8 @@ def load_supply_data() -> pd.DataFrame:
     final_stock_sales_df["Ajusted_total_need"] = final_stock_sales_df.apply(calc_adjusted_total_need, axis=1)
 
     # Predicted Stockout
-    final_stock_sales_df["Predicted Stockout"] = safe_numeric(final_stock_sales_df["total_stock"], 0) <= safe_numeric(final_stock_sales_df["optimal stock"], 0)
+    final_stock_sales_df["Predicted Stockout"] = safe_numeric(final_stock_sales_df["total_stock"], 0) <= safe_numeric(
+        final_stock_sales_df["optimal stock"], 0)
 
     # Stock Status
     def get_stock_status(row):
@@ -1714,10 +1731,11 @@ def load_supply_data() -> pd.DataFrame:
             return "Order Soon"
         else:
             return "Stock OK"
+
     final_stock_sales_df["Stock Status"] = final_stock_sales_df.apply(get_stock_status, axis=1)
 
     # Credit Adequacy
-    for c in ["total_stock","Average Daily Sales","ADJUSTED_LEADTIME","credit_days","Predicted Order Quantity"]:
+    for c in ["total_stock", "Average Daily Sales", "ADJUSTED_LEADTIME", "credit_days", "Predicted Order Quantity"]:
         if c not in final_stock_sales_df.columns:
             final_stock_sales_df[c] = 0.0
         final_stock_sales_df[c] = safe_numeric(final_stock_sales_df[c], 0)
@@ -1725,14 +1743,14 @@ def load_supply_data() -> pd.DataFrame:
     cds = final_stock_sales_df["credit_days"].clip(lower=0)
     ads = final_stock_sales_df["Average Daily Sales"].clip(lower=0)
     alt = final_stock_sales_df["ADJUSTED_LEADTIME"].clip(lower=0)
-    s0  = final_stock_sales_df["total_stock"].clip(lower=0)
-    q   = final_stock_sales_df["Predicted Order Quantity"].clip(lower=0)
+    s0 = final_stock_sales_df["total_stock"].clip(lower=0)
+    q = final_stock_sales_df["Predicted Order Quantity"].clip(lower=0)
 
-    target_low  = ads * cds
+    target_low = ads * cds
     target_high = ads * (cds + alt)
     s_post = s0 + q
     gap_low = (target_low - s_post).clip(lower=0)
-    excess  = (s_post - target_high).clip(lower=0)
+    excess = (s_post - target_high).clip(lower=0)
     denom = target_low.where(target_low > 0, 1.0)
     err = (gap_low + excess) / denom
     credit_score = np.exp(-1.5 * err)
@@ -1747,7 +1765,9 @@ def load_supply_data() -> pd.DataFrame:
         ads.loc[no_credit_mask] > 0, 1.0, 0.0
     )
     dmask = final_stock_sales_df["delisting_status"].astype(str).str.lower().eq("delisted")
-    final_stock_sales_df.loc[dmask, ["Predicted Order Quantity","Predicted Stockout","purchase_need","QAC","MOQ MAAD"]] = [0, False, 0, 0, 0]
+    final_stock_sales_df.loc[
+        dmask, ["Predicted Order Quantity", "Predicted Stockout", "purchase_need", "QAC", "MOQ MAAD"]] = [0, False, 0,
+                                                                                                          0, 0]
     final_stock_sales_df.loc[dmask, "Ajusted_total_need"] = "NO NEED"
     final_stock_sales_df.loc[dmask, "Credit Adequacy Risk"] = False
     final_stock_sales_df.loc[dmask, "Credit Adequacy Score"] = 1.0
@@ -1838,15 +1858,15 @@ def load_supply_data() -> pd.DataFrame:
     final_stock_sales_df = final_stock_sales_df[
         [c for c in _front if c in final_stock_sales_df.columns] +
         [c for c in final_stock_sales_df.columns if c not in _front]
-    ]
+        ]
 
     # =========================
     # TEST FINAL DE VALIDATION
     # =========================
     print("\n========== VÉRIFICATION FINALE RECALCULATED ADS ==========")
     sample = final_stock_sales_df[["product_name", "Average Daily Sales (7d)",
-                                    "Average Daily Sales (30d)", "Daily OOS Rate (7d)",
-                                    "Average Daily Sales"]].head(10)
+                                   "Average Daily Sales (30d)", "Daily OOS Rate (7d)",
+                                   "Average Daily Sales"]].head(10)
     print("Échantillon (10 premiers produits) :")
     print(sample.to_string())
 
@@ -1952,12 +1972,154 @@ def load_supply_data() -> pd.DataFrame:
 
         return final_stock_sales_df
 
+
 # Utility: add Actions columns
 def add_action_cols(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
-    df2["✏️ Edit"] = "✏️"
-    df2["🗑️ Delete"] = "🗑️"
+    df2["edit Edit"] = "edit"
+    df2["delete Delete"] = "delete"
     return df2
+
+
+# ✅ ✅ ✅ PLACER ICI LA FONCTION recalculate_product_metrics ✅ ✅ ✅
+
+def recalculate_product_metrics(row: pd.Series) -> pd.Series:
+    """
+    Recalcule TOUS les paramètres dépendants d'un produit après modification.
+    Garantit la cohérence métier Supply Chain.
+
+    Args:
+        row: Ligne produit (pd.Series) avec valeurs potentiellement modifiées
+
+    Returns:
+        pd.Series avec toutes les métriques recalculées
+    """
+
+
+    row = row.copy()
+
+    # === VALIDATION & NETTOYAGE ===
+    numeric_cols = {
+        #'total_stock': 0,
+        'Average Daily Sales': 0.1,
+        'Max Daily Sales (Pikine)': 0,
+        'QAC': 0,
+        'MOQ MAAD': 0,
+        'purchase_need': 0,
+        'credit_days': 0,
+        'ADJUSTED_LEADTIME': 7,
+        'AJUSTER_BUFFER': 0,
+        #'target_quantity': 0,
+        #'optimal stock': 0,
+        'Max Coverage Day': 0
+    }
+
+    for col, default in numeric_cols.items():
+        if col in row.index:
+            val = pd.to_numeric(row[col], errors='coerce')
+            row[col] = max(val if pd.notna(val) else default, default)
+
+    # === PARAMÈTRES DE BASE ===
+    ads = max(row.get('Average Daily Sales', 0.1), 0.1)
+    leadtime = row.get('ADJUSTED_LEADTIME', 7)
+    credit = row.get('credit_days', 0)
+    buffer = row.get('AJUSTER_BUFFER', 0)
+    stock = row.get('total_stock', 0)
+    max_daily = row.get('Max Daily Sales (Pikine)', 0)
+
+    # Si Max Daily Sales non défini, estimer à 1.5x ADS
+    if max_daily == 0:
+        max_daily = ads * 1.5
+        row['Max Daily Sales (Pikine)'] = max_daily
+
+    # === RECALCULS MÉTIER (ordre critique) ===
+
+    # 1. Couverture en jours
+    row['Max Coverage Day'] = min(stock / ads, 365) if ads > 0 else 0
+
+    # 2. Stock optimal
+    row['optimal stock'] = max(
+        max_daily,
+        (max_daily / 2.0) + (buffer * ads)
+    )
+
+    # 3. MOQ MAAD
+    row['MOQ MAAD'] = (leadtime + 3) * ads
+
+    # 4. Purchase Need
+    optimal = row['optimal stock']
+    param_supplier_factor = row.get('Param_Supplier_Factor', 0)
+    param_buffer_value = row.get('Param_Buffer_Value_Lookup', 0)
+
+    if stock <= 0:
+        row['purchase_need'] = max_daily + (param_buffer_value * ads)
+    elif stock < optimal + (param_supplier_factor * ads):
+        row['purchase_need'] = max(0, (optimal - stock) + (param_supplier_factor * ads))
+    else:
+        row['purchase_need'] = 0
+
+    # 5. QAC (ne recalculer que si vide)
+    current_qac = row.get('QAC', 0)
+    if current_qac == 0 or pd.isna(current_qac):
+        row['QAC'] = max(row['MOQ MAAD'], row['purchase_need'])
+
+    # 6. Target Quantity
+    row['target_quantity'] = max(
+        0,
+        ads * (leadtime + credit) + buffer * ads - stock
+    )
+
+    # 7. Adjusted Total Need
+    delisting = str(row.get('delisting_status', '')).lower()
+    if delisting == 'delisted':
+        row['Ajusted_total_need'] = 'NO NEED'
+    else:
+        coverage = row['Max Coverage Day']
+        replenishment_days = leadtime + credit
+        optimal_coverage = optimal / ads if ads > 0 else 0
+
+        if coverage <= leadtime + 3:
+            row['Ajusted_total_need'] = 'ORDER NOW'
+        elif coverage < replenishment_days + optimal_coverage:
+            row['Ajusted_total_need'] = 'ORDER NOT URGENT'
+        else:
+            row['Ajusted_total_need'] = 'NO NEED'
+
+    # 8. Stock Status
+    if stock <= 0:
+        row['Stock Status'] = 'Out of Stock'
+    elif stock <= optimal:
+        row['Stock Status'] = 'Predicted Stockout Soon'
+    elif stock <= optimal + (leadtime * ads):
+        row['Stock Status'] = 'Order Soon'
+    else:
+        row['Stock Status'] = 'Stock OK'
+
+    # 9. Predicted Stockout
+    row['Predicted Stockout'] = (stock <= optimal)
+
+    # 10. Credit Adequacy
+    if credit > 0:
+        target_low = ads * credit
+        target_high = ads * (credit + leadtime)
+        stock_post = stock + row.get('Predicted Order Quantity', row['QAC'])
+
+        gap_low = max(0, target_low - stock_post)
+        excess = max(0, stock_post - target_high)
+
+        denom = target_low if target_low > 0 else 1.0
+        err = (gap_low + excess) / denom
+
+        row['Credit Adequacy Score'] = np.exp(-1.5 * err)
+        row['Credit Adequacy Risk'] = (err > 0)
+    else:
+        row['Credit Adequacy Score'] = 1.0 if ads > 0 else 0.0
+        row['Credit Adequacy Risk'] = False
+
+    # 11. Timestamp de modification
+    row['last_modified'] = datetime.now().isoformat()
+
+    return row
 
 
 def train_optimal_order_quantity_model(df: pd.DataFrame) -> tuple:
@@ -2018,6 +2180,7 @@ def train_optimal_order_quantity_model(df: pd.DataFrame) -> tuple:
         np.maximum(df_work['Average Daily Sales'], 0.1),
         index=df_work.index
     ).clip(upper=10)
+
     # =========================
     # Target : Quantité optimale théorique
     # =========================
@@ -2113,9 +2276,10 @@ def train_optimal_order_quantity_model(df: pd.DataFrame) -> tuple:
         df_work['Predicted Order Quantity'] = df_work['target_quantity']
         return df_work, None
 
+
 # ----------------------------- App & Cache ---------------------------------------
 app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True)
-server = app.server
+#server = app.server
 cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
 
 # ------------------------------ Custom CSS & JS ----------------------------------
@@ -2190,7 +2354,7 @@ app.index_string = """
             .upload-box {
                 border: 2px dashed #9ca3af; border-radius: 10px; padding: 10px; text-align:center; color:#6b7280; background:#ffffff;
             }
-        
+
             .dark-dropdown .Select-control {
                 background: #0a1320 !important;
                 border: 1px solid #1f2937 !important;
@@ -2242,10 +2406,12 @@ app.index_string = """
 </html>
 """
 
+
 # ------------------------------ Data cache layer ---------------------------------
 @cache.memoize()
 def get_df_cached():
     return load_supply_data()
+
 
 # ------------------------------ Sidebar ------------------------------------------
 def make_sidebar():
@@ -2319,11 +2485,7 @@ def make_sidebar():
         html.Br(),
         html.Div([
             html.Span(" "),
-            dbc.Button("Bon de commande PDF",
-                       id="btn-po-pdf",
-                       className="btn-primary",
-                       size="sm",
-                       disabled=True),  # Le bouton est désactivé par défaut
+            dbc.Button("📄 Bon de commande WORD", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True), # Le bouton est désactivé par défaut
             dcc.Download(id="download-data"),
             dcc.Download(id="download-po"),
         ]),
@@ -2342,12 +2504,14 @@ def make_sidebar():
         html.Div(id="debug-info", style={"marginTop": "20px", "fontSize": "10px", "color": "#6b7280"})  # Pour debug
     ])
 
+
 # ------------------------------ Aggregation helpers ------------------------------
 def _first_non_null(series):
     for v in series:
         if pd.notna(v) and v != "":
             return v
     return np.nan
+
 
 def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
     """Vue dé-dupliquée : 1 ligne par product_name, en conservant toutes les colonnes clés."""
@@ -2378,20 +2542,22 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
         tmp['Supplier'] = ""
 
     # Fournisseur principal = plus grand stock
-    if {'product_name','Supplier','total_stock'}.issubset(tmp.columns):
+    if {'product_name', 'Supplier', 'total_stock'}.issubset(tmp.columns):
         idx_max = tmp.groupby('product_name')['total_stock'].idxmax()
-        main_sup = tmp.loc[idx_max, ['product_name','Supplier']].rename(columns={'Supplier':'Main Supplier'})
+        main_sup = tmp.loc[idx_max, ['product_name', 'Supplier']].rename(columns={'Supplier': 'Main Supplier'})
     else:
-        main_sup = pd.DataFrame(columns=['product_name','Main Supplier'])
+        main_sup = pd.DataFrame(columns=['product_name', 'Main Supplier'])
 
     # Priorités pour quelques colonnes catégorielles
     status_priority = {'Out of Stock': 3, 'Predicted Stockout Soon': 2, 'Order Soon': 1, 'Stock OK': 0}
+
     def pick_status(series):
         s = series.dropna().astype(str)
         if s.empty: return np.nan
         return s.iloc[s.map(lambda v: status_priority.get(v, 0)).argmax()]
 
     need_priority = {'ORDER NOW': 2, 'ORDER NOT URGENT': 1, 'NO NEED': 0}
+
     def pick_need(series):
         s = series.dropna().astype(str)
         if s.empty: return np.nan
@@ -2416,7 +2582,7 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
     agg_map = {}
 
     # Sommes (conservatives pour des besoins agrégés)
-    for c in ['total_stock','Predicted Order Quantity','purchase_need','MOQ MAAD','QAC']:
+    for c in ['total_stock', 'Predicted Order Quantity', 'purchase_need', 'MOQ MAAD', 'QAC']:
         if c in tmp.columns: agg_map[c] = 'sum'
 
     # Max (couverture, LT, OOS, buffers…)
@@ -2476,6 +2642,8 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
             # Optionnel : garder aussi Suppliers (all) pour référence
 
     return grouped
+
+
 
 
 # ------------------------------ Pages --------------------------------------------
@@ -2546,7 +2714,6 @@ def make_kpis(df: pd.DataFrame):
     elif 'Ajusted_total_need' in df_valid.columns:
         risk_count = int((df_valid['Ajusted_total_need'].isin(['ORDER NOW', 'ORDER NOT URGENT'])).sum())
 
-
     # Cartes KPI
     cards = dbc.Row([
         dbc.Col(html.Div(className="kpi", children=[
@@ -2580,10 +2747,16 @@ def make_kpis(df: pd.DataFrame):
     print(f"📊 KPIs calculés : SKUs={total_skus}, Ruptures={out_of_stock}, Risques={risk_count}")
 
     return cards, bell
+
+
 def page_overview(master_df: pd.DataFrame = None):
     # Charger les données
+
+    print(master_df.head())
     df = master_df if master_df is not None else get_df_cached()
     df = df.copy()
+
+
 
     # === UI HARDENING (garantir présence + valeurs non vides) ===
     def _ui_harden(df):
@@ -2631,6 +2804,8 @@ def page_overview(master_df: pd.DataFrame = None):
 
     # ✅ 1. DÉFINIR colonnes prioritaires overview
     cols_priority_overview = [
+        "QAC edited",
+        #"delete",
         "product_id",
         "product_name",
         "Supplier",
@@ -2651,7 +2826,8 @@ def page_overview(master_df: pd.DataFrame = None):
         "MOQ MAAD",
         "delisting_status",
         "Daily OOS Rate (30d)",
-       # "📝 Notes"
+        # "📝 Notes"
+
     ]
 
     # ✅ 2. Colonnes INTERDITES dans overview (techniques + promo)
@@ -2663,7 +2839,7 @@ def page_overview(master_df: pd.DataFrame = None):
         "Daily OOS Rate (7d)",
         "Stockout Probability",
         "Credit Adequacy Score",
-        #"Stock Status",
+        # "Stock Status",
         "is_active",
         "demand_stability",
         "oos_risk",
@@ -2711,7 +2887,6 @@ def page_overview(master_df: pd.DataFrame = None):
         if must not in available_cols:
             available_cols.insert(1, must)
 
-
     # Vérifier que product_name est dans available_cols
     if "product_name" not in available_cols and "product_name" in df_overview.columns:
         available_cols.insert(0, "product_name")
@@ -2726,7 +2901,17 @@ def page_overview(master_df: pd.DataFrame = None):
             else "Stock OK",
             axis=1
         )
+    # Ajouter les colonnes d'actions "edit" et "delete"
+    df_with_actions = df.copy()
 
+    # Insérer les colonnes "edit" et "delete" dans le DataFrame avec un message d'action ou une valeur par défaut
+   # df_with_actions.insert(0, "delete", "delete")  # Colonne Delete
+    #df_with_actions.insert(0, "edit", "edit")  # Colonne Edit
+    # Appliquer la fonction pour ajouter les colonnes "edit" et "delete"
+    #df_with_actions = add_action_cols(df)
+
+    # Mettre à jour la liste des colonnes disponibles
+    available_cols_with_actions = ["edit", "delete"] + available_cols
 
     # KPIs
     kpi_cards, risk_bell = make_kpis(df_overview)
@@ -2736,22 +2921,27 @@ def page_overview(master_df: pd.DataFrame = None):
         dbc.Col(html.H2("Overview"), md=8),
         dbc.Col(html.Div(risk_bell, style={"textAlign": "right"}), md=4),
     ])
+    # Ajouter la nouvelle colonne 'QAC edited' dans available_cols
+    available_cols = available_cols #+ ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
 
-    # ✅ 7. Tableau avec df_overview filtré
+    # Générer dynamiquement les colonnes et rendre 'QAC edited' editable
+    columns = [
+        {"name": c, "id": c, "deletable": False, "hideable": True, "editable": True if c == 'QAC edited' else False}
+        for c in available_cols
+    ]
+
+    # DataTable avec la nouvelle colonne 'QAC edited' éditable
     table = dash_table.DataTable(
         id="main-table",
-        columns=[
-            {"name": c, "id": c, "deletable": False, "hideable": True}
-            for c in available_cols
-        ],
-        data=df_overview[available_cols].to_dict("records"),  # ✅ df_overview
+        columns=columns,  # Utilisation des colonnes générées dynamiquement
+        data=df_overview[available_cols].to_dict("records"),  # Les données de la table
         page_size=15,
         filter_action="native",
         sort_action="native",
         sort_mode="multi",
         column_selectable="single",
-        editable=True,
-        row_selectable="single",
+        editable=True,  # La table entière est éditable, mais 'QAC edited' est précisément rendue éditable
+        row_selectable="multi",
         selected_rows=[],
         style_table={"overflowX": "auto", "maxWidth": "100%"},
         style_header={
@@ -2768,6 +2958,19 @@ def page_overview(master_df: pd.DataFrame = None):
             "textAlign": "center",
             "padding": "6px"
         },
+        style_cell_conditional=[
+            {
+                "if": {"column_id": "QAC edited"},  # Spécifie le style de la colonne 'QAC edited'
+                "width": "150px",
+                "minWidth": "150px",
+                "maxWidth": "150px",
+                "textAlign": "center",
+                "cursor": "pointer",
+                "fontWeight": "bold",
+                "fontSize": "16px",
+                "backgroundColor": "#0f1625"
+            }
+        ],
         style_data_conditional=[
             {"if": {"filter_query": "{Ajusted_total_need} = 'ORDER NOW'"},
              "backgroundColor": "rgba(239,68,68,.2)", "color": "#fee2e2"},
@@ -2775,15 +2978,11 @@ def page_overview(master_df: pd.DataFrame = None):
              "backgroundColor": "rgba(245,158,11,.2)", "color": "#fef3c7"},
             {"if": {"filter_query": "{Ajusted_total_need} = 'NO NEED'"},
              "backgroundColor": "rgba(16,185,129,.15)", "color": "#d1fae5"},
-            {"if": {"state": "active"},
-             "backgroundColor": "#1e293b", "color": "#f9fafb"},
-            {"if": {"state": "selected"},
-             "backgroundColor": "#334155", "color": "#f9fafb"},
         ],
         style_data={"whiteSpace": "normal", "height": "auto"},
         export_format="csv",
         export_headers="display",
-        persistence=True,
+        persistence=False,
         persisted_props=["filter_query", "sort_by", "page_current",
                          "selected_rows", "selected_columns", "hidden_columns"],
     )
@@ -2955,6 +3154,88 @@ def page_overview(master_df: pd.DataFrame = None):
         notes_modal,  # ✅ Modal
         dcc.Store(id="selected-product-for-notes", data=None)
     ])
+
+
+# Callback 2 : Filtrage (avec allow_duplicate)
+@app.callback(
+    [Output("filtered-data", "data", allow_duplicate=True),
+     Output("main-table", "data", allow_duplicate=True),
+     Output("risk-banner", "children", allow_duplicate=True)],
+    [Input("search-input", "value"),
+     Input("filter-supplier", "value"),
+     Input("filter-category", "value"),
+     Input("filter-need", "value"),
+     Input("toggle-options", "value")],
+    State("master-data", "data"),
+    prevent_initial_call="initial_duplicate"
+)
+def apply_filters(search, sup, cat, need, options, master_json):
+    base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+    base = validate_core_columns(base)
+
+    # ✅ SUPPRIMER TOUTES LES COLONNES PROMO AVANT FILTRAGE
+    promo_cols_to_remove = [
+        'promo_status',
+        'days_remaining',
+        'uplift_pct',
+        'roi_pct',
+        'promo_recommendation',
+        'promo_priority',
+        'net_profit_per_day',
+        'discount_pct',
+        'sales_with_promo',
+        'sales_without_promo',
+        'additional_sales_per_day',
+        'revenue_loss_per_day',
+        'additional_profit_per_day'
+    ]
+
+    base = base.drop(columns=[c for c in promo_cols_to_remove if c in base.columns], errors='ignore')
+
+    print(f"[apply_filters] Colonnes après suppression promo : {base.columns.tolist()[:15]}")
+
+    sup = sup or []
+    cat = cat or []
+    need = need or []
+    options = options or []
+
+    fdf = filter_dataframe(base, search, sup, [], cat, options)
+
+    if need and len(need) > 0 and 'Ajusted_total_need' in fdf.columns:
+        fdf = fdf[fdf['Ajusted_total_need'].isin(need)]
+
+    print(f"[apply_filters] Résultat: {len(fdf)} lignes, {len(fdf.columns)} colonnes")
+
+    banner = " "
+    fdf_actions = add_action_cols(fdf)
+    # Ajouter colonnes d'actions
+    #fdf_actions = fdf.copy()
+    #fdf_actions.insert(0, "delete", "delete")
+    #fdf_actions.insert(0, "edit", "edit")
+
+    # ✅ Vérification finale : s'assurer qu'aucune colonne promo ne subsiste
+    final_cols = [c for c in fdf_actions.columns if c not in promo_cols_to_remove]
+    fdf_actions = fdf_actions[final_cols]
+
+    return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
+
+@app.callback(
+    Output("main-table", "selected_rows", allow_duplicate=True),
+    [Input("search-input", "value"),
+     Input("filter-supplier", "value"),
+     Input("filter-category", "value"),
+     Input("filter-need", "value"),
+     Input("toggle-options", "value")],
+    prevent_initial_call=True
+)
+def reset_selection_on_filter(search, supplier, category, need, options):
+    """
+    Réinitialise la sélection à chaque changement de filtre.
+    Évite les sélections fantômes après filtrage.
+    """
+    print("🔄 Réinitialisation des sélections suite à filtrage")
+    return []  # ✅ Aucune ligne sélectionnée
+
 
 
 # ==================== CALLBACKS NOTES ====================
@@ -3246,12 +3527,12 @@ def page_analytics(master_df: pd.DataFrame = None):
 
 
 # Callback : mettre à jour le scatter analytics avec filtres
-#@app.callback(
- #   Output("analytics-scatter", "figure"),
-  #  Input("analytics-filter-supplier", "value"),
-   # Input("analytics-filter-category", "value"),
-    #prevent_initial_call=False
-#)
+# @app.callback(
+#   Output("analytics-scatter", "figure"),
+#  Input("analytics-filter-supplier", "value"),
+# Input("analytics-filter-category", "value"),
+# prevent_initial_call=False
+# )
 def update_analytics_scatter(supplier_value, category_value):
     df = get_df_cached()
 
@@ -3322,8 +3603,8 @@ def page_predictive(master_df: pd.DataFrame = None):
             )
 
             # Période de réapprovisionnement (leadtime + credit)
-            #replenishment = pred_df_ml.get('ADJUSTED_LEADTIME', 7).fillna(7) + pred_df_ml.get('credit_days', 14).fillna(
-             #   14)
+            # replenishment = pred_df_ml.get('ADJUSTED_LEADTIME', 7).fillna(7) + pred_df_ml.get('credit_days', 14).fillna(
+            #   14)
             replenishment = pred_df_ml.get('ADJUSTED_LEADTIME', 7) + pred_df_ml.get('credit_days', 14)
 
             # Risque si couverture < période réapprovisionnement
@@ -3701,6 +3982,8 @@ def page_promotions():
             )
         ])
     ])
+
+
 # =========================
 # ROUTING CALLBACK
 # =========================
@@ -3726,6 +4009,8 @@ def display_page(pathname):
             html.P("Page introuvable"),
             html.A("Retour à l'accueil", href="/")
         ], className="error-message")
+
+
 # ------------------------------ Chatbot helpers ----------------------------------
 
 # =============================== Chatbot helpers ================================
@@ -3733,7 +4018,8 @@ def _detect_lang(text: str) -> str:
     if not text:
         return "fr"
     t = text.lower()
-    fr_markers = ["bonjour","salut","stock","commande","fournisseur","rupture","couverture","jours","crédit","delisting"]
+    fr_markers = ["bonjour", "salut", "stock", "commande", "fournisseur", "rupture", "couverture", "jours", "crédit",
+                  "delisting"]
     if any(w in t for w in fr_markers) or re.search(r"[àâçéèêëîïôùûüœ]", t):
         return "fr"
     return "en"
@@ -3794,17 +4080,20 @@ def _clean_df_for_advice(df: pd.DataFrame) -> pd.DataFrame:
 
     d["risk"] = (d["rupture_ml"].astype(str).str.upper() == "OUI").astype(int)
     return d
+
+
 def _bubble(role: str, text: str):
     is_user = (role == "user")
     return html.Div(className=f"chat-bubble {'user' if is_user else 'bot'}", children=[
         html.Div("🧑" if is_user else "🤖", className=f"chat-avatar {'user' if is_user else ''}"),
         html.Div(dcc.Markdown(text or "", link_target="_blank",
-                              style={"whiteSpace":"pre-wrap","wordBreak":"break-word"}), className="chat-msg")
+                              style={"whiteSpace": "pre-wrap", "wordBreak": "break-word"}), className="chat-msg")
     ])
 
 
 def _render_messages(msgs: list):
-    return [_bubble(m.get("role","assistant"), m.get("text","")) for m in (msgs or [])]
+    return [_bubble(m.get("role", "assistant"), m.get("text", "")) for m in (msgs or [])]
+
 
 # --- Wrapper simple vers Gemini (utilise l'instance gemini_client déjà créée) ---
 def ask_ai(prompt: str, stream: bool = False) -> str:
@@ -3813,6 +4102,7 @@ def ask_ai(prompt: str, stream: bool = False) -> str:
     except Exception as e:
         print(f"[Gemini] Erreur: {type(e).__name__}: {e}")
         return ""
+
 
 def chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> str:
     """
@@ -3825,9 +4115,9 @@ def chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> s
         lang = _detect_lang(user_text)
         sample = _clean_df_for_advice(df if isinstance(df, pd.DataFrame) else pd.DataFrame())
         fields = [
-            'product_name_display','supplier_name','abc_class','xyz_class','current_stock',
-            'avg_daily_sales','coverage_days','leadtime_days','credit_days','rupture_ml',
-            'delisting_product','risk'
+            'product_name_display', 'supplier_name', 'abc_class', 'xyz_class', 'current_stock',
+            'avg_daily_sales', 'coverage_days', 'leadtime_days', 'credit_days', 'rupture_ml',
+            'delisting_product', 'risk'
         ]
         view = sample[[c for c in fields if c in sample.columns]].copy() if not sample.empty else pd.DataFrame()
 
@@ -3836,7 +4126,8 @@ def chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> s
         try:
             if not view.empty and 'coverage_days' in view.columns:
                 cov_med = float(view['coverage_days'].median())
-                at_risk = view[view['rupture_ml'].str.upper() == 'OUI'] if 'rupture_ml' in view.columns else pd.DataFrame()
+                at_risk = view[
+                    view['rupture_ml'].str.upper() == 'OUI'] if 'rupture_ml' in view.columns else pd.DataFrame()
                 top_list = (
                     at_risk.sort_values('coverage_days', ascending=True).head(6)
                     if not at_risk.empty else
@@ -3864,9 +4155,9 @@ def chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> s
 
         # Détecte si l'utilisateur demande une analyse
         needs_analysis = any(keyword in user_text.lower() for keyword in [
-            'analyse','recommande','conseil','rupture','commande','stock',
-            'produit','quels','combien','urgent','priorité','fournisseur',
-            'risque','order','achat','besoin','coverage','lead time'
+            'analyse', 'recommande', 'conseil', 'rupture', 'commande', 'stock',
+            'produit', 'quels', 'combien', 'urgent', 'priorité', 'fournisseur',
+            'risque', 'order', 'achat', 'besoin', 'coverage', 'lead time'
         ])
 
         if lang == "fr":
@@ -3900,7 +4191,7 @@ def chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> s
                     ) + "\n"
 
                 else:
-                  ctx = "Conversation générale. Données disponibles si besoin d'analyse détaillée.\n"
+                    ctx = "Conversation générale. Données disponibles si besoin d'analyse détaillée.\n"
 
             user_q = f"Question : {user_text.strip()}"
 
@@ -3944,7 +4235,7 @@ def chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> s
         hist_lines = []
         for m in (history_messages or [])[-10:]:
             role = "Utilisateur" if m.get("role") == "user" else "Assistant"
-            hist_lines.append(f"{role}: {m.get('text','').strip()}")
+            hist_lines.append(f"{role}: {m.get('text', '').strip()}")
         history_txt = "\n".join(hist_lines) if hist_lines else "—"
 
         prompt_text = (
@@ -3953,7 +4244,7 @@ def chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> s
             f"[HISTORIQUE (dernier·e·s 10)]\n{history_txt}\n\n"
             f"[QUESTION]\n{user_q}\n\n"
             f"[INSTRUCTIONS DE SORTIE]\n"
-            f"- Réponds en **{ 'français' if lang=='fr' else 'anglais' }**.\n"
+            f"- Réponds en **{'français' if lang == 'fr' else 'anglais'}**.\n"
             f"- Sois concis, clair, structuré en puces si nécessaire.\n"
             f"- N'invente pas de calculs : appuie-toi uniquement sur les données fournies dans le CONTEXTE.\n"
         )
@@ -3978,7 +4269,7 @@ def _chatbot_fallback(user_text: str, df: pd.DataFrame, prefix: str = "") -> str
 
     try:
         top_risk = df.sort_values(['risk', 'coverage_days'], ascending=[False, True]).head(5) \
-                   if 'risk' in df.columns else df.head(5)
+            if 'risk' in df.columns else df.head(5)
         cnt_risk = int(df['risk'].sum()) if 'risk' in df.columns else 0
         cov_med = float(df['coverage_days'].median()) if 'coverage_days' in df.columns else 0
 
@@ -4005,45 +4296,47 @@ def _chatbot_fallback(user_text: str, df: pd.DataFrame, prefix: str = "") -> str
         print(f"[Chatbot] Erreur fallback: {e}")
         return prefix + ("Recommandation impossible avec les données disponibles." if lang == "fr"
                          else "Unable to compute recommendation with available data.")
+
+
 # ===============================================================================
 
-#def _chatbot_fallback(user_text: str, df: pd.DataFrame, prefix: str = "") -> str:
- #   """
-  #  df ici est déjà le DataFrame nettoyé (view), pas besoin de re-nettoyer
-   # """
-    #lang = _detect_lang(user_text)
+# def _chatbot_fallback(user_text: str, df: pd.DataFrame, prefix: str = "") -> str:
+#   """
+#  df ici est déjà le DataFrame nettoyé (view), pas besoin de re-nettoyer
+# """
+# lang = _detect_lang(user_text)
 
-    # ✅ NE PAS appeler _clean_df_for_advice ici, df est déjà nettoyé
-    #if df.empty:
-     #   return prefix + (
-      #      "Données insuffisantes. Recharge les sources." if lang == "fr" else "Insufficient data. Please reload sources.")
+# ✅ NE PAS appeler _clean_df_for_advice ici, df est déjà nettoyé
+# if df.empty:
+#   return prefix + (
+#      "Données insuffisantes. Recharge les sources." if lang == "fr" else "Insufficient data. Please reload sources.")
 
-    #try:
-        # Utiliser directement df (qui est view)
-     #   top_risk = df.sort_values(['risk', 'coverage_days'], ascending=[False, True]).head(
-      #      5) if 'risk' in df.columns else df.head(5)
-       # cnt_risk = int(df['risk'].sum()) if 'risk' in df.columns else 0
-       # cov_med = float(df['coverage_days'].median()) if 'coverage_days' in df.columns else 0
+# try:
+# Utiliser directement df (qui est view)
+#   top_risk = df.sort_values(['risk', 'coverage_days'], ascending=[False, True]).head(
+#      5) if 'risk' in df.columns else df.head(5)
+# cnt_risk = int(df['risk'].sum()) if 'risk' in df.columns else 0
+# cov_med = float(df['coverage_days'].median()) if 'coverage_days' in df.columns else 0
 
-        #lines = [f"{prefix}" + (f"Risque: {cnt_risk} prod. • Couverture médiane ~ {cov_med:.1f} j." if lang == "fr"
-         #                       else f"Risk: {cnt_risk} SKUs • Median coverage ~ {cov_med:.1f}d.")]
+# lines = [f"{prefix}" + (f"Risque: {cnt_risk} prod. • Couverture médiane ~ {cov_med:.1f} j." if lang == "fr"
+#                       else f"Risk: {cnt_risk} SKUs • Median coverage ~ {cov_med:.1f}d.")]
 
-        #for _, r in top_risk.iterrows():
-         #   if lang == "fr":
-          #      lines.append(
-           #         f"- {r.get('product_name_display', '?')} · cov {float(r.get('coverage_days', 0)):.1f}j · LT {int(r.get('leadtime_days', 0))}j · crédit {int(r.get('credit_days', 0))}j")
-           # else:
-            #    lines.append(
-             #       f"- {r.get('product_name_display', '?')} · cov {float(r.get('coverage_days', 0)):.1f}d · LT {int(r.get('leadtime_days', 0))}d · credit {int(r.get('credit_days', 0))}d")
+# for _, r in top_risk.iterrows():
+#   if lang == "fr":
+#      lines.append(
+#         f"- {r.get('product_name_display', '?')} · cov {float(r.get('coverage_days', 0)):.1f}j · LT {int(r.get('leadtime_days', 0))}j · crédit {int(r.get('credit_days', 0))}j")
+# else:
+#    lines.append(
+#       f"- {r.get('product_name_display', '?')} · cov {float(r.get('coverage_days', 0)):.1f}d · LT {int(r.get('leadtime_days', 0))}d · credit {int(r.get('credit_days', 0))}d")
 
-        #lines += [("Cibles: A/AX en Y/Z <7j; crédit>14j si LT>20j; promos classe C." if lang == "fr"
-         #          else "Focus A/A+ in Y/Z <7d; credit>14d if LT>20d; promo bundles for class C.")]
-        #return "\n".join(lines)
+# lines += [("Cibles: A/AX en Y/Z <7j; crédit>14j si LT>20j; promos classe C." if lang == "fr"
+#          else "Focus A/A+ in Y/Z <7d; credit>14d if LT>20d; promo bundles for class C.")]
+# return "\n".join(lines)
 
-    #except Exception as e:
-     #   print(f"[Chatbot] Erreur fallback: {e}")
-      #  return prefix + (
-       #     "Recommandation impossible avec les données disponibles." if lang == "fr" else "Unable to compute recommendation with available data.")
+# except Exception as e:
+#   print(f"[Chatbot] Erreur fallback: {e}")
+#  return prefix + (
+#     "Recommandation impossible avec les données disponibles." if lang == "fr" else "Unable to compute recommendation with available data.")
 # ------------------------------ Layout root (with floating chat) ------------------
 try:
     initial_df = get_df_cached()
@@ -4053,11 +4346,14 @@ try:
 except Exception as e:
     print(f"❌ ERREUR CRITIQUE lors du chargement initial : {e}")
     import traceback
+
     traceback.print_exc()
     # Créer un DataFrame vide par sécurité
     initial_df = pd.DataFrame(columns=['product_name', 'Supplier', 'total_stock'])
 
 initial_df = get_df_cached()
+initial_df['QAC edited']=' '
+#initial_df['delete']='delete'
 app.layout = html.Div([
     dcc.Location(id="url"),
     dcc.Store(id="master-data", data=initial_df.to_json(orient="records")),
@@ -4067,22 +4363,21 @@ app.layout = html.Div([
     dcc.Store(id="chat-open", data=False),
     dcc.Store(id='selected-product-for-notes', data=None),
 
-
     make_sidebar(),
     html.Div(id="page-container", children=page_overview(initial_df)),
 
     html.Button(id="chat-fab", className="chat-fab", children=[html.Span("Assistant"), html.Span("💬")]),
-    html.Div(id="chat-window", className="chat-window", style={"display":"none"}, children=[
+    html.Div(id="chat-window", className="chat-window", style={"display": "none"}, children=[
         html.Div(className="chat-header", children=[
             html.Strong("Assistant "),
             html.Div([dbc.Button("Minimiser", id="chat-close", size="sm", className="btn-primary")])
         ]),
         html.Div(id="chat-messages", className="chat-body"),
-        html.Div(style={"padding":"10px"}, children=[
+        html.Div(style={"padding": "10px"}, children=[
             dcc.Upload(id="chat-upload",
                        children=html.Div(["📤 Glisser-déposer un CSV ici ou ", html.B("cliquer pour sélectionner")]),
                        multiple=False, className="upload-box"),
-            html.Small(id="upload-status", style={"color":"#6b7280"})
+            html.Small(id="upload-status", style={"color": "#6b7280"})
         ]),
         html.Div(className="chat-input-wrap", children=[
             dbc.Textarea(id="chat-input", className="chat-textarea",
@@ -4091,6 +4386,8 @@ app.layout = html.Div([
         ])
     ]),
 ])
+
+
 # Callback pour mettre à jour le Store 'selected-product-for-notes'
 @app.callback(
     Output('selected-product-for-notes', 'data'),
@@ -4105,63 +4402,206 @@ def update_selected_product(active_cell, table_data):
         return product_name  # Mettre à jour avec le nom du produit sélectionné
     return None
 
+
+# Validation layout
+#app.validation_layout = html.Div([
+ #   dcc.Location(id="url"),
+  #  dcc.Store(id="master-data"),
+   # dcc.Store(id="filtered-data"),
+    #dcc.Dropdown(id="filter-supplier"),
+ #   dcc.Dropdown(id="filter-category"),
+  #  dcc.Dropdown(id="filter-need"),  # ✅ IMPORTANT
+   # dcc.Dropdown(
+    #    id='filter-status',
+     #   options=[
+      #      {'label': 'Status 1', 'value': 'status1'},
+       #     {'label': 'Status 2', 'value': 'status2'}
+        #],
+ #       value='status1'
+  #  ),
+
+   # dcc.Input(id="search-input"),
+    #dbc.Checklist(id="toggle-options"),
+    #dcc.Store(id="uploaded-csv"),
+ #   dcc.Store(id="chat-store"),
+  #  dcc.Store(id="chat-open"),
+   # make_sidebar(),
+    #page_overview(initial_df),
+  #  page_analytics(),
+  #  page_predictive(),
+   # page_about(),
+    #html.Div(id="page-container"),
+  #  html.Button(id="chat-fab"),
+   # html.Div(id="chat-window"),
+    #html.Div(id="chat-messages"),
+  #  dbc.Textarea(id="chat-input"),
+   # dcc.Upload(id="chat-upload"),
+  #  html.Small(id="upload-status"),
+   # dbc.Button(id="chat-send"),
+  #  dbc.Button(id="chat-close"),
+   # dcc.Download(id="download-data"),
+    #dcc.Download(id="download-po"),
+   # dbc.Button(id="btn-add-row"),
+    #dbc.Modal(id="edit-modal"),
+   # dbc.Input(id="edit-product"),
+    #dbc.Input(id="edit-supplier"),
+  #  dbc.Input(id="edit-category"),
+   # dbc.Input(id="edit-stock"),
+    #dbc.Modal(id="notes-modal"),
+   # html.Div(id="notes-modal-title"),
+    # ✅ Ajouter les nouveaux composants
+   # html.Button(id="notes-fab"),
+ #   dcc.Dropdown(id="note-product-selector"),
+  #  dbc.Modal(id="notes-modal-new"),
+   # html.Div(id="notes-display-list"),
+    #dbc.Textarea(id="note-text-input"),
+  #  dbc.Input(id="note-author-input"),
+   # html.Div(id="note-feedback-new"),
+    #dbc.Button(id="note-modal-send"),
+  #  dbc.Button(id="note-modal-close"),
+   # dcc.Store(id="selected-product-for-notes"),
+#])
 # Validation layout
 app.validation_layout = html.Div([
+    # ==================== NAVIGATION & STORES ====================
     dcc.Location(id="url"),
     dcc.Store(id="master-data"),
     dcc.Store(id="filtered-data"),
-    dcc.Dropdown(id="filter-supplier"),
-    dcc.Dropdown(id="filter-category"),
-    dcc.Dropdown(id="filter-need"),  # ✅ IMPORTANT
-    dcc.Dropdown(
-        id='filter-status',
-        options=[
-            {'label': 'Status 1', 'value': 'status1'},
-            {'label': 'Status 2', 'value': 'status2'}
-        ],
-        value='status1'
-    ),
-
-    dcc.Input(id="search-input"),
-    dbc.Checklist(id="toggle-options"),
     dcc.Store(id="uploaded-csv"),
     dcc.Store(id="chat-store"),
     dcc.Store(id="chat-open"),
-    make_sidebar(),
-    page_overview(initial_df),
-    page_analytics(),
-    page_predictive(),
-    page_about(),
-    html.Div(id="page-container"),
-    html.Button(id="chat-fab"),
-    html.Div(id="chat-window"),
-    html.Div(id="chat-messages"),
-    dbc.Textarea(id="chat-input"),
-    dcc.Upload(id="chat-upload"),
-    html.Small(id="upload-status"),
-    dbc.Button(id="chat-send"),
-    dbc.Button(id="chat-close"),
+    dcc.Store(id="selected-product-for-notes"),
+    dcc.Store(id="edit-mode"),  # ✅ NOUVEAU
+    dcc.Store(id="edit-original-product"),  # ✅ NOUVEAU
+
+    # ==================== SIDEBAR COMPONENTS ====================
+    html.Div(id="risk-banner"),
+    dcc.Input(id="search-input"),
+    dcc.Dropdown(id="filter-supplier"),
+    dcc.Dropdown(id="filter-category"),
+    dcc.Dropdown(id="filter-need"),
+    dcc.Dropdown(id="filter-status", options=[
+        {'label': 'Tous', 'value': 'all'},
+        {'label': 'Stock OK', 'value': 'ok'},
+        {'label': 'Rupture', 'value': 'oos'}
+    ], value='all'),
+    dbc.Checklist(id="toggle-options"),
+    dbc.Button(id="btn-refresh"),
+    dbc.Button(id="btn-add-row"),  # ✅ NOUVEAU
+    dbc.Button(id="btn-po-pdf"),
     dcc.Download(id="download-data"),
     dcc.Download(id="download-po"),
-    dbc.Button(id="btn-add-row"),
-    dbc.Modal(id="edit-modal"),
-    dbc.Input(id="edit-product"),
-    dbc.Input(id="edit-supplier"),
-    dbc.Input(id="edit-category"),
-    dbc.Input(id="edit-stock"),
-    dbc.Modal(id="notes-modal"),
-    html.Div(id="notes-modal-title"),
-    # ✅ Ajouter les nouveaux composants
+    html.Div(id="debug-info"),
+
+    # ==================== NAVIGATION ====================
+    dbc.NavLink(id="nav-overview"),
+    dbc.NavLink(id="nav-analytics"),
+    dbc.NavLink(id="nav-pred"),
+    dbc.NavLink(id="nav-about"),
+
+    # ==================== PAGE CONTAINER ====================
+    html.Div(id="page-container"),
+    html.Div(id="action-feedback"),  # ✅ NOUVEAU
+
+    # ==================== MAIN TABLE (CRITIQUE) ====================
+    dash_table.DataTable(
+        id="main-table",
+        columns=[
+            {"name": "product_name", "id": "product_name"},
+            {"name": "Supplier", "id": "Supplier"},
+            {"name": "total_stock", "id": "total_stock"},
+            {"name": "QAC", "id": "QAC"},
+            {"name": "edit", "id": "edit"},
+            {"name": "delete", "id": "delete"}
+        ],
+        data=[],
+        row_selectable="multi",
+        selected_rows=[]
+    ),
+
+    # ==================== EDIT MODAL ====================
+    dbc.Modal(
+        id="edit-modal",
+        is_open=False,
+        children=[
+            dbc.ModalHeader(dbc.ModalTitle("", id="edit-modal-title")),
+            dbc.ModalBody([
+                dbc.Input(id="edit-product-name"),
+                dbc.Input(id="edit-supplier"),
+                dbc.Input(id="edit-category"),
+                dbc.Input(id="edit-stock"),
+                dbc.Input(id="edit-qac"),
+                dbc.Input(id="edit-ads"),
+                dbc.Input(id="edit-credit"),
+                dbc.Input(id="edit-leadtime"),
+                dbc.Input(id="edit-buffer"),
+                dbc.Input(id="edit-max-sales"),
+                html.Div(id="edit-modal-feedback")
+            ]),
+            dbc.ModalFooter([
+                dbc.Button("Annuler", id="edit-modal-close"),
+                dbc.Button("Enregistrer", id="edit-modal-save")
+            ])
+        ]
+    ),
+
+    # ==================== NOTES SYSTEM ====================
     html.Button(id="notes-fab"),
-    dcc.Dropdown(id="note-product-selector"),
-    dbc.Modal(id="notes-modal-new"),
-    html.Div(id="notes-display-list"),
-    dbc.Textarea(id="note-text-input"),
-    dbc.Input(id="note-author-input"),
-    html.Div(id="note-feedback-new"),
-    dbc.Button(id="note-modal-send"),
-    dbc.Button(id="note-modal-close"),
-    dcc.Store(id="selected-product-for-notes"),
+    dbc.Modal(
+        id="notes-modal-new",
+        is_open=False,
+        children=[
+            dbc.ModalHeader("Notes"),
+            dbc.ModalBody([
+                dcc.Dropdown(id="note-product-selector"),
+                html.Div(id="notes-display-list"),
+                dbc.Textarea(id="note-text-input"),
+                dbc.Input(id="note-author-input"),
+                html.Div(id="note-feedback-new")
+            ]),
+            dbc.ModalFooter([
+                dbc.Button("Fermer", id="note-modal-close"),
+                dbc.Button("Envoyer", id="note-modal-send")
+            ])
+        ]
+    ),
+
+    # ==================== CHAT ====================
+    html.Button(id="chat-fab"),
+    html.Div(id="chat-window", children=[
+        html.Div(id="chat-close"),
+        html.Div(id="chat-messages"),
+        dcc.Upload(id="chat-upload"),
+        html.Small(id="upload-status"),
+        dbc.Textarea(id="chat-input"),
+        dbc.Button(id="chat-send")
+    ]),
+
+    # ==================== ANALYTICS (si callbacks existent) ====================
+    dcc.Graph(id="analytics-scatter"),
+    dcc.Dropdown(id="analytics-filter-supplier"),
+    dcc.Dropdown(id="analytics-filter-category"),
+
+    # ==================== PREDICTIONS (si callbacks existent) ====================
+    dcc.Graph(id="predictive-bar"),
+    dash_table.DataTable(id="predictive-table", data=[], columns=[]),
+    dcc.Dropdown(id="predictive-filter-supplier"),
+    dcc.Dropdown(id="predictive-filter-category"),
+
+    # ==================== PROMOTIONS (si callbacks existent) ====================
+    dash_table.DataTable(id="promo-table", data=[], columns=[]),
+
+    # ==================== AUDIT (si callbacks existent) ====================
+    dash_table.DataTable(id="audit-table", data=[], columns=[]),
+
+    # ==================== SELECTION COUNTER (si ajouté) ====================
+    html.Div(id="selection-counter"),
+
+    # ==================== CONFLICT ALERT (si ajouté) ====================
+    html.Div(id="conflict-alert"),
+
+    # ==================== CONFIRM DIALOG (si ajouté) ====================
+    dcc.ConfirmDialog(id="confirm-dialog"),
 ])
 
 # ------------------------------ Routing ------------------------------------------
@@ -4187,6 +4627,8 @@ def render_page(path, master_json):
         return page_about()
     else:  # "/" ou autre
         return page_overview(base)
+
+
 # ------------------------------ Filtering logic ----------------------------------
 def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: list, cats: list, options: list):
     out = df.copy()
@@ -4217,6 +4659,7 @@ def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: li
 
     return out
 
+
 def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Garantit que les colonnes critiques existent et sont valides"""
     df = df.copy()
@@ -4243,13 +4686,15 @@ def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+
 # ------------------------------ Callbacks: filtering / banner --------------------
 @app.callback(
-    [Output("filtered-data", "data"),
-     Output("main-table", "data"),
-     Output("risk-banner", "children")],
+    [Output("filtered-data", "data", allow_duplicate=True),
+     Output("main-table", "data", allow_duplicate=True),
+    Output("main-table", "selected_rows", allow_duplicate=True),
+     Output("risk-banner", "children", allow_duplicate=True)],
     Input("master-data", "data"),
-    prevent_initial_call=False
+    prevent_initial_call=True
 )
 def initialize_table(master_json):
     """Initialise le tableau au chargement sans filtres"""
@@ -4266,86 +4711,61 @@ def initialize_table(master_json):
     df = df.drop(columns=[c for c in promo_cols_to_remove if c in df.columns], errors='ignore')
 
     print(f"[initialize_table] Colonnes disponibles : {df.columns.tolist()[:15]}")
-
+    print("####################################################################")
+    print(df.columns)
     banner = " "
     return df.to_json(orient="records"), df.to_dict("records"), banner
 
-# Callback 2 : Filtrage (avec allow_duplicate)
-@app.callback(
-    [Output("filtered-data", "data", allow_duplicate=True),
-     Output("main-table", "data", allow_duplicate=True),
-     Output("risk-banner", "children", allow_duplicate=True)],
-    [Input("search-input", "value"),
-     Input("filter-supplier", "value"),
-     Input("filter-category", "value"),
-     Input("filter-need", "value"),
-     Input("toggle-options", "value")],
-    State("master-data", "data"),
-    prevent_initial_call=True
-)
-def apply_filters(search, sup, cat, need, options, master_json):
-    base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
-    base = validate_core_columns(base)
 
-    # ✅ SUPPRIMER TOUTES LES COLONNES PROMO AVANT FILTRAGE
+@app.callback(
+    [Output("filtered-data", "data"),
+     Output("main-table", "data", allow_duplicate=True),
+     Output("main-table", "selected_rows", allow_duplicate=True)],
+    Input("url", "pathname"),
+    State("master-data", "data"),
+    prevent_initial_call='initial_duplicate'  # ✅ Corrigé
+)
+def initial_load_table(pathname, master_json):
+    """S'exécute au chargement initial avec duplication autorisée."""
+    if not master_json:
+        raise dash.exceptions.PreventUpdate
+
+    if pathname not in ["/", None]:
+        raise dash.exceptions.PreventUpdate
+
+    df = pd.DataFrame(json.loads(master_json))
+    df = validate_core_columns(df)
+
     promo_cols_to_remove = [
-        'promo_status',
-        'days_remaining',
-        'uplift_pct',
-        'roi_pct',
-        'promo_recommendation',
-        'promo_priority',
-        'net_profit_per_day',
-        'discount_pct',
-        'sales_with_promo',
-        'sales_without_promo',
-        'additional_sales_per_day',
-        'revenue_loss_per_day',
-        'additional_profit_per_day'
+        'promo_status', 'days_remaining', 'uplift_pct', 'roi_pct',
+        'promo_recommendation', 'promo_priority', 'net_profit_per_day',
+        'discount_pct', 'sales_with_promo', 'sales_without_promo'
     ]
 
-    base = base.drop(columns=[c for c in promo_cols_to_remove if c in base.columns], errors='ignore')
+    df = df.drop(columns=[c for c in promo_cols_to_remove if c in df.columns], errors='ignore')
 
-    print(f"[apply_filters] Colonnes après suppression promo : {base.columns.tolist()[:15]}")
+    print(f"🚀 [initial_load] Chargement initial : {len(df)} lignes, 0 sélections")
 
-    sup = sup or []
-    cat = cat or []
-    need = need or []
-    options = options or []
+    return df.to_json(orient="records"), df.to_dict("records"), []
 
-    fdf = filter_dataframe(base, search, sup, [], cat, options)
-
-    if need and len(need) > 0 and 'Ajusted_total_need' in fdf.columns:
-        fdf = fdf[fdf['Ajusted_total_need'].isin(need)]
-
-    print(f"[apply_filters] Résultat: {len(fdf)} lignes, {len(fdf.columns)} colonnes")
-
-    banner = " "
-    fdf_actions = add_action_cols(fdf)
-
-    # ✅ Vérification finale : s'assurer qu'aucune colonne promo ne subsiste
-    final_cols = [c for c in fdf_actions.columns if c not in promo_cols_to_remove]
-    fdf_actions = fdf_actions[final_cols]
-
-    return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
 # ------------------------------ Notes System Callbacks ----------------------------
 
 # ------------------------------ Export CSV ---------------------------------------
 @app.callback(
-    Output("download-data","data"),
-    Input("btn-export","n_clicks"),
-    State("filtered-data","data"),
+    Output("download-data", "data"),
+    Input("btn-export", "n_clicks"),
+    State("filtered-data", "data"),
     prevent_initial_call=True
 )
 def export_csv(n, data_json):
     if not n or not data_json: return no_update
     df = pd.DataFrame(json.loads(data_json))
-    for c in ["✏️ Edit","🗑️ Delete"]:
+    for c in ["edit Edit", "delete Delete"]:
         if c in df.columns: df.drop(columns=[c], inplace=True)
     return dcc.send_data_frame(df.to_csv, f"supply_filtered_{datetime.now().strftime('%Y%m%d_%H%M')}.csv", index=False)
 
-# ------------------------------ Export Purchase Order PDF ------------------------
 
+# ------------------------------ Export Purchase Order PDF ------------------------
 
 
 # Fonction pour récupérer les données CSV depuis Google Sheets
@@ -4354,11 +4774,13 @@ def fetch_product_data_from_csv():
     response = requests.get(url)
     if response.status_code == 200:
         product_data = pd.read_csv(io.StringIO(response.text))
-        print(f"Colonnes du DataFrame : {product_data.columns.tolist()}")  # Afficher les colonnes pour vérifier le nom exact
+        print(
+            f"Colonnes du DataFrame : {product_data.columns.tolist()}")  # Afficher les colonnes pour vérifier le nom exact
         return product_data
     else:
         print(f"Erreur lors du téléchargement des données : {response.status_code}")
         return pd.DataFrame()
+
 
 # Fonction pour générer un code de référence basé sur le nom du produit
 def ref_from_name(name: str) -> str:
@@ -4373,6 +4795,7 @@ def ref_from_name(name: str) -> str:
         parts[0][3:6] if len(parts[0]) > 3 else "")).upper()
     return "-".join([left, right]) if right else left
 
+
 # Fonction pour calculer la quantité cible
 def calculate_formula_based_target(df):
     """
@@ -4386,12 +4809,13 @@ def calculate_formula_based_target(df):
     stock = df.get('total_stock', pd.Series(0, index=df.index))
 
     target = (
-        ads * (leadtime + credit) +
-        buffer * ads -
-        stock
+            ads * (leadtime + credit) +
+            buffer * ads -
+            stock
     )
 
     return np.maximum(0, target)
+
 
 # Fonction pour récupérer le logo en base64 ou fichier local
 def _get_logo_data_uri():
@@ -4404,7 +4828,9 @@ def _get_logo_data_uri():
         print(f"❌ Erreur lors de la récupération du logo en base64: {e}")
     return None
 
+
 LOGO_DATA_URI = _get_logo_data_uri()
+
 
 def get_logo_for_reportlab():
     try:
@@ -4436,45 +4862,44 @@ def get_logo_for_reportlab():
 @app.callback(
     Output("download-po", "data"),
     Input("btn-po-pdf", "n_clicks"),
-    [State("main-table", "active_cell"),
-     State("main-table", "selected_rows"),
+    [State("main-table", "selected_rows"),
      State("main-table", "data")],
     prevent_initial_call=True
 )
-def export_po_pdf(n, active_cell, selected_rows, table_data):
-    """Génère le bon de commande PDF avec prix depuis le catalogue."""
-    if not n or not table_data:
+def export_po_word(n_clicks, selected_rows, table_data):
+    """
+    Génère un bon de commande WORD (.docx) pour PLUSIEURS produits sélectionnés.
+
+    IMPORTANT : Utilise la QAC ÉDITÉE (colonne QAC du tableau, pas target_quantity).
+    Le document Word permet d'ajouter les remises manuellement après génération.
+    """
+    if not n_clicks or not table_data or not selected_rows or len(selected_rows) == 0:
         return no_update
 
-    # Déterminer la ligne sélectionnée
-    row_idx = None
-    if selected_rows and len(selected_rows) > 0:
-        row_idx = selected_rows[0]
-    elif active_cell and isinstance(active_cell, dict):
-        row_idx = active_cell.get("row")
+    # ========================================
+    # 1. RÉCUPÉRER LES PRODUITS SÉLECTIONNÉS
+    # ========================================
+    selected_products = [table_data[idx] for idx in selected_rows if idx < len(table_data)]
 
-    if row_idx is None or row_idx < 0 or row_idx >= len(table_data):
+    if not selected_products:
         return no_update
 
-    # Données produit
-    r = table_data[row_idx]
-    prod_name = str(r.get("product_name", "")).strip()
-    supplier = str(r.get("Supplier", "")).strip()
-    qty = float(r.get("target_quantity", 0) or r.get("QAC", 0) or 0)
+    print(f"\n{'=' * 60}")
+    print(f"📄 GÉNÉRATION BON DE COMMANDE WORD")
+    print(f"{'=' * 60}")
+    print(f"Produits sélectionnés : {len(selected_products)}")
 
-    if qty <= 0:
-        qty = 1  # Quantité minimale
-
-    # Charger catalogue pour prix
+    # ========================================
+    # 2. CHARGER LE CATALOGUE POUR LES PRIX
+    # ========================================
     try:
         cat_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrpcAiktxAPBiwznGOh35kVetc4O8-z5rQdFDgBaDE4OC3Jnb7JDGm59c55Cwm2pWCktcsBirWT_0b/pub?gid=751531326&single=true&output=csv"
         catalog = pd.read_csv(cat_url, skiprows=1)
 
-        # Colonnes attendues : A=id, B=name, D=selling_price, K=purchase_price
+        # Colonnes : A=id, B=name, D=selling_price, K=purchase_price
         catalog_subset = catalog.iloc[:, [0, 1, 3, 10]].copy()
         catalog_subset.columns = ['product_id', 'product_name', 'selling_price', 'purchase_price']
 
-        # Nettoyer
         catalog_subset['product_name_clean'] = (
             catalog_subset['product_name']
             .astype(str)
@@ -4482,162 +4907,361 @@ def export_po_pdf(n, active_cell, selected_rows, table_data):
             .str.strip()
         )
 
-        # Chercher le produit
-        prod_match = catalog_subset[
-            catalog_subset['product_name_clean'] == prod_name.lower()
-            ]
+        # Mapping produit → prix d'achat
+        price_map = dict(zip(
+            catalog_subset['product_name_clean'],
+            pd.to_numeric(catalog_subset['purchase_price'], errors='coerce').fillna(1000)
+        ))
 
-        if prod_match.empty:
-            print(f"⚠️ Produit non trouvé dans catalogue : {prod_name}")
-            unit_price = 1000.0  # Prix par défaut
-        else:
-            unit_price = pd.to_numeric(
-                prod_match['purchase_price'].iloc[0],
-                errors='coerce'
-            )
-            if pd.isna(unit_price) or unit_price <= 0:
-                unit_price = 1000.0
+        print(f"✅ Catalogue chargé : {len(price_map)} produits avec prix")
 
     except Exception as e:
         print(f"❌ Erreur chargement catalogue : {e}")
-        unit_price = 1000.0
+        price_map = {}
 
-    # Calculs financiers
-    TVA_RATE = 0.18
-    total_ht = qty * unit_price
-    total_tva = total_ht * TVA_RATE
-    total_ttc = total_ht + total_tva
+    # ========================================
+    # 3. REGROUPER PAR FOURNISSEUR
+    # ========================================
+    suppliers = {}
+    for prod in selected_products:
+        supplier = str(prod.get("Supplier", "")).strip()
+        if not supplier or supplier.lower() == 'nan':
+            supplier = "Fournisseur non spécifié"
 
-    # Générer PDF
-    buf = io.BytesIO()
-    po_number = get_next_po_number()
-    ref_code = ref_from_name(prod_name)
+        if supplier not in suppliers:
+            suppliers[supplier] = []
+        suppliers[supplier].append(prod)
 
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        title=f"Bon de commande {po_number}"
-    )
+    print(f"✅ Fournisseurs détectés : {len(suppliers)}")
+    for sup, prods in suppliers.items():
+        print(f"   - {sup}: {len(prods)} produit(s)")
 
-    styles = getSampleStyleSheet()
-    story = []
+    # ========================================
+    # 4. CRÉER LE DOCUMENT WORD
+    # ========================================
+    from docx import Document
+    from docx.shared import Pt, Inches, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
 
-    # Logo
-    logo_src = get_logo_for_reportlab()
-    if logo_src:
+    doc = Document()
+
+    # Configuration des marges (en inches)
+    sections = doc.sections
+    for section in sections:
+        section.top_margin = Inches(0.8)
+        section.bottom_margin = Inches(0.8)
+        section.left_margin = Inches(0.6)
+        section.right_margin = Inches(0.6)
+
+    # ========================================
+    # 5. EN-TÊTE DU DOCUMENT
+    # ========================================
+
+    # Logo (si disponible)
+    logo_path = Path("logo_maad.jpg")
+    if logo_path.exists():
         try:
-            from reportlab.platypus import Image
-            logo_img = Image(logo_src)
-            logo_img.drawHeight = 18 * mm
-            logo_img.drawWidth = 18 * mm
-            story.append(logo_img)
-            story.append(Spacer(1, 12))
+            doc.add_picture(str(logo_path), width=Inches(1.2))
+            last_paragraph = doc.paragraphs[-1]
+            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
         except Exception as e:
             print(f"⚠️ Logo non ajouté : {e}")
 
-    # En-tête
-    story.append(Paragraph(f"<b>BON DE COMMANDE N° {po_number}</b>", styles["Title"]))
-    story.append(Spacer(1, 12))
-    story.append(Paragraph(f"<b>{COMPANY_NAME}</b>", styles["Normal"]))
+    # Titre
+    po_number = get_next_po_number()
+    title = doc.add_heading(f'BON DE COMMANDE N° {po_number}', level=1)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_run = title.runs[0]
+    title_run.font.color.rgb = RGBColor(0, 51, 102)  # Bleu foncé
+
+    # Informations entreprise
+    company_info = doc.add_paragraph()
+    company_info.add_run(f"{COMPANY_NAME}\n").bold = True
     if COMPANY_ADDRESS:
-        story.append(Paragraph(COMPANY_ADDRESS, styles["Normal"]))
-    story.append(Spacer(1, 6))
-    story.append(Paragraph(f"Date : {datetime.now().strftime('%d/%m/%Y')}", styles["Normal"]))
-    story.append(Spacer(1, 12))
+        company_info.add_run(f"{COMPANY_ADDRESS}\n")
+    if COMPANY_PHONE:
+        company_info.add_run(f"Tél : {COMPANY_PHONE}\n")
+    if COMPANY_EMAIL:
+        company_info.add_run(f"Email : {COMPANY_EMAIL}\n")
 
-    story.append(Paragraph(f"<b>Fournisseur :</b> {supplier}", styles["Normal"]))
-    story.append(Spacer(1, 18))
+    # Date
+    date_para = doc.add_paragraph()
+    date_para.add_run(f"Date : {datetime.now().strftime('%d/%m/%Y')}").bold = True
 
-    # Tableau produits
-    headers = ["Réf.", "Désignation", "Qté", "PU HT", "Total HT", "TVA 18%", "Total TTC"]
-    data_tbl = [[
-        ref_code,
-        prod_name[:40],
-        f"{qty:.0f}",
-        f"{unit_price:,.0f}",
-        f"{total_ht:,.0f}",
-        f"{total_tva:,.0f}",
-        f"{total_ttc:,.0f}"
-    ]]
+    # Résumé
+    summary = doc.add_paragraph()
+    summary.add_run(f"Nombre de produits : {len(selected_products)} • ").bold = True
+    summary.add_run(f"Fournisseurs : {len(suppliers)}").bold = True
 
-    tbl = Table([headers] + data_tbl, hAlign="LEFT")
-    tbl.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-    ]))
-    story.append(tbl)
+    doc.add_paragraph()  # Ligne vide
 
-    # Totaux
-    story.append(Spacer(1, 12))
-    story.append(Paragraph(f"<b>TOTAL HT :</b> {total_ht:,.0f} FCFA", styles["Normal"]))
-    story.append(Paragraph(f"<b>TVA (18%) :</b> {total_tva:,.0f} FCFA", styles["Normal"]))
-    story.append(Paragraph(f"<b>TOTAL TTC :</b> {total_ttc:,.0f} FCFA", styles["Heading2"]))
+    # ========================================
+    # 6. CONSTANTES TVA
+    # ========================================
+    TVA_RATE = 0.18
+    total_ht_global = 0
+    total_tva_global = 0
 
-    # Pied de page
-    story.append(Spacer(1, 24))
-    story.append(Paragraph("Conditions de livraison : À convenir avec le fournisseur", styles["Normal"]))
-    story.append(Paragraph("Modalités de paiement : Selon termes contractuels", styles["Normal"]))
+    # ========================================
+    # 7. CRÉER TABLEAU PAR FOURNISSEUR
+    # ========================================
 
-    # Build
-    doc.build(story)
+    for supplier, products in suppliers.items():
+
+        # Titre fournisseur
+        supplier_heading = doc.add_heading(f'📦 Fournisseur : {supplier}', level=2)
+        supplier_run = supplier_heading.runs[0]
+        supplier_run.font.color.rgb = RGBColor(34, 139, 34)  # Vert
+
+        # Créer tableau (8 colonnes : Réf, Produit, Qté, PU HT, Total HT, Remise, TVA, Total TTC)
+        table = doc.add_table(rows=1, cols=8)
+        table.style = 'Light Grid Accent 1'
+        table.autofit = False
+        table.allow_autofit = False
+
+        # En-têtes
+        headers = ['Réf.', 'Désignation', 'Qté', 'PU HT', 'Total HT', 'Remise (%)', 'TVA 18%', 'Total TTC']
+        hdr_cells = table.rows[0].cells
+
+        for i, header in enumerate(headers):
+            hdr_cells[i].text = header
+            # Style header
+            for paragraph in hdr_cells[i].paragraphs:
+                for run in paragraph.runs:
+                    run.font.bold = True
+                    run.font.size = Pt(10)
+                    run.font.color.rgb = RGBColor(255, 255, 255)
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+            # Couleur de fond header (bleu)
+            shading_elm = OxmlElement('w:shd')
+            shading_elm.set(qn('w:fill'), '4472C4')
+            hdr_cells[i]._element.get_or_add_tcPr().append(shading_elm)
+
+        # Largeurs de colonnes (en inches)
+        widths = [Inches(0.6), Inches(2.5), Inches(0.5), Inches(0.8), Inches(0.9), Inches(0.8), Inches(0.8),
+                  Inches(1.0)]
+        for i, width in enumerate(widths):
+            for cell in table.columns[i].cells:
+                cell.width = width
+
+        # ========================================
+        # 8. REMPLIR LES LIGNES DE PRODUITS
+        # ========================================
+
+        total_ht_supplier = 0
+        total_tva_supplier = 0
+
+        for prod in products:
+            prod_name = str(prod.get("product_name", "")).strip()
+
+            # ✅ ✅ ✅ UTILISER QAC ÉDITÉE (priorité absolue) ✅ ✅ ✅
+            qty = float(prod.get("QAC", 0))
+
+            # Si QAC est vide ou 0, fallback sur target_quantity
+            if qty <= 0:
+                qty = float(prod.get("target_quantity", 0))
+
+            # Si toujours 0, mettre 1 par défaut
+            if qty <= 0:
+                qty = 1
+
+            # Chercher prix dans le catalogue
+            unit_price = price_map.get(prod_name.lower(), 1000.0)
+            if unit_price <= 0:
+                unit_price = 1000.0
+
+            # Calculs (SANS remise pour l'instant)
+            total_ht = qty * unit_price
+            total_tva = total_ht * TVA_RATE
+            total_ttc = total_ht + total_tva
+
+            total_ht_supplier += total_ht
+            total_tva_supplier += total_tva
+
+            # Référence produit
+            ref_code = ref_from_name(prod_name)
+
+            # Ajouter ligne
+            row_cells = table.add_row().cells
+
+            row_cells[0].text = ref_code
+            row_cells[1].text = prod_name[:50]  # Limiter longueur
+            row_cells[2].text = f"{qty:.0f}"
+            row_cells[3].text = f"{unit_price:,.0f}"
+            row_cells[4].text = f"{total_ht:,.0f}"
+            row_cells[5].text = ""  # ✅ REMISE VIDE (à remplir manuellement)
+            row_cells[6].text = f"{total_tva:,.0f}"
+            row_cells[7].text = f"{total_ttc:,.0f}"
+
+            # Alignement
+            for i in [2, 3, 4, 5, 6, 7]:  # Colonnes numériques
+                row_cells[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+            # Taille de police
+            for cell in row_cells:
+                for paragraph in cell.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.size = Pt(9)
+
+        # ========================================
+        # 9. SOUS-TOTAL PAR FOURNISSEUR
+        # ========================================
+
+        subtotal_row = table.add_row().cells
+        subtotal_row[0].merge(subtotal_row[3])
+        subtotal_row[0].text = f"SOUS-TOTAL {supplier.upper()}"
+        subtotal_row[0].paragraphs[0].runs[0].font.bold = True
+
+        subtotal_row[4].text = f"{total_ht_supplier:,.0f}"
+        subtotal_row[5].text = "-"
+        subtotal_row[6].text = f"{total_tva_supplier:,.0f}"
+        subtotal_row[7].text = f"{(total_ht_supplier + total_tva_supplier):,.0f}"
+
+        # Style sous-total
+        for i in [4, 6, 7]:
+            subtotal_row[i].paragraphs[0].runs[0].font.bold = True
+            subtotal_row[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+        # Couleur de fond sous-total (gris clair)
+        for cell in subtotal_row:
+            shading_elm = OxmlElement('w:shd')
+            shading_elm.set(qn('w:fill'), 'E7E6E6')
+            cell._element.get_or_add_tcPr().append(shading_elm)
+
+        total_ht_global += total_ht_supplier
+        total_tva_global += total_tva_supplier
+
+        doc.add_paragraph()  # Espacement
+
+    # ========================================
+    # 10. TOTAUX GLOBAUX
+    # ========================================
+
+    total_ttc_global = total_ht_global + total_tva_global
+
+    doc.add_paragraph()  # Ligne vide
+
+    totals_para = doc.add_paragraph()
+    totals_para.add_run(f"TOTAL HT : {total_ht_global:,.0f} FCFA\n").bold = True
+    totals_para.add_run(f"TVA (18%) : {total_tva_global:,.0f} FCFA\n").bold = True
+
+    ttc_run = totals_para.add_run(f"TOTAL TTC : {total_ttc_global:,.0f} FCFA")
+    ttc_run.bold = True
+    ttc_run.font.size = Pt(14)
+    ttc_run.font.color.rgb = RGBColor(0, 102, 204)
+
+    # ========================================
+    # 11. NOTES ET CONDITIONS
+    # ========================================
+
+    doc.add_paragraph()
+
+    notes_heading = doc.add_heading('Notes importantes :', level=3)
+    notes_list = doc.add_paragraph(style='List Bullet')
+    notes_list.add_run("La colonne 'Remise (%)' est à remplir manuellement selon négociations\n")
+    notes_list.add_run("Les totaux seront recalculés après application des remises\n")
+    notes_list.add_run("Formule : Total TTC = (Total HT × (1 - Remise/100)) × 1.18")
+
+    doc.add_paragraph()
+
+    conditions = doc.add_paragraph()
+    conditions.add_run("Conditions de livraison : ").bold = True
+    conditions.add_run("À convenir avec les fournisseurs\n")
+
+    conditions.add_run("Modalités de paiement : ").bold = True
+    conditions.add_run("Selon termes contractuels")
+
+    # ========================================
+    # 12. PIED DE PAGE
+    # ========================================
+
+    doc.add_paragraph()
+    footer_para = doc.add_paragraph()
+    footer_run = footer_para.add_run(f"Document généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}")
+    footer_run.font.size = Pt(8)
+    footer_run.font.color.rgb = RGBColor(128, 128, 128)
+    footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # ========================================
+    # 13. SAUVEGARDER ET ENVOYER
+    # ========================================
+
+    buf = io.BytesIO()
+    doc.save(buf)
     buf.seek(0)
 
-    fname = f"bon_commande_{po_number}_{ref_code}.pdf"
-    print(f"✅ PDF généré : {fname}")
+    fname = f"bon_commande_{po_number}_{len(selected_products)}_produits.docx"
+
+    print(f"✅ Document Word généré : {fname}")
+    print(f"   - {len(selected_products)} produits")
+    print(f"   - {len(suppliers)} fournisseur(s)")
+    print(f"   - Total HT : {total_ht_global:,.0f} FCFA")
+    print(f"   - Total TTC : {total_ttc_global:,.0f} FCFA")
+    print(f"{'=' * 60}\n")
 
     return dcc.send_bytes(buf.read(), filename=fname)
 
 
 # Activer le bouton PO si une cellule/ligne est sélectionnée et contient product_name + Supplier
 @app.callback(
-    Output("btn-po-pdf", "disabled"),  # Active ou désactive le bouton
-    [Input("main-table", "active_cell"),  # Quand une cellule est activée
-     Input("main-table", "selected_rows"),  # Quand une ligne est sélectionnée
-     Input("main-table", "data")],  # Données du tableau
-    prevent_initial_call=True  # Ne s'exécute que lorsque l'utilisateur interagit
+    Output("btn-po-pdf", "disabled"),
+    [Input("main-table", "selected_rows"),  # ✅ Écoute les sélections multiples
+     Input("main-table", "data")],
+    prevent_initial_call=True
 )
-def toggle_po_button(active_cell, selected_rows, data):
-    if not data or len(data) == 0:  # Si pas de données, désactiver le bouton
-        return True
+def toggle_po_button(selected_rows, data):
+    """
+    Active le bouton "Bon de commande PDF" si AU MOINS une ligne est sélectionnée.
+    """
+    if not data or len(data) == 0:
+        return True  # Désactiver si pas de données
 
-    row_idx = None
-    # Priorité 1 : Ligne explicitement sélectionnée
+    # ✅ Activer si au moins une ligne sélectionnée
     if selected_rows and len(selected_rows) > 0:
-        row_idx = selected_rows[0]
+        # Vérifier que les lignes sélectionnées ont des produits valides
+        valid_selections = [
+            idx for idx in selected_rows
+            if idx < len(data) and data[idx].get("product_name") and data[idx].get("Supplier")
+        ]
+        return len(valid_selections) == 0  # False = activé, True = désactivé
 
-    # Priorité 2 : Cellule active
-    elif active_cell and isinstance(active_cell, dict):
-        row_idx = active_cell.get("row")
+    return True  # Désactivé par défaut
 
-    # Vérification de la validité de l'index de la ligne
-    if row_idx is None or row_idx < 0 or row_idx >= len(data):
-        return True  # Si l'index de la ligne est invalide, désactiver le bouton
 
-    # Vérification des champs obligatoires
-    try:
-        r = data[row_idx]
-        prod = str(r.get("product_name", "")).strip()
-        sup = str(r.get("Supplier", "")).strip()
+@app.callback(
+    Output("selection-counter", "children"),
+    Input("main-table", "selected_rows"),
+    prevent_initial_call=False  # ✅ False pour afficher dès le départ
+)
+def update_selection_counter(selected_rows):
+    """Affiche le nombre de lignes sélectionnées"""
+    count = len(selected_rows) if selected_rows else 0
 
-        # Le bouton est activé seulement si les deux champs sont remplis
-        return not (prod and sup)  # False = activé, True = désactivé
-    except (IndexError, KeyError, TypeError):
-        return True  # Désactive le bouton en cas d'erreur
+    if count == 0:
+        return html.Div([
+            html.Small("Aucune sélection", style={"color": "#6b7280", "fontSize": "12px"})
+        ])
 
+    return dbc.Badge(
+        f"☑️ {count} produit{'s' if count > 1 else ''} sélectionné{'s' if count > 1 else ''}",
+        color="primary",
+        pill=True,
+        style={"fontSize": "13px", "padding": "8px 12px"}
+    )
 # ------------------------------ Edit/Add/Delete rows -----------------------------
 @app.callback(
-    Output("edit-modal","is_open"),
+    Output("edit-modal", "is_open"),
     Output("edit-input", "value"),
-    Output("edit-supplier","value"),
-    Output("edit-category","value"),
-    Output("edit-stock","value"),
-    Output("main-table","active_cell"),
-    Input("btn-add-row","n_clicks"),
-    Input("main-table","active_cell"),
-    State("main-table","data"),
+    Output("edit-supplier", "value"),
+    Output("edit-category", "value"),
+    Output("edit-stock", "value"),
+    Output("main-table", "active_cell"),
+    Input("btn-add-row", "n_clicks"),
+    Input("main-table", "active_cell"),
+    State("main-table", "data"),
     prevent_initial_call=True
 )
 def open_edit_modal(n_add, active_cell, data):
@@ -4650,50 +5274,58 @@ def open_edit_modal(n_add, active_cell, data):
     if trig == "main-table" and active_cell:
         col = active_cell.get("column_id")
         row = active_cell.get("row")
-        if col == "✏️ Edit" and data and 0 <= row < len(data):
+        if col == "edit Edit" and data and 0 <= row < len(data):
             r = data[row]
-            return True, r.get("product_name",""), r.get("Supplier",""), r.get("Product Category",""), r.get("total_stock",0), None
+            return True, r.get("product_name", ""), r.get("Supplier", ""), r.get("Product Category", ""), r.get(
+                "total_stock", 0), None
     return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
+
 @app.callback(
-    Output("master-data","data", allow_duplicate=True),
-    Output("filtered-data","data", allow_duplicate=True),
-    Output("main-table","data", allow_duplicate=True),
-    Output("risk-banner","children", allow_duplicate=True),  # ✅ Décommenté
-    Output("edit-modal","is_open", allow_duplicate=True),
-    Input("edit-save","n_clicks"),
-    State("edit-product","value"),
-    State("edit-supplier","value"),
-    State("edit-category","value"),
-    State("edit-stock","value"),
-    State("main-table","active_cell"),
-    State("main-table","data"),
-    State("search-input","value"),
-    State("filter-supplier","value"),
-    State("filter-status","value"),
-    State("filter-category","value"),
-    State("toggle-options","value"),
-    State("master-data","data"),
-    prevent_initial_call=True
+    [Output("master-data", "data", allow_duplicate=True),
+    Output("filtered-data", "data", allow_duplicate=True),
+    Output("main-table", "data", allow_duplicate=True),
+    Output("main-table", "selected_rows", allow_duplicate=True),
+   ],
+
+    Output("risk-banner", "children", allow_duplicate=True),  # ✅ Décommenté
+    Output("edit-modal", "is_open", allow_duplicate=True),
+[   Input("main-table", "data")],
+    Input("edit-save", "n_clicks"),
+    State("edit-product", "value"),
+    State("edit-supplier", "value"),
+    State("edit-category", "value"),
+    State("edit-stock", "value"),
+    State("main-table", "active_cell"),
+    State("main-table", "data"),
+    State("search-input", "value"),
+    State("filter-supplier", "value"),
+    State("filter-status", "value"),
+    State("filter-category", "value"),
+    State("toggle-options", "value"),
+    State("master-data", "data"),
+    prevent_initial_call="initial_duplicate"
 )
 def save_edit(n, prod, sup, cat, stock, active_cell, table_data, q, fs, fst, fc, opts, master_json):
     base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
     df = base.copy()
 
-    if active_cell and active_cell.get("column_id") == "✏️ Edit" and active_cell.get("row") is not None and table_data:
+    if active_cell and active_cell.get("column_id") == "edit Edit" and active_cell.get("row") is not None and table_data:
         row = active_cell["row"]
         r = table_data[row]
         key_p = r.get("product_name")
         key_s = r.get("Supplier")
-        idx = df[(df["product_name"].astype(str)==str(key_p)) & (df["Supplier"].astype(str)==str(key_s))].index
-        if len(idx)>0:
+        idx = df[(df["product_name"].astype(str) == str(key_p)) & (df["Supplier"].astype(str) == str(key_s))].index
+        if len(idx) > 0:
             i = idx[0]
-            if prod is not None: df.at[i,"product_name"] = prod
-            if sup is not None: df.at[i,"Supplier"] = sup
-            if cat is not None: df.at[i,"Product Category"] = cat
+            if prod is not None: df.at[i, "product_name"] = prod
+            if sup is not None: df.at[i, "Supplier"] = sup
+            if cat is not None: df.at[i, "Product Category"] = cat
             if stock is not None:
-                try: df.at[i,"total_stock"] = float(stock)
-                except: pass
+                try:
+                    df.at[i, "total_stock"] = float(stock)
+                except:
+                    pass
     else:
         new_row = {c: np.nan for c in df.columns}
         new_row["product_name"] = prod or ""
@@ -4713,46 +5345,57 @@ def save_edit(n, prod, sup, cat, stock, active_cell, table_data, q, fs, fst, fc,
             new_row["Stock Status"] = "Order Soon" if new_row["total_stock"] else "Out of Stock"
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-    sup_list = fs or []; stat_list = fst or []; cat_list = fc or []; options = opts or []
+    sup_list = fs or [];
+    stat_list = fst or [];
+    cat_list = fc or [];
+    options = opts or []
     fdf = filter_dataframe(df, q, sup_list, stat_list, cat_list, options)
-    risk_count = int((fdf['Stock Status'].isin(['Out of Stock','Predicted Stockout Soon']).sum())) if 'Stock Status' in fdf.columns else 0
-    #banner = [html.B("Alerte Rupture : "), f"{risk_count} SKU(s) à risque dans la vue filtrée — ",
-            #  html.Span("OOS", className="badge badge-danger"), " / ", html.Span("Rupture imminente", className="badge-warn")]
+    risk_count = int((fdf['Stock Status'].isin(
+        ['Out of Stock', 'Predicted Stockout Soon']).sum())) if 'Stock Status' in fdf.columns else 0
+    # banner = [html.B("Alerte Rupture : "), f"{risk_count} SKU(s) à risque dans la vue filtrée — ",
+    #  html.Span("OOS", className="badge badge-danger"), " / ", html.Span("Rupture imminente", className="badge-warn")]
     fdf_actions = add_action_cols(fdf)
     return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), False
 
+
 @app.callback(
-    Output("master-data","data", allow_duplicate=True),
-    Output("filtered-data","data", allow_duplicate=True),
-    Output("main-table","data", allow_duplicate=True),
-    Output("risk-banner","children", allow_duplicate=True),
-    Input("main-table","active_cell"),
-    State("main-table","data"),
-    State("search-input","value"),
-    State("filter-supplier","value"),
-    State("filter-status","value"),
-    State("filter-category","value"),
-    State("toggle-options","value"),
-    State("master-data","data"),
+    Output("master-data", "data", allow_duplicate=True),
+    Output("filtered-data", "data", allow_duplicate=True),
+    Output("main-table", "data", allow_duplicate=True),
+    Output("risk-banner", "children", allow_duplicate=True),
+    Input("main-table", "active_cell"),
+    State("main-table", "data"),
+    State("search-input", "value"),
+    State("filter-supplier", "value"),
+    State("filter-status", "value"),
+    State("filter-category", "value"),
+    State("toggle-options", "value"),
+    State("master-data", "data"),
     prevent_initial_call=True
 )
 def delete_row(active_cell, table_data, q, fs, fst, fc, opts, master_json):
-    if not active_cell or active_cell.get("column_id") != "🗑️ Delete" or not table_data:
+    if not active_cell or active_cell.get("column_id") != "delete Delete" or not table_data:
         raise dash.exceptions.PreventUpdate
     base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
     row = active_cell["row"]
     r = table_data[row]
     key_p = r.get("product_name")
     key_s = r.get("Supplier")
-    df = base[~((base["product_name"].astype(str)==str(key_p)) & (base["Supplier"].astype(str)==str(key_s)))].copy()
+    df = base[~((base["product_name"].astype(str) == str(key_p)) & (base["Supplier"].astype(str) == str(key_s)))].copy()
 
-    sup_list = fs or []; stat_list = fst or []; cat_list = fc or []; options = opts or []
+    sup_list = fs or [];
+    stat_list = fst or [];
+    cat_list = fc or [];
+    options = opts or []
     fdf = filter_dataframe(df, q, sup_list, stat_list, cat_list, options)
-    risk_count = int((fdf['Stock Status'].isin(['Out of Stock','Predicted Stockout Soon']).sum())) if 'Stock Status' in fdf.columns else 0
+    risk_count = int((fdf['Stock Status'].isin(
+        ['Out of Stock', 'Predicted Stockout Soon']).sum())) if 'Stock Status' in fdf.columns else 0
     banner = [html.B("Alerte Rupture : "), f"{risk_count} SKU(s) à risque dans la vue filtrée — ",
-              html.Span("OOS", className="badge badge-danger"), " / ", html.Span("Rupture imminente", className="badge-warn")]
+              html.Span("OOS", className="badge badge-danger"), " / ",
+              html.Span("Rupture imminente", className="badge-warn")]
     fdf_actions = add_action_cols(fdf)
     return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
+
 
 # ------------------------------ Floating Chat callbacks ---------------------------
 @app.callback(
@@ -4773,6 +5416,7 @@ def toggle_chat(n_fab, n_close, is_open):
         return not is_open
     return is_open
 
+
 @app.callback(
     Output("chat-window", "style"),
     Input("chat-open", "data")
@@ -4780,17 +5424,21 @@ def toggle_chat(n_fab, n_close, is_open):
 def show_hide_chat(is_open):
     return {"display": "flex" if is_open else "none"}
 
+
 def parse_contents(content):
     import base64
     content_type, content_string = content.split(',')
     decoded = base64.b64decode(content_string)
     try:
-        df = pd.read_csv(io.BytesIO(decoded)); return df
+        df = pd.read_csv(io.BytesIO(decoded));
+        return df
     except Exception:
         try:
-            df = pd.read_excel(io.BytesIO(decoded)); return df
+            df = pd.read_excel(io.BytesIO(decoded));
+            return df
         except Exception:
             return pd.DataFrame()
+
 
 @app.callback(
     Output("uploaded-csv", "data"),
@@ -4820,6 +5468,7 @@ def on_upload(contents, filename, history, rendered):
     msg = f"📥 Fichier chargé : **{filename}** — {len(df_u)} lignes détectées."
     history.append({"role": "assistant", "text": msg, "ts": datetime.now().isoformat()})
     return df_u.to_json(orient="records"), f"✅ {filename} importé.", _render_messages(history), history
+
 
 @app.callback(
     [Output("chat-messages", "children", allow_duplicate=True),
@@ -4858,6 +5507,7 @@ def on_chat(n_clicks, user_text, history, uploaded_json, master_json):
     history.append({"role": "assistant", "text": reply, "ts": datetime.now().isoformat()})
 
     return _render_messages(history), history, ""  # ✅ Vider l'input
+
 
 # ------------------------------ Run -------------------------------------------
 if __name__ == "__main__":

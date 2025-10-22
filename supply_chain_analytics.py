@@ -2819,7 +2819,7 @@ def page_overview(master_df: pd.DataFrame = None):
 
     # ✅ 1. DÉFINIR colonnes prioritaires overview
     cols_priority_overview = [
-        "QAC edited",
+
         #"delete",
         "product_id",
         "product_name",
@@ -2829,6 +2829,7 @@ def page_overview(master_df: pd.DataFrame = None):
         "Max Daily Sales (Pikine)",
         "optimal stock",
         "Ajusted_total_need",
+        "QAC edited",
         "QAC",
         "target_quantity",
         "Max Coverage Day",

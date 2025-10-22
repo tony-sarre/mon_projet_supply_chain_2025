@@ -51,6 +51,21 @@ from reportlab.platypus import Image
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+# --- Word / python-docx (import paresseux & sûr) ---
+DOCX_AVAILABLE = False
+DOCX_IMPORT_ERROR = None
+try:
+    from docx import Document
+    from docx.shared import Pt, Inches, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    DOCX_AVAILABLE = True
+except Exception as _e:
+    DOCX_AVAILABLE = False
+    DOCX_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
+
+
 # from openai import OpenAI
 import requests
 
@@ -4873,6 +4888,10 @@ def export_po_word(n_clicks, selected_rows, table_data):
     IMPORTANT : Utilise la QAC ÉDITÉE (colonne QAC du tableau, pas target_quantity).
     Le document Word permet d'ajouter les remises manuellement après génération.
     """
+    if not DOCX_AVAILABLE:
+        # Log clair + stopper proprement cette feature
+        print(f"❌ python-docx indisponible: {DOCX_IMPORT_ERROR}")
+        raise RuntimeError("La génération Word est indisponible sur cet environnement.")
     if not n_clicks or not table_data or not selected_rows or len(selected_rows) == 0:
         return no_update
 
@@ -4939,11 +4958,6 @@ def export_po_word(n_clicks, selected_rows, table_data):
     # ========================================
     # 4. CRÉER LE DOCUMENT WORD
     # ========================================
-    from docx import Document
-    from docx.shared import Pt, Inches, RGBColor
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.oxml.ns import qn
-    from docx.oxml import OxmlElement
 
     doc = Document()
 

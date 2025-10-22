@@ -3011,16 +3011,16 @@ def page_overview(master_df: pd.DataFrame = None):
     ], style={"marginBottom": "15px"})
 
     # Dropdown filter-status
-    dcc.Dropdown(
-        id="filter-status",
-        options=[
-            {"label": "Tous", "value": "all"},
-            {"label": "Stock OK", "value": "ok"},
-            {"label": "Rupture", "value": "oos"}
-        ],
-        value="all",
-        className="filter-dropdown"
-    )
+    #dcc.Dropdown(
+     #   id="filter-status",
+      #  options=[
+       #     {"label": "Tous", "value": "all"},
+        #    {"label": "Stock OK", "value": "ok"},
+         #   {"label": "Rupture", "value": "oos"}
+        #],
+        #value="all",
+        #className="filter-dropdown"
+    #)
 
     # Modal édition
     #edit_modal = dbc.Modal(
@@ -4717,11 +4717,11 @@ app.validation_layout = html.Div([
     dcc.Dropdown(id="filter-supplier"),
     dcc.Dropdown(id="filter-category"),
     dcc.Dropdown(id="filter-need"),
-    dcc.Dropdown(id="filter-status", options=[
-        {'label': 'Tous', 'value': 'all'},
-        {'label': 'Stock OK', 'value': 'ok'},
-        {'label': 'Rupture', 'value': 'oos'}
-    ], value='all'),
+    #dcc.Dropdown(id="filter-status", options=[
+     #   {'label': 'Tous', 'value': 'all'},
+      #  {'label': 'Stock OK', 'value': 'ok'},
+       # {'label': 'Rupture', 'value': 'oos'}
+    #], value='all'),
     dbc.Checklist(id="toggle-options"),
     dbc.Button(id="btn-refresh"),
     dbc.Button(id="btn-add-row"),
@@ -5568,7 +5568,7 @@ def open_edit_modal(n_add, active_cell, data):
     State("main-table", "data"),
     State("search-input", "value"),
     State("filter-supplier", "value"),
-    State("filter-status", "value"),
+    #State("filter-status", "value"),
     State("filter-category", "value"),
     State("toggle-options", "value"),
     State("master-data", "data"),
@@ -5635,7 +5635,7 @@ def save_edit(n, prod, sup, cat, stock, active_cell, table_data, q, fs, fst, fc,
     State("main-table", "data"),
     State("search-input", "value"),
     State("filter-supplier", "value"),
-    State("filter-status", "value"),
+    #State("filter-status", "value"),
     State("filter-category", "value"),
     State("toggle-options", "value"),
     State("master-data", "data"),

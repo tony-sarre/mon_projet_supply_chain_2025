@@ -3177,66 +3177,60 @@ def page_overview(master_df: pd.DataFrame = None):
 @app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
-     Output("risk-banner", "children", allow_duplicate=True)],
+     Output("risk-banner", "children", allow_duplicate=True),
+     Output("main-table", "selected_rows", allow_duplicate=True)],  # Add the missing selected_rows output
     [Input("search-input", "value"),
      Input("filter-supplier", "value"),
      Input("filter-category", "value"),
      Input("filter-need", "value"),
      Input("toggle-options", "value")],
     State("master-data", "data"),
-    prevent_initial_call="initial_duplicate"
+    prevent_initial_call=True #"initial_duplicate"
 )
 def apply_filters(search, sup, cat, need, options, master_json):
+    # Convert master_json to DataFrame
     base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
     base = validate_core_columns(base)
 
-    # ✅ SUPPRIMER TOUTES LES COLONNES PROMO AVANT FILTRAGE
+    # ✅ Remove promo columns before filtering
     promo_cols_to_remove = [
-        'promo_status',
-        'days_remaining',
-        'uplift_pct',
-        'roi_pct',
-        'promo_recommendation',
-        'promo_priority',
-        'net_profit_per_day',
-        'discount_pct',
-        'sales_with_promo',
-        'sales_without_promo',
-        'additional_sales_per_day',
-        'revenue_loss_per_day',
-        'additional_profit_per_day'
+        'promo_status', 'days_remaining', 'uplift_pct', 'roi_pct', 'promo_recommendation', 'promo_priority',
+        'net_profit_per_day', 'discount_pct', 'sales_with_promo', 'sales_without_promo', 'additional_sales_per_day',
+        'revenue_loss_per_day', 'additional_profit_per_day'
     ]
-
     base = base.drop(columns=[c for c in promo_cols_to_remove if c in base.columns], errors='ignore')
 
     print(f"[apply_filters] Colonnes après suppression promo : {base.columns.tolist()[:15]}")
 
+    # Handle None values
     sup = sup or []
     cat = cat or []
     need = need or []
     options = options or []
 
+    # Apply filtering based on search, supplier, category, and options
     fdf = filter_dataframe(base, search, sup, [], cat, options)
 
+    # Apply filtering on 'Ajusted_total_need' column if needed
     if need and len(need) > 0 and 'Ajusted_total_need' in fdf.columns:
         fdf = fdf[fdf['Ajusted_total_need'].isin(need)]
 
     print(f"[apply_filters] Résultat: {len(fdf)} lignes, {len(fdf.columns)} colonnes")
 
+    # Prepare the banner message
     banner = " "
-    fdf_actions = add_action_cols(fdf)
-    # Ajouter colonnes d'actions
-    #fdf_actions = fdf.copy()
-    #fdf_actions.insert(0, "delete", "delete")
-    #fdf_actions.insert(0, "edit", "edit")
 
-    # ✅ Vérification finale : s'assurer qu'aucune colonne promo ne subsiste
+    # Add action columns to the filtered dataframe
+    fdf_actions = add_action_cols(fdf)
+
+    # Final check: Ensure no promo columns remain
     final_cols = [c for c in fdf_actions.columns if c not in promo_cols_to_remove]
     fdf_actions = fdf_actions[final_cols]
 
-    return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
+    # Ensure that all 4 outputs are returned:
+    return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner, []  # Empty list for selected_rows
 
-@app.callback(
+'''@app.callback(
     Output("main-table", "selected_rows", allow_duplicate=True),
     [Input("search-input", "value"),
      Input("filter-supplier", "value"),
@@ -3252,7 +3246,7 @@ def reset_selection_on_filter(search, supplier, category, need, options):
     """
     print("🔄 Réinitialisation des sélections suite à filtrage")
     return []  # ✅ Aucune ligne sélectionnée
-
+'''
 
 
 # ==================== CALLBACKS NOTES ====================
@@ -4955,41 +4949,37 @@ def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ------------------------------ Callbacks: filtering / banner --------------------
+# ==================================================================================
+# SECTION CALLBACKS - VERSION NETTOYÉE (SUPPRIMER TOUS LES ANCIENS CALLBACKS)
+# ==================================================================================
+
+# ==================== CALLBACK 1 : INITIALISATION (PRIORITÉ 1) ====================
 @app.callback(
-    [Output("filtered-data", "data", allow_duplicate=True),
-     Output("main-table", "data", allow_duplicate=True),
-     Output("main-table", "selected_rows", allow_duplicate=True),
-     Output("risk-banner", "children", allow_duplicate=True)],
+    [Output("filtered-data", "data"),
+     Output("main-table", "data"),
+     Output("main-table", "selected_rows"),
+     Output("risk-banner", "children")],
     Input("master-data", "data"),
-    prevent_initial_call=True
+    prevent_initial_call=False  # ✅ S'exécute AU DÉMARRAGE
 )
 def initialize_table(master_json):
-    """Initialise le tableau au chargement sans filtres"""
-    # Parse the JSON data if master_json is not empty or None, otherwise fallback to cached data
+    """Initialise le tableau au chargement - CALLBACK PRINCIPAL"""
     df = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
     df = validate_core_columns(df)
 
-    # ✅ SUPPRIMER COLONNES PROMO dès l'initialisation
     promo_cols_to_remove = [
         'promo_status', 'days_remaining', 'uplift_pct', 'roi_pct',
         'promo_recommendation', 'promo_priority', 'net_profit_per_day',
         'discount_pct', 'sales_with_promo', 'sales_without_promo'
     ]
-
-    # Drop the promo columns if they exist
     df = df.drop(columns=[c for c in promo_cols_to_remove if c in df.columns], errors='ignore')
 
-    print(f"[initialize_table] Colonnes disponibles : {df.columns.tolist()[:15]}")
-    print("####################################################################")
-    print(df.columns)
-
+    print(f"✅ [initialize_table] {len(df)} lignes chargées")
     banner = " "
-
-    # Return 4 outputs: filtered data, main table data, selected rows (empty), and the risk banner
     return df.to_json(orient="records"), df.to_dict("records"), [], banner
 
 
-@app.callback(
+'''@app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
      Output("main-table", "selected_rows", allow_duplicate=True)],
@@ -5019,7 +5009,7 @@ def initial_load_table(pathname, master_json):
     print(f"🚀 [initial_load] Chargement initial : {len(df)} lignes, 0 sélections")
 
     return df.to_json(orient="records"), df.to_dict("records"), []
-
+'''
 # ------------------------------ Notes System Callbacks ----------------------------
 
 # ------------------------------ Export CSV ---------------------------------------
@@ -5502,10 +5492,11 @@ def toggle_po_button(selected_rows, data):
     return True  # Désactivé par défaut
 
 
+# ==================== CALLBACK 4 : COMPTEUR DE SÉLECTION ====================
 @app.callback(
     Output("selection-counter", "children"),
     Input("main-table", "selected_rows"),
-    prevent_initial_call=False  # ✅ False pour afficher dès le départ
+    prevent_initial_call=False
 )
 def update_selection_counter(selected_rows):
     """Affiche le nombre de lignes sélectionnées"""
@@ -5522,6 +5513,7 @@ def update_selection_counter(selected_rows):
         pill=True,
         style={"fontSize": "13px", "padding": "8px 12px"}
     )
+
 # ------------------------------ Edit/Add/Delete rows -----------------------------
 '''@app.callback(
    # Output("edit-modal", "is_open"),
@@ -5646,12 +5638,12 @@ def save_edit(n_clicks, table_data, prod, sup, cat, stock, active_cell, master_j
     # Make sure you return 5 outputs:
     return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), [], False
 
-
+'''
 @app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
      Output("main-table", "selected_rows", allow_duplicate=True),
-     Output("risk-banner", "children", allow_duplicate=True)],
+     Output("risk-banner", "children", allow_duplicate=True)],  # Allow duplicate outputs
     Input("master-data", "data"),
     prevent_initial_call=True
 )
@@ -5675,19 +5667,14 @@ def delete_row(master_json):
     # Process the base DataFrame (you can add more processing logic here)
     df = base.copy()
 
-    # Here you can add your logic for row deletion (if needed)
-    # For example, use active_cell to find and delete rows based on active selection
-    # This part is up to your specific logic, here's a placeholder logic
-    if "edit Delete" in df.columns:  # Assuming you want to delete rows with a specific column (e.g., edit Delete)
-        df = df[df["edit Delete"] != True]  # Example: delete rows where "edit Delete" is True
-
     # Example of filtering and updating
     # Apply any necessary filters based on your actual requirements
-    banner = "Updated successfully"
+    banner = "Updated successfully"  # Set your banner message here
 
     # Return the 4 outputs required by the callback:
-    return df.to_json(orient="records"), df.to_dict("records"), [], banner  # Empty list for selected rows
-
+    # filtered-data, main-table, selected_rows (empty list), and risk-banner
+    return df.to_json(orient="records"), df.to_dict("records"), [], banner
+'''
 # ------------------------------ Floating Chat callbacks ---------------------------
 @app.callback(
     Output("chat-open", "data"),

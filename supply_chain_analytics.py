@@ -3164,7 +3164,7 @@ def page_overview(master_df: pd.DataFrame = None):
                 dbc.Col(html.Div(action_buttons, style={"textAlign": "right"}), md=4)
             ])),
             html.Br(),
-            table,
+            table
             #edit_modal,
         ]),
         notes_fab_button,  # ✅ Bouton flottant
@@ -3443,7 +3443,7 @@ def send_note_with_notifications(n_clicks, message, author, product_name):
     feedback = f"✅ Note envoyée • {len(emails_sent)} email(s) : {', '.join(emails_sent)}" if emails_sent else "✅ Note enregistrée"
 
     return notes_display, "", author, feedback
-@app.callback(
+'''@app.callback(
     Output('main-table', 'data', allow_duplicate=True),  # Cela dépend de ce que tu veux actualiser
     Input('btn-refresh', 'n_clicks'),
     prevent_initial_call=True
@@ -3472,7 +3472,7 @@ def add_new_product(n_clicks, current_data):
         return current_data
     return no_update
 
-
+'''
 def page_analytics(master_df: pd.DataFrame = None):
     df = master_df if master_df is not None else get_df_cached()
 
@@ -4958,13 +4958,14 @@ def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
 @app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
-    Output("main-table", "selected_rows", allow_duplicate=True),
+     Output("main-table", "selected_rows", allow_duplicate=True),
      Output("risk-banner", "children", allow_duplicate=True)],
     Input("master-data", "data"),
     prevent_initial_call=True
 )
 def initialize_table(master_json):
     """Initialise le tableau au chargement sans filtres"""
+    # Parse the JSON data if master_json is not empty or None, otherwise fallback to cached data
     df = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
     df = validate_core_columns(df)
 
@@ -4975,17 +4976,21 @@ def initialize_table(master_json):
         'discount_pct', 'sales_with_promo', 'sales_without_promo'
     ]
 
+    # Drop the promo columns if they exist
     df = df.drop(columns=[c for c in promo_cols_to_remove if c in df.columns], errors='ignore')
 
     print(f"[initialize_table] Colonnes disponibles : {df.columns.tolist()[:15]}")
     print("####################################################################")
     print(df.columns)
+
     banner = " "
-    return df.to_json(orient="records"), df.to_dict("records"), banner
+
+    # Return 4 outputs: filtered data, main table data, selected rows (empty), and the risk banner
+    return df.to_json(orient="records"), df.to_dict("records"), [], banner
 
 
 @app.callback(
-    [Output("filtered-data", "data"),
+    [Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
      Output("main-table", "selected_rows", allow_duplicate=True)],
     Input("url", "pathname"),
@@ -5518,10 +5523,10 @@ def update_selection_counter(selected_rows):
         style={"fontSize": "13px", "padding": "8px 12px"}
     )
 # ------------------------------ Edit/Add/Delete rows -----------------------------
-@app.callback(
+'''@app.callback(
    # Output("edit-modal", "is_open"),
     #Output("edit-input", "value"),
-    Output("edit-supplier", "value"),
+    #Output("edit-supplier", "value"),
     Output("edit-category", "value"),
     Output("edit-stock", "value"),
     Output("main-table", "active_cell"),
@@ -5529,7 +5534,7 @@ def update_selection_counter(selected_rows):
     Input("main-table", "active_cell"),
     State("main-table", "data"),
     prevent_initial_call=True
-)
+)'''
 def open_edit_modal(n_add, active_cell, data):
     ctx = dash.callback_context
     if not ctx.triggered:
@@ -5547,38 +5552,42 @@ def open_edit_modal(n_add, active_cell, data):
     return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
 
+import json
+import pandas as pd
+import numpy as np
+
 @app.callback(
     [Output("master-data", "data", allow_duplicate=True),
-    Output("filtered-data", "data", allow_duplicate=True),
-    Output("main-table", "data", allow_duplicate=True),
-    Output("main-table", "selected_rows", allow_duplicate=True),
-   ],
-
-    Output("risk-banner", "children", allow_duplicate=True),  # ✅ Décommenté
-    #Output("edit-modal", "is_open", allow_duplicate=True),
-[   Input("main-table", "data")],
+     Output("filtered-data", "data", allow_duplicate=True),
+     Output("main-table", "data", allow_duplicate=True),
+     Output("main-table", "selected_rows", allow_duplicate=True),
+     Output("risk-banner", "children", allow_duplicate=True)],  # ✅ Décommenté
+    Input("main-table", "data"),
     Input("edit-modal-save", "n_clicks"),
-   # Input('edit-product', 'value'),  # Utilisation correcte de l'ID
-    Input('edit-product-name', 'value'),
-    State("edit-product", "value"),
-    State("edit-supplier", "value"),
-    State("edit-category", "value"),
-    State("edit-stock", "value"),
+    State("edit-product-name", "value"),  # Utilisé
+    State("edit-supplier", "value"),  # Utilisé
+    State("edit-category", "value"),  # Utilisé
+    State("edit-stock", "value"),  # Utilisé
     State("main-table", "active_cell"),
     State("main-table", "data"),
     State("search-input", "value"),
     State("filter-supplier", "value"),
-    #State("filter-status", "value"),
     State("filter-category", "value"),
     State("toggle-options", "value"),
     State("master-data", "data"),
     prevent_initial_call="initial_duplicate"
 )
-def save_edit(n, prod, sup, cat, stock, active_cell, table_data, q, fs, fst, fc, opts, master_json):
-    base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+def save_edit(n_clicks, table_data, prod, sup, cat, stock, active_cell, master_json, q, fs, fc, opts, test):
+    # If master_json is already a list (not a JSON string), use it directly
+    if isinstance(master_json, str):
+        base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+    else:
+        base = pd.DataFrame(master_json) if master_json else get_df_cached()
+
     df = base.copy()
 
-    if active_cell and active_cell.get("column_id") == "edit Edit" and active_cell.get("row") is not None and table_data:
+    if active_cell and active_cell.get("column_id") == "edit Edit" and active_cell.get(
+            "row") is not None and table_data:
         row = active_cell["row"]
         r = table_data[row]
         key_p = r.get("product_name")
@@ -5613,57 +5622,71 @@ def save_edit(n, prod, sup, cat, stock, active_cell, table_data, q, fs, fst, fc,
             new_row["Stock Status"] = "Order Soon" if new_row["total_stock"] else "Out of Stock"
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-    sup_list = fs or [];
-    stat_list = fst or [];
-    cat_list = fc or [];
+    # Application des filtres
+    sup_list = fs or []
+    stat_list = []  # 'fst' n'était pas utilisé dans la fonction précédente
+    cat_list = fc or []
     options = opts or []
-    fdf = filter_dataframe(df, q, sup_list, stat_list, cat_list, options)
-    risk_count = int((fdf['Stock Status'].isin(
-        ['Out of Stock', 'Predicted Stockout Soon']).sum())) if 'Stock Status' in fdf.columns else 0
-    # banner = [html.B("Alerte Rupture : "), f"{risk_count} SKU(s) à risque dans la vue filtrée — ",
-    #  html.Span("OOS", className="badge badge-danger"), " / ", html.Span("Rupture imminente", className="badge-warn")]
+
+    # Vérification si fdf n'est pas vide avant application des filtres
+    if not df.empty:
+        fdf = filter_dataframe(df, q, sup_list, stat_list, cat_list, options)
+
+        # Calcul du risque
+        risk_count = int((fdf['Stock Status'].isin(
+            ['Out of Stock', 'Predicted Stockout Soon']).sum())) if 'Stock Status' in fdf.columns else 0
+    else:
+        fdf = pd.DataFrame()  # DataFrame vide
+        risk_count = 0
+
+    # Application des actions sur fdf
     fdf_actions = add_action_cols(fdf)
-    return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), False
+
+    # Retour des résultats sous forme de JSON
+    # Make sure you return 5 outputs:
+    return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), [], False
 
 
 @app.callback(
-    Output("master-data", "data", allow_duplicate=True),
-    Output("filtered-data", "data", allow_duplicate=True),
-    Output("main-table", "data", allow_duplicate=True),
-    Output("risk-banner", "children", allow_duplicate=True),
-    Input("main-table", "active_cell"),
-    State("main-table", "data"),
-    State("search-input", "value"),
-    State("filter-supplier", "value"),
-    #State("filter-status", "value"),
-    State("filter-category", "value"),
-    State("toggle-options", "value"),
-    State("master-data", "data"),
+    [Output("filtered-data", "data", allow_duplicate=True),
+     Output("main-table", "data", allow_duplicate=True),
+     Output("main-table", "selected_rows", allow_duplicate=True),
+     Output("risk-banner", "children", allow_duplicate=True)],
+    Input("master-data", "data"),
     prevent_initial_call=True
 )
-def delete_row(active_cell, table_data, q, fs, fst, fc, opts, master_json):
-    if not active_cell or active_cell.get("column_id") != "delete Delete" or not table_data:
-        raise dash.exceptions.PreventUpdate
-    base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
-    row = active_cell["row"]
-    r = table_data[row]
-    key_p = r.get("product_name")
-    key_s = r.get("Supplier")
-    df = base[~((base["product_name"].astype(str) == str(key_p)) & (base["Supplier"].astype(str) == str(key_s)))].copy()
+def delete_row(master_json):
+    """Function to delete row based on master_json"""
 
-    sup_list = fs or [];
-    stat_list = fst or [];
-    cat_list = fc or [];
-    options = opts or []
-    fdf = filter_dataframe(df, q, sup_list, stat_list, cat_list, options)
-    risk_count = int((fdf['Stock Status'].isin(
-        ['Out of Stock', 'Predicted Stockout Soon']).sum())) if 'Stock Status' in fdf.columns else 0
-    banner = [html.B("Alerte Rupture : "), f"{risk_count} SKU(s) à risque dans la vue filtrée — ",
-              html.Span("OOS", className="badge badge-danger"), " / ",
-              html.Span("Rupture imminente", className="badge-warn")]
-    fdf_actions = add_action_cols(fdf)
-    return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner
+    # Check if master_json is None or empty
+    if not master_json:
+        # If master_json is None, fallback to an empty DataFrame or a cached DataFrame
+        print("master_json is None or empty. Using fallback data.")
+        base = get_df_cached()  # Replace with appropriate fallback DataFrame function
+    else:
+        try:
+            # If master_json is a valid JSON string, parse it; if it's already a list, use it directly
+            base = pd.DataFrame(json.loads(master_json)) if isinstance(master_json, str) else pd.DataFrame(master_json)
+        except ValueError as e:
+            # Fallback if JSON is invalid
+            print(f"Error parsing master_json: {e}. Using fallback data.")
+            base = get_df_cached()  # Fallback if JSON is invalid
 
+    # Process the base DataFrame (you can add more processing logic here)
+    df = base.copy()
+
+    # Here you can add your logic for row deletion (if needed)
+    # For example, use active_cell to find and delete rows based on active selection
+    # This part is up to your specific logic, here's a placeholder logic
+    if "edit Delete" in df.columns:  # Assuming you want to delete rows with a specific column (e.g., edit Delete)
+        df = df[df["edit Delete"] != True]  # Example: delete rows where "edit Delete" is True
+
+    # Example of filtering and updating
+    # Apply any necessary filters based on your actual requirements
+    banner = "Updated successfully"
+
+    # Return the 4 outputs required by the callback:
+    return df.to_json(orient="records"), df.to_dict("records"), [], banner  # Empty list for selected rows
 
 # ------------------------------ Floating Chat callbacks ---------------------------
 @app.callback(

@@ -4,9 +4,10 @@
 # pip install pandas scikit-learn flask-caching numpy
 # pip install reportlab
 # Optional: pip install openai
-
-
+import csv
 import os, sys
+
+#import MATCH
 
 print("CWD:", os.getcwd())
 print("Dir files:", os.listdir("."))
@@ -35,7 +36,7 @@ import pandas as pd
 from flask_caching import Cache
 # from dash_extensions import Cache
 import dash
-from dash import Dash, html, dcc, Input, Output, State, dash_table, no_update
+from dash import Dash, html, dcc, Input, Output, State, dash_table, no_update, MATCH
 from dash.dependencies import Input, Output, State, ALL
 import dash_bootstrap_components as dbc
 import plotly.express as px
@@ -2293,7 +2294,7 @@ def train_optimal_order_quantity_model(df: pd.DataFrame) -> tuple:
 
 
 # ----------------------------- App & Cache ---------------------------------------
-app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True)
+app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
 #server = app.server
 cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
 
@@ -3022,20 +3023,20 @@ def page_overview(master_df: pd.DataFrame = None):
     )
 
     # Modal édition
-    edit_modal = dbc.Modal(
-        [
-            dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
-            dbc.ModalBody([
-                html.Div("Formulaire d'édition à implémenter ici…"),
-                dcc.Input(id="edit-input", type="text", placeholder="Modifier la valeur")
-            ]),
-            dbc.ModalFooter(
-                dbc.Button("Fermer", id="close-edit", className="ms-auto", n_clicks=0)
-            ),
-        ],
-        id="edit-modal",
-        is_open=False,
-    )
+    #edit_modal = dbc.Modal(
+     #   [
+      #      dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
+       #     dbc.ModalBody([
+        #        html.Div("Formulaire d'édition à implémenter ici…"),
+         #       dcc.Input(id="edit-input", type="text", placeholder="Modifier la valeur")
+          #  ]),
+           # dbc.ModalFooter(
+            #    dbc.Button("Fermer", id="close-edit", className="ms-auto", n_clicks=0)
+            #),
+        #],
+        #id="edit-modal",
+        #is_open=False,
+    #)
 
     # ✅ NOUVEAU : Bouton flottant + Modal amélioré
     notes_fab_button = html.Button(
@@ -3164,7 +3165,7 @@ def page_overview(master_df: pd.DataFrame = None):
             ])),
             html.Br(),
             table,
-            edit_modal,
+            #edit_modal,
         ]),
         notes_fab_button,  # ✅ Bouton flottant
         notes_modal,  # ✅ Modal
@@ -3442,6 +3443,34 @@ def send_note_with_notifications(n_clicks, message, author, product_name):
     feedback = f"✅ Note envoyée • {len(emails_sent)} email(s) : {', '.join(emails_sent)}" if emails_sent else "✅ Note enregistrée"
 
     return notes_display, "", author, feedback
+@app.callback(
+    Output('main-table', 'data', allow_duplicate=True),  # Cela dépend de ce que tu veux actualiser
+    Input('btn-refresh', 'n_clicks'),
+    prevent_initial_call=True
+)
+def refresh_data(n_clicks):
+    if n_clicks:
+        # Rafraîchir les données ici (par exemple, recharger les données depuis la source)
+        updated_data = load_supply_data()  # Assure-toi d'avoir une fonction load_data() qui recharge les données
+        return updated_data
+    return no_update
+@app.callback(
+    Output('main-table', 'data', allow_duplicate=True),
+    Input('btn-add-row', 'n_clicks'),
+    State('main-table', 'data'),
+    prevent_initial_call=True
+)
+def add_new_product(n_clicks, current_data):
+    if n_clicks:
+        new_product = {
+            "product_name": "Nouveau produit",
+            "total_stock": 0,
+            "Average Daily Sales": 0.1,
+            # Remplir avec d'autres valeurs par défaut si nécessaire
+        }
+        current_data.append(new_product)
+        return current_data
+    return no_update
 
 
 def page_analytics(master_df: pd.DataFrame = None):
@@ -4467,6 +4496,25 @@ app.layout = html.Div([
         ],
         style={"display": "none"}
     ),
+    html.Div("Cliquez pour stocker les données en:"),
+
+    # Le stockage en mémoire, il est vidé à chaque actualisation de la page
+    dcc.Store(id={'type': 'storage', 'index': 'memory'}),
+
+    # Le stockage local, persiste même après une actualisation de la page
+    dcc.Store(id={'type': 'storage', 'index': 'local'}, storage_type='local'),
+
+    # Boutons pour activer le stockage
+    html.Button('Stockage Local', id={'type': 'button-storage', 'index': 'local'}),
+    html.Button('Stockage Session', id={'type': 'button-storage', 'index': 'session'}),
+
+    html.Hr(),
+
+    # Affichage du nombre de clics pour chaque type de stockage
+    html.Div([html.Span(0, id={'type': 'output-storage', 'index': 'local'}), " Clics en Local"]),
+# Bouton pour sauvegarder les données dans un fichier CSV
+    html.Button('💾 Enregistrer QAC', id="btn-save-qac", className="btn-success", style={'fontSize': '14px', 'padding': '8px 16px'}),
+
 
     make_sidebar(),
     html.Div(id="page-container", children=page_overview(initial_df)),
@@ -4491,6 +4539,78 @@ app.layout = html.Div([
         ])
     ]),
 ])
+
+
+# Callback pour stocker les données locales
+@app.callback(
+    Output({'type': 'storage', 'index': MATCH}, 'data'),
+    Input({'type': 'button-storage', 'index': MATCH}, 'n_clicks'),
+    State({'type': 'storage', 'index': MATCH}, 'data')
+)
+def store_data_in_local_storage(n_clicks, data):
+    if n_clicks is None:
+        return no_update
+
+    data = data or {'clicks': 0}
+    data['clicks'] = data['clicks'] + 1
+    return data
+
+
+# Callback pour afficher le nombre de clics dans chaque zone de stockage
+@app.callback(
+    Output({'type': 'output-storage', 'index': MATCH}, 'children'),
+    Input({'type': 'storage', 'index': MATCH}, 'modified_timestamp'),
+    State({'type': 'storage', 'index': MATCH}, 'data')
+)
+def display_storage_data(ts, data):
+    if ts is None:
+        return no_update
+    data = data or {}
+    return data.get('clicks', 0)
+
+
+# Callback pour enregistrer les données dans un fichier CSV
+@app.callback(
+    Output("main-table", "data", allow_duplicate=True),
+    Input('btn-save-qac', 'n_clicks'),
+    State("main-table", "data"),
+    prevent_initial_call='initial_duplicate'
+)
+def save_data_qac(n_clicks, table_data):
+    if n_clicks is None:
+        return no_update
+
+    # Sauvegarder les données dans un fichier CSV
+    try:
+        file_path = 'qac_data.csv'
+        file_exists = False
+        try:
+            with open(file_path, mode='r', newline='', encoding='utf-8') as f:
+                file_exists = True
+        except FileNotFoundError:
+            pass  # Le fichier n'existe pas, on va le créer
+
+        with open(file_path, mode='a', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=["product_name", "total_stock", "Average Daily Sales", "QAC edited"])
+
+            # Si le fichier est vide, écrire l'en-tête
+            if not file_exists:
+                writer.writeheader()
+
+            # Écrire les lignes dans le fichier CSV
+            for row in table_data:
+                writer.writerow({
+                    "product_name": row['product_name'],
+                    "total_stock": row['total_stock'],
+                    "Average Daily Sales": row['Average Daily Sales'],
+                    "QAC edited": row['QAC edited']
+                })
+
+        print("Données QAC sauvegardées dans le fichier CSV avec succès.")
+    except Exception as e:
+        print(f"Erreur lors de la sauvegarde des données QAC dans le fichier CSV : {e}")
+
+    return table_data  # Retourner les données actualisées du tableau
 
 
 # Callback pour mettre à jour le Store 'selected-product-for-notes'
@@ -5427,6 +5547,7 @@ def open_edit_modal(n_add, active_cell, data):
     Output("edit-modal", "is_open", allow_duplicate=True),
 [   Input("main-table", "data")],
     Input("edit-modal-save", "n_clicks"),
+    Input('edit-product', 'value'),  # Utilisation correcte de l'ID
     State("edit-product", "value"),
     State("edit-supplier", "value"),
     State("edit-category", "value"),

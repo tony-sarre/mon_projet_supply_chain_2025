@@ -4408,8 +4408,10 @@ app.layout = html.Div([
     dcc.Store(id="chat-open", data=False),
     dcc.Store(id='selected-product-for-notes', data=None),
     dcc.Store(id="qac-edits", storage_type="local"),
+    dcc.Input(id='edit-product', type='text', placeholder='Modifier produit', debounce=True),
 
     # ==================== EDIT MODAL (VERSION COMPLÈTE SANS ELLIPSIS) ====================
+    html.Div(id='edit-product-output'),
     html.Div(
         id="global-edit-modal-holder",
         children=[
@@ -4540,6 +4542,14 @@ app.layout = html.Div([
     ]),
 ])
 
+@app.callback(
+    Output('edit-product-output', 'children'),
+    Input('edit-product', 'value'),
+)
+def update_product_name(value):
+    if value:
+        return f"Produit modifié: {value}"
+    return no_update
 
 # Callback pour stocker les données locales
 @app.callback(
@@ -4759,6 +4769,7 @@ app.validation_layout = html.Div([
                     dbc.ModalBody([
                         html.Label("Nom du produit", style={"fontWeight": "600", "marginBottom": "5px"}),
                         dbc.Input(id="edit-product-name", placeholder="Nom du produit", type="text"),
+                       # dcc.Input(id='edit-product', type='text', placeholder='Modifier produit'),
                         html.Br(),
 
                         html.Label("Fournisseur", style={"fontWeight": "600", "marginBottom": "5px"}),
@@ -5508,8 +5519,8 @@ def update_selection_counter(selected_rows):
     )
 # ------------------------------ Edit/Add/Delete rows -----------------------------
 @app.callback(
-    Output("edit-modal", "is_open"),
-    Output("edit-input", "value"),
+   # Output("edit-modal", "is_open"),
+    #Output("edit-input", "value"),
     Output("edit-supplier", "value"),
     Output("edit-category", "value"),
     Output("edit-stock", "value"),
@@ -5544,10 +5555,11 @@ def open_edit_modal(n_add, active_cell, data):
    ],
 
     Output("risk-banner", "children", allow_duplicate=True),  # ✅ Décommenté
-    Output("edit-modal", "is_open", allow_duplicate=True),
+    #Output("edit-modal", "is_open", allow_duplicate=True),
 [   Input("main-table", "data")],
     Input("edit-modal-save", "n_clicks"),
-    Input('edit-product', 'value'),  # Utilisation correcte de l'ID
+   # Input('edit-product', 'value'),  # Utilisation correcte de l'ID
+    Input('edit-product-name', 'value'),
     State("edit-product", "value"),
     State("edit-supplier", "value"),
     State("edit-category", "value"),

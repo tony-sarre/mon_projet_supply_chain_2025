@@ -3003,11 +3003,11 @@ def page_overview(master_df: pd.DataFrame = None):
                          "selected_rows", "selected_columns", "hidden_columns"],
     )
 
-    # Boutons d'actions globales
     action_buttons = dbc.ButtonGroup([
         dbc.Button("🔄 Actualiser", id="btn-refresh", className="btn-outline-secondary", size="sm"),
-        dbc.Button("➕ Ajouter une ligne", id="btn-add-row", className="btn-primary", size="sm"),
-    ])
+        dbc.Button("➕ Ajouter produit", id="btn-add-row", className="btn-primary", size="sm"),
+        dbc.Button("💾 Enregistrer QAC", id="btn-save-qac", className="btn-success", size="sm"),  # ✅ nouveau
+    ], style={"marginBottom": "15px"})
 
     # Dropdown filter-status
     dcc.Dropdown(
@@ -4378,6 +4378,95 @@ app.layout = html.Div([
     dcc.Store(id="chat-store", data=[]),
     dcc.Store(id="chat-open", data=False),
     dcc.Store(id='selected-product-for-notes', data=None),
+    dcc.Store(id="qac-edits", storage_type="local"),
+
+    # ==================== EDIT MODAL (VERSION COMPLÈTE SANS ELLIPSIS) ====================
+    html.Div(
+        id="global-edit-modal-holder",
+        children=[
+            dbc.Modal(
+                id="edit-modal",
+                children=[
+                    dbc.ModalHeader(dbc.ModalTitle("Éditer produit", id="edit-modal-title")),
+                    dbc.ModalBody([
+                        # Nom du produit
+                        html.Div([
+                            html.Label("Nom du produit", style={"fontWeight": "600", "marginBottom": "5px"}),
+                            dbc.Input(id="edit-product-name", placeholder="Nom du produit", type="text"),
+                        ], style={"marginBottom": "15px"}),
+
+                        # Fournisseur
+                        html.Div([
+                            html.Label("Fournisseur", style={"fontWeight": "600", "marginBottom": "5px"}),
+                            dbc.Input(id="edit-supplier", placeholder="Fournisseur", type="text"),
+                        ], style={"marginBottom": "15px"}),
+
+                        # Catégorie
+                        html.Div([
+                            html.Label("Catégorie", style={"fontWeight": "600", "marginBottom": "5px"}),
+                            dbc.Input(id="edit-category", placeholder="Catégorie ABC/XYZ", type="text"),
+                        ], style={"marginBottom": "15px"}),
+
+                        # Stock
+                        html.Div([
+                            html.Label("Stock actuel", style={"fontWeight": "600", "marginBottom": "5px"}),
+                            dbc.Input(id="edit-stock", placeholder="Stock", type="number", min=0),
+                        ], style={"marginBottom": "15px"}),
+
+                        # QAC
+                        html.Div([
+                            html.Label("QAC (Quantité à commander)",
+                                       style={"fontWeight": "600", "marginBottom": "5px"}),
+                            dbc.Input(id="edit-qac", placeholder="QAC", type="number", min=0),
+                        ], style={"marginBottom": "15px"}),
+
+                        # Average Daily Sales
+                        html.Div([
+                            html.Label("Average Daily Sales", style={"fontWeight": "600", "marginBottom": "5px"}),
+                            dbc.Input(id="edit-ads", placeholder="Ventes journalières moyennes", type="number", min=0,
+                                      step=0.1),
+                        ], style={"marginBottom": "15px"}),
+
+                        # Crédit
+                        html.Div([
+                            html.Label("Jours de crédit", style={"fontWeight": "600", "marginBottom": "5px"}),
+                            dbc.Input(id="edit-credit", placeholder="Crédit (jours)", type="number", min=0),
+                        ], style={"marginBottom": "15px"}),
+
+                        # Lead Time
+                        html.Div([
+                            html.Label("Lead Time ajusté", style={"fontWeight": "600", "marginBottom": "5px"}),
+                            dbc.Input(id="edit-leadtime", placeholder="Lead time (jours)", type="number", min=0),
+                        ], style={"marginBottom": "15px"}),
+
+                        # Buffer
+                        html.Div([
+                            html.Label("Buffer ajusté", style={"fontWeight": "600", "marginBottom": "5px"}),
+                            dbc.Input(id="edit-buffer", placeholder="Buffer (jours)", type="number", min=0),
+                        ], style={"marginBottom": "15px"}),
+
+                        # Max Daily Sales
+                        html.Div([
+                            html.Label("Max Daily Sales", style={"fontWeight": "600", "marginBottom": "5px"}),
+                            dbc.Input(id="edit-max-sales", placeholder="Ventes max journalières", type="number", min=0),
+                        ], style={"marginBottom": "15px"}),
+
+                        # Feedback
+                        html.Div(id="edit-modal-feedback",
+                                 style={"color": "#10b981", "marginTop": "10px", "fontSize": "13px"})
+                    ]),
+                    dbc.ModalFooter([
+                        dbc.Button("Annuler", id="edit-modal-close", outline=True, size="sm",
+                                   style={"marginRight": "8px"}),
+                        dbc.Button("💾 Enregistrer", id="edit-modal-save", color="primary", size="sm", n_clicks=0),
+                    ])
+                ],
+                is_open=False,
+                backdrop="static",
+            )
+        ],
+        style={"display": "none"}
+    ),
 
     make_sidebar(),
     html.Div(id="page-container", children=page_overview(initial_df)),
@@ -4478,6 +4567,7 @@ def update_selected_product(active_cell, table_data):
    # dcc.Store(id="selected-product-for-notes"),
 #])
 # Validation layout
+# Validation layout
 app.validation_layout = html.Div([
     # ==================== NAVIGATION & STORES ====================
     dcc.Location(id="url"),
@@ -4487,8 +4577,9 @@ app.validation_layout = html.Div([
     dcc.Store(id="chat-store"),
     dcc.Store(id="chat-open"),
     dcc.Store(id="selected-product-for-notes"),
-    dcc.Store(id="edit-mode"),  # ✅ NOUVEAU
-    dcc.Store(id="edit-original-product"),  # ✅ NOUVEAU
+    dcc.Store(id="edit-mode"),
+    dcc.Store(id="edit-original-product"),
+    dcc.Store(id="qac-edits"),
 
     # ==================== SIDEBAR COMPONENTS ====================
     html.Div(id="risk-banner"),
@@ -4503,11 +4594,14 @@ app.validation_layout = html.Div([
     ], value='all'),
     dbc.Checklist(id="toggle-options"),
     dbc.Button(id="btn-refresh"),
-    dbc.Button(id="btn-add-row"),  # ✅ NOUVEAU
+    dbc.Button(id="btn-add-row"),
     dbc.Button(id="btn-po-pdf"),
+    dbc.Button(id="btn-save-qac"),  # ✅ AJOUT
     dcc.Download(id="download-data"),
     dcc.Download(id="download-po"),
     html.Div(id="debug-info"),
+    html.Div(id="action-feedback"),
+    html.Div(id="selection-counter"),
 
     # ==================== NAVIGATION ====================
     dbc.NavLink(id="nav-overview"),
@@ -4517,7 +4611,6 @@ app.validation_layout = html.Div([
 
     # ==================== PAGE CONTAINER ====================
     html.Div(id="page-container"),
-    html.Div(id="action-feedback"),  # ✅ NOUVEAU
 
     # ==================== MAIN TABLE (CRITIQUE) ====================
     dash_table.DataTable(
@@ -4527,37 +4620,73 @@ app.validation_layout = html.Div([
             {"name": "Supplier", "id": "Supplier"},
             {"name": "total_stock", "id": "total_stock"},
             {"name": "QAC", "id": "QAC"},
-            {"name": "edit", "id": "edit"},
-            {"name": "delete", "id": "delete"}
+            {"name": "QAC edited", "id": "QAC edited", "editable": True},  # ✅ AJOUT
         ],
         data=[],
         row_selectable="multi",
-        selected_rows=[]
+        selected_rows=[],
+        editable=True
     ),
 
-    # ==================== EDIT MODAL ====================
-    dbc.Modal(
-        id="edit-modal",
-        is_open=False,
+    # ==================== EDIT MODAL (VERSION COMPLÈTE) ====================
+    html.Div(
+        id="global-edit-modal-holder",
         children=[
-            dbc.ModalHeader(dbc.ModalTitle("", id="edit-modal-title")),
-            dbc.ModalBody([
-                dbc.Input(id="edit-product-name"),
-                dbc.Input(id="edit-supplier"),
-                dbc.Input(id="edit-category"),
-                dbc.Input(id="edit-stock"),
-                dbc.Input(id="edit-qac"),
-                dbc.Input(id="edit-ads"),
-                dbc.Input(id="edit-credit"),
-                dbc.Input(id="edit-leadtime"),
-                dbc.Input(id="edit-buffer"),
-                dbc.Input(id="edit-max-sales"),
-                html.Div(id="edit-modal-feedback")
-            ]),
-            dbc.ModalFooter([
-                dbc.Button("Annuler", id="edit-modal-close"),
-                dbc.Button("Enregistrer", id="edit-modal-save")
-            ])
+            dbc.Modal(
+                id="edit-modal",
+                children=[
+                    dbc.ModalHeader(dbc.ModalTitle("", id="edit-modal-title")),
+                    dbc.ModalBody([
+                        html.Label("Nom du produit", style={"fontWeight": "600", "marginBottom": "5px"}),
+                        dbc.Input(id="edit-product-name", placeholder="Nom du produit", type="text"),
+                        html.Br(),
+
+                        html.Label("Fournisseur", style={"fontWeight": "600", "marginBottom": "5px"}),
+                        dbc.Input(id="edit-supplier", placeholder="Fournisseur", type="text"),
+                        html.Br(),
+
+                        html.Label("Catégorie", style={"fontWeight": "600", "marginBottom": "5px"}),
+                        dbc.Input(id="edit-category", placeholder="Catégorie ABC/XYZ", type="text"),
+                        html.Br(),
+
+                        html.Label("Stock actuel", style={"fontWeight": "600", "marginBottom": "5px"}),
+                        dbc.Input(id="edit-stock", placeholder="Stock", type="number", min=0),
+                        html.Br(),
+
+                        html.Label("QAC (Quantité à commander)", style={"fontWeight": "600", "marginBottom": "5px"}),
+                        dbc.Input(id="edit-qac", placeholder="QAC", type="number", min=0),
+                        html.Br(),
+
+                        html.Label("Average Daily Sales", style={"fontWeight": "600", "marginBottom": "5px"}),
+                        dbc.Input(id="edit-ads", placeholder="Ventes journalières moyennes", type="number", min=0),
+                        html.Br(),
+
+                        html.Label("Jours de crédit", style={"fontWeight": "600", "marginBottom": "5px"}),
+                        dbc.Input(id="edit-credit", placeholder="Crédit (jours)", type="number", min=0),
+                        html.Br(),
+
+                        html.Label("Lead Time ajusté", style={"fontWeight": "600", "marginBottom": "5px"}),
+                        dbc.Input(id="edit-leadtime", placeholder="Lead time (jours)", type="number", min=0),
+                        html.Br(),
+
+                        html.Label("Buffer ajusté", style={"fontWeight": "600", "marginBottom": "5px"}),
+                        dbc.Input(id="edit-buffer", placeholder="Buffer (jours)", type="number", min=0),
+                        html.Br(),
+
+                        html.Label("Max Daily Sales", style={"fontWeight": "600", "marginBottom": "5px"}),
+                        dbc.Input(id="edit-max-sales", placeholder="Ventes max journalières", type="number", min=0),
+                        html.Br(),
+
+                        html.Div(id="edit-modal-feedback", style={"color": "#10b981", "marginTop": "10px"})
+                    ]),
+                    dbc.ModalFooter([
+                        dbc.Button("Annuler", id="edit-modal-close", outline=True, size="sm"),
+                        dbc.Button("💾 Enregistrer", id="edit-modal-save", color="primary", size="sm", n_clicks=0),
+                    ])
+                ],
+                is_open=False,
+                backdrop="static",
+            )
         ]
     ),
 
@@ -4593,33 +4722,24 @@ app.validation_layout = html.Div([
         dbc.Button(id="chat-send")
     ]),
 
-    # ==================== ANALYTICS (si callbacks existent) ====================
+    # ==================== ANALYTICS ====================
     dcc.Graph(id="analytics-scatter"),
     dcc.Dropdown(id="analytics-filter-supplier"),
     dcc.Dropdown(id="analytics-filter-category"),
 
-    # ==================== PREDICTIONS (si callbacks existent) ====================
+    # ==================== PREDICTIONS ====================
     dcc.Graph(id="predictive-bar"),
     dash_table.DataTable(id="predictive-table", data=[], columns=[]),
     dcc.Dropdown(id="predictive-filter-supplier"),
     dcc.Dropdown(id="predictive-filter-category"),
 
-    # ==================== PROMOTIONS (si callbacks existent) ====================
+    # ==================== PROMOTIONS ====================
     dash_table.DataTable(id="promo-table", data=[], columns=[]),
 
-    # ==================== AUDIT (si callbacks existent) ====================
-    dash_table.DataTable(id="audit-table", data=[], columns=[]),
-
-    # ==================== SELECTION COUNTER (si ajouté) ====================
-    html.Div(id="selection-counter"),
-
-    # ==================== CONFLICT ALERT (si ajouté) ====================
+    # ==================== AUTRES COMPOSANTS ====================
     html.Div(id="conflict-alert"),
-
-    # ==================== CONFIRM DIALOG (si ajouté) ====================
     dcc.ConfirmDialog(id="confirm-dialog"),
 ])
-
 # ------------------------------ Routing ------------------------------------------
 @app.callback(
     Output("page-container", "children"),
@@ -5306,7 +5426,7 @@ def open_edit_modal(n_add, active_cell, data):
     Output("risk-banner", "children", allow_duplicate=True),  # ✅ Décommenté
     Output("edit-modal", "is_open", allow_duplicate=True),
 [   Input("main-table", "data")],
-    Input("edit-save", "n_clicks"),
+    Input("edit-modal-save", "n_clicks"),
     State("edit-product", "value"),
     State("edit-supplier", "value"),
     State("edit-category", "value"),

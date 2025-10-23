@@ -3172,7 +3172,8 @@ def page_overview(master_df: pd.DataFrame = None):
         ]),
         notes_fab_button,  # ✅ Bouton flottant
         notes_modal,  # ✅ Modal
-        dcc.Store(id="selected-product-for-notes", data=None)
+        #dcc.Store(id="selected-product-for-notes", data=None)
+        dcc.Store(id={'type': 'selected-product-for-notes', 'index': '1'}, data=None)
     ])
 
 
@@ -4407,6 +4408,8 @@ app.layout = html.Div([
     dcc.Store(id="qac-edits", storage_type="local"),
     dcc.Input(id='edit-product', type='text', placeholder='Modifier produit', debounce=True),
     dcc.Store(id="qac-edits-store", storage_type='local', data={}),
+    dcc.Store(id="edit-mode"),
+    dcc.Store(id="edit-original-product"),
     # ==================== EDIT MODAL (VERSION COMPLÈTE SANS ELLIPSIS) ====================
     html.Div(id='edit-product-output'),
     html.Div(
@@ -4496,8 +4499,8 @@ app.layout = html.Div([
         style={"display": "none"}
     ),
 # Ajout du composant action-feedback
-    html.Div(id='action-feedback', children='Aucune action effectuée encore.', style={"color": "#10b981", "marginTop": "10px"}),  # C'est là que le feedback apparaîtra
-    html.Div("Cliquez pour stocker les données en:"),
+   # html.Div(id='action-feedback', children='Aucune action effectuée encore.', style={"color": "#10b981", "marginTop": "10px"}),  # C'est là que le feedback apparaîtra
+    #html.Div("Cliquez pour stocker les données en:"),
 
     # Le stockage en mémoire, il est vidé à chaque actualisation de la page
     dcc.Store(id={'type': 'storage', 'index': 'memory'}),
@@ -4518,6 +4521,8 @@ app.layout = html.Div([
 
     make_sidebar(),
     html.Div(id="page-container", children=page_overview(initial_df)),
+    html.Div(id="action-feedback", style={"position": "fixed", "top": "80px", "right": "20px", "zIndex": 10000}),
+    html.Div(id="selection-counter"),
 
     html.Button(id="chat-fab", className="chat-fab", children=[html.Span("Assistant"), html.Span("💬")]),
     html.Div(id="chat-window", className="chat-window", style={"display": "none"}, children=[
@@ -4595,7 +4600,7 @@ def display_storage_data(ts, data):
 
 
 # ==================== CALLBACK 1 : CAPTURER LES MODIFICATIONS EN TEMPS RÉEL ====================
-@app.callback(
+'''@app.callback(
     Output("qac-edits-store", "data"),
     Input("main-table", "data"),
     State("qac-edits-store", "data"),
@@ -4638,9 +4643,9 @@ def capture_qac_edits(table_data, stored_edits):
     print(f"💾 [localStorage] {len(stored_edits)} QAC sauvegardés")
     return stored_edits
 
-
+'''
 # ==================== CALLBACK 2 : RESTAURER LES QAC AU CHARGEMENT ====================
-@app.callback(
+'''@app.callback(
     Output("main-table", "data", allow_duplicate=True),
     Input("qac-edits-store", "modified_timestamp"),
     State("qac-edits-store", "data"),
@@ -4667,10 +4672,10 @@ def restore_qac_from_storage(timestamp, stored_edits, table_data):
         print(f"✅ [localStorage] {restored_count} QAC restaurés")
 
     return table_data
-
+'''
 
 # ==================== CALLBACK 3 : SAUVEGARDER EN CSV (BOUTON) ====================
-@app.callback(
+'''@app.callback(
     [Output("action-feedback", "children"),
      Output("main-table", "data", allow_duplicate=True)],
     Input('btn-save-qac', 'n_clicks'),
@@ -4744,10 +4749,10 @@ def save_qac_to_csv(n_clicks, table_data, stored_edits):
             color="danger",
             duration=5000
         ), table_data
-
+'''
 
 # ==================== CALLBACK 4 : CHARGER QAC DEPUIS CSV AU DÉMARRAGE ====================
-@app.callback(
+'''@app.callback(
     Output("qac-edits-store", "data", allow_duplicate=True),
     Input("url", "pathname"),
     prevent_initial_call='initial_duplicate'
@@ -4786,9 +4791,11 @@ def load_qac_from_csv_on_startup(pathname):
     except Exception as e:
         print(f"⚠️ Erreur chargement CSV : {e}")
         return {}
+'''
+
 # Callback pour mettre à jour le Store 'selected-product-for-notes'
 @app.callback(
-    Output('selected-product-for-notes', 'data'),
+    Output('selected-product-for-notes', 'data', allow_duplicate = True),
     Input('main-table', 'active_cell'),
     State('main-table', 'data'),
     prevent_initial_call=True
@@ -4869,13 +4876,16 @@ app.validation_layout = html.Div([
     dcc.Store(id="uploaded-csv"),
     dcc.Store(id="chat-store"),
     dcc.Store(id="chat-open"),
-    dcc.Store(id="selected-product-for-notes"),
+    dcc.Store(id={'type': 'selected-product-for-notes', 'index': '2'}),
     dcc.Store(id="edit-mode"),
     dcc.Store(id="edit-original-product"),
-    dcc.Store(id="qac-edits"),
+    #dcc.Store(id="qac-edits"),
+    dcc.Store(id="qac-edits-store"),
 
     # ==================== SIDEBAR COMPONENTS ====================
     html.Div(id="risk-banner"),
+    html.Div(id="action-feedback"),  # ✅ AJOUTER
+    html.Div(id="selection-counter"),  # ✅ AJOUTER
     dcc.Input(id="search-input"),
     dcc.Dropdown(id="filter-supplier"),
     dcc.Dropdown(id="filter-category"),

@@ -4595,7 +4595,12 @@ def capture_qac_edits(table_data, stored_edits):
     # Parcourir les lignes du tableau
     for row in table_data:
         product_name = row.get("product_name")
+        #qac_edited = row.get("QAC edited", "")
         qac_edited = row.get("QAC edited", "")
+        if qac_edited is not None:
+            qac_edited = qac_edited.strip()
+        else:
+            qac_edited = ""
 
         # Vérifier si qac_edited est None et le convertir en chaîne vide si nécessaire
         if qac_edited is not None:

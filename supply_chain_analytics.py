@@ -5979,12 +5979,12 @@ def on_chat(n_clicks, user_text, history, uploaded_json, master_json):
 
 
 # ------------------------------ Run ------------------------------------------
-'''if __name__ == "__main__":
+if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
-    app.run(debug=True, host="0.0.0.0", port=port)'''
-from waitress import serve
+    app.run(debug=True, host="0.0.0.0", port=port)
+'''from waitress import serve
 from supply_chain_analytics import app  # Assurez-vous que 'app' est bien l'instance de votre application Dash/Flask
 
 if __name__ == "__main__":
     serve(app, host="0.0.0.0", port=10000)  # Lance Waitress sur le port 10000
-
+'''

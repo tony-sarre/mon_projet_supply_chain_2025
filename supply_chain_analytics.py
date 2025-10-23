@@ -5733,8 +5733,6 @@ def open_edit_modal(n_add, active_cell, data):
 
 
 import json
-import pandas as pd
-import numpy as np
 
 @app.callback(
     [Output("master-data", "data", allow_duplicate=True),

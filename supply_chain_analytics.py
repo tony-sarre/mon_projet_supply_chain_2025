@@ -17,6 +17,9 @@ from dash import Dash
 import dash_bootstrap_components as dbc
 import os
 import google.generativeai as genai
+import orjson
+
+opts = orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY
 
 app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP], prevent_initial_callbacks='initial_duplicate')
 

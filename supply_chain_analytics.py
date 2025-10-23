@@ -3010,7 +3010,7 @@ def page_overview(master_df: pd.DataFrame = None):
     action_buttons = dbc.ButtonGroup([
         dbc.Button("🔄 Actualiser", id="btn-refresh", className="btn-outline-secondary", size="sm"),
         dbc.Button("➕ Ajouter produit", id="btn-add-row", className="btn-primary", size="sm"),
-        dbc.Button("💾 Enregistrer QAC", id="btn-save-qac", className="btn-success", size="sm"),  # ✅ nouveau
+        dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, className="btn-success", size="sm"), # ✅ nouveau
     ], style={"marginBottom": "15px"})
 
     # Dropdown filter-status
@@ -4514,8 +4514,7 @@ app.layout = html.Div([
     # Affichage du nombre de clics pour chaque type de stockage
     html.Div([html.Span(0, id={'type': 'output-storage', 'index': 'local'}), " Clics en Local"]),
 # Bouton pour sauvegarder les données dans un fichier CSV
-    html.Button('💾 Enregistrer QAC', id="btn-save-qac", className="btn-success", style={'fontSize': '14px', 'padding': '8px 16px'}),
-
+    html.Button('💾 Enregistrer QAC', id={'type': 'btn-save-qac', 'index': 'html'}, className="btn-success", style={'fontSize': '14px', 'padding': '8px 16px'}),
 
     make_sidebar(),
     html.Div(id="page-container", children=page_overview(initial_df)),
@@ -5961,6 +5960,9 @@ def on_chat(n_clicks, user_text, history, uploaded_json, master_json):
 '''if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
     app.run(debug=True, host="0.0.0.0", port=port)'''
+from waitress import serve
+from supply_chain_analytics import app  # Assurez-vous que 'app' est bien l'instance de votre application Dash/Flask
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    serve(app, host="0.0.0.0", port=10000)  # Lance Waitress sur le port 10000
+

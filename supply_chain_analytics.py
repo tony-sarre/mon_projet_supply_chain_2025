@@ -4541,6 +4541,23 @@ app.layout = html.Div([
     ]),
 ])
 
+import dash
+
+
+@app.callback(
+    Output('action-feedback', 'children'),
+    Input('some-input', 'value'),
+    prevent_initial_call=True
+)
+def update_feedback(input_value):
+    ctx = dash.callback_context
+    print(f"Callback triggered by: {ctx.triggered}")
+
+    if input_value is None:
+        return "No input provided"
+    return f"Input value: {input_value}"
+
+
 @app.callback(
     Output('edit-product-output', 'children'),
     Input('edit-product', 'value'),

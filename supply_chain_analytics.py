@@ -4403,7 +4403,7 @@ app.layout = html.Div([
     dcc.Store(id='selected-product-for-notes', data=None),
     dcc.Store(id="qac-edits", storage_type="local"),
     dcc.Input(id='edit-product', type='text', placeholder='Modifier produit', debounce=True),
-
+    dcc.Store(id="qac-edits-store", storage_type='local', data={}),
     # ==================== EDIT MODAL (VERSION COMPLÈTE SANS ELLIPSIS) ====================
     html.Div(id='edit-product-output'),
     html.Div(
@@ -4492,6 +4492,8 @@ app.layout = html.Div([
         ],
         style={"display": "none"}
     ),
+# Ajout du composant action-feedback
+    html.Div(id='action-feedback', children='Aucune action effectuée encore.', style={"color": "#10b981", "marginTop": "10px"}),  # C'est là que le feedback apparaîtra
     html.Div("Cliquez pour stocker les données en:"),
 
     # Le stockage en mémoire, il est vidé à chaque actualisation de la page
@@ -4573,50 +4575,193 @@ def display_storage_data(ts, data):
     return data.get('clicks', 0)
 
 
-# Callback pour enregistrer les données dans un fichier CSV
+# ==================== CALLBACK 1 : CAPTURER LES MODIFICATIONS EN TEMPS RÉEL ====================
+@app.callback(
+    Output("qac-edits-store", "data"),
+    Input("main-table", "data"),
+    State("qac-edits-store", "data"),
+    prevent_initial_call=True
+)
+def capture_qac_edits(table_data, stored_edits):
+    """
+    Capture automatiquement les modifications de QAC edited
+    et les sauvegarde dans localStorage
+    """
+    if not table_data:
+        return stored_edits or {}
+
+    stored_edits = stored_edits or {}
+
+    # Parcourir les lignes du tableau
+    for row in table_data:
+        product_name = row.get("product_name")
+        qac_edited = row.get("QAC edited", "")
+
+        # Vérifier si qac_edited est None et le convertir en chaîne vide si nécessaire
+        if qac_edited is not None:
+            qac_edited = qac_edited.strip()
+        else:
+            qac_edited = ""  # Si c'est None, on le remplace par une chaîne vide
+
+        # Si QAC edited n'est pas vide, sauvegarder
+        if product_name and qac_edited:
+            stored_edits[product_name] = {
+                "qac_edited": qac_edited,
+                "supplier": row.get("Supplier", ""),
+                "timestamp": datetime.now().isoformat()
+            }
+
+    print(f"💾 [localStorage] {len(stored_edits)} QAC sauvegardés")
+    return stored_edits
+
+
+# ==================== CALLBACK 2 : RESTAURER LES QAC AU CHARGEMENT ====================
 @app.callback(
     Output("main-table", "data", allow_duplicate=True),
-    Input('btn-save-qac', 'n_clicks'),
+    Input("qac-edits-store", "modified_timestamp"),
+    State("qac-edits-store", "data"),
     State("main-table", "data"),
-    prevent_initial_call='initial_duplicate'
+    prevent_initial_call=True
 )
-def save_data_qac(n_clicks, table_data):
-    if n_clicks is None:
+def restore_qac_from_storage(timestamp, stored_edits, table_data):
+    """
+    Restaure les QAC édités depuis localStorage au chargement de la page
+    """
+    if not timestamp or not stored_edits or not table_data:
         return no_update
 
-    # Sauvegarder les données dans un fichier CSV
+    restored_count = 0
+
+    # Appliquer les QAC sauvegardés
+    for row in table_data:
+        product_name = row.get("product_name")
+        if product_name in stored_edits:
+            row["QAC edited"] = stored_edits[product_name]["qac_edited"]
+            restored_count += 1
+
+    if restored_count > 0:
+        print(f"✅ [localStorage] {restored_count} QAC restaurés")
+
+    return table_data
+
+
+# ==================== CALLBACK 3 : SAUVEGARDER EN CSV (BOUTON) ====================
+@app.callback(
+    [Output("action-feedback", "children"),
+     Output("main-table", "data", allow_duplicate=True)],
+    Input('btn-save-qac', 'n_clicks'),
+    [State("main-table", "data"),
+     State("qac-edits-store", "data")],
+    prevent_initial_call=True
+)
+def save_qac_to_csv(n_clicks, table_data, stored_edits):
+    """
+    Sauvegarde les QAC édités dans un fichier CSV
+    Utilise les données du localStorage pour garantir la cohérence
+    """
+    if not n_clicks:
+        return no_update, no_update
+
     try:
         file_path = 'qac_data.csv'
-        file_exists = False
-        try:
-            with open(file_path, mode='r', newline='', encoding='utf-8') as f:
-                file_exists = True
-        except FileNotFoundError:
-            pass  # Le fichier n'existe pas, on va le créer
 
-        with open(file_path, mode='a', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=["product_name", "total_stock", "Average Daily Sales", "QAC edited"])
+        # Préparer les données à sauvegarder
+        rows_to_save = []
 
-            # Si le fichier est vide, écrire l'en-tête
-            if not file_exists:
-                writer.writeheader()
+        for row in table_data:
+            product_name = row.get('product_name')
+            qac_edited = row.get('QAC edited', None)
 
-            # Écrire les lignes dans le fichier CSV
-            for row in table_data:
-                writer.writerow({
-                    "product_name": row['product_name'],
-                    "total_stock": row['total_stock'],
-                    "Average Daily Sales": row['Average Daily Sales'],
-                    "QAC edited": row['QAC edited']
+            # Vérifier si qac_edited est None et le convertir en chaîne vide si nécessaire
+            if qac_edited is None:
+                qac_edited = ""  # Si c'est None, on le remplace par une chaîne vide
+            else:
+                qac_edited = qac_edited.strip()  # Applique strip() si ce n'est pas None
+
+            # Sauvegarder seulement les lignes avec QAC edited non vide
+            if qac_edited and qac_edited != " ":
+                rows_to_save.append({
+                    "product_name": product_name,
+                    "supplier": row.get('Supplier', ''),
+                    "total_stock": row.get('total_stock', 0),
+                    "Average Daily Sales": row.get('Average Daily Sales', 0),
+                    "QAC": row.get('QAC', 0),
+                    "QAC edited": qac_edited,
+                    "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 })
 
-        print("Données QAC sauvegardées dans le fichier CSV avec succès.")
+        if not rows_to_save:
+            return dbc.Alert(
+                "⚠️ Aucune donnée QAC à sauvegarder",
+                color="warning",
+                duration=3000
+            ), table_data
+
+        # Écrire dans le CSV (mode écrasement pour éviter les doublons)
+        with open(file_path, mode='w', newline='', encoding='utf-8') as f:
+            fieldnames = ["product_name", "supplier", "total_stock",
+                          "Average Daily Sales", "QAC", "QAC edited", "timestamp"]
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows_to_save)
+
+        print(f"✅ [CSV] {len(rows_to_save)} lignes sauvegardées dans {file_path}")
+
+        return dbc.Alert(
+            f"✅ {len(rows_to_save)} QAC sauvegardés dans {file_path}",
+            color="success",
+            duration=4000
+        ), table_data
+
     except Exception as e:
-        print(f"Erreur lors de la sauvegarde des données QAC dans le fichier CSV : {e}")
+        print(f"❌ Erreur sauvegarde CSV : {e}")
+        return dbc.Alert(
+            f"❌ Erreur : {str(e)}",
+            color="danger",
+            duration=5000
+        ), table_data
 
-    return table_data  # Retourner les données actualisées du tableau
 
+# ==================== CALLBACK 4 : CHARGER QAC DEPUIS CSV AU DÉMARRAGE ====================
+@app.callback(
+    Output("qac-edits-store", "data", allow_duplicate=True),
+    Input("url", "pathname"),
+    prevent_initial_call='initial_duplicate'
+)
+def load_qac_from_csv_on_startup(pathname):
+    """
+    Charge les QAC depuis le CSV au démarrage de l'application
+    """
+    if pathname not in ["/", None]:
+        return no_update
 
+    file_path = 'qac_data.csv'
+
+    try:
+        if not os.path.exists(file_path):
+            return {}
+
+        stored_edits = {}
+
+        with open(file_path, mode='r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                product_name = row.get('product_name')
+                if product_name:
+                    stored_edits[product_name] = {
+                        "qac_edited": row.get('QAC edited', ''),
+                        "supplier": row.get('supplier', ''),
+                        "timestamp": row.get('timestamp', '')
+                    }
+
+        if stored_edits:
+            print(f"✅ [CSV] {len(stored_edits)} QAC chargés depuis {file_path}")
+
+        return stored_edits
+
+    except Exception as e:
+        print(f"⚠️ Erreur chargement CSV : {e}")
+        return {}
 # Callback pour mettre à jour le Store 'selected-product-for-notes'
 @app.callback(
     Output('selected-product-for-notes', 'data'),

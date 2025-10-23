@@ -83,7 +83,17 @@ cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TI
 def get_df_cached():
     return load_supply_data()  # Fonction pour charger vos données
 
+RENDER_ENV = os.getenv("RENDER", False)
+DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
 
+if RENDER_ENV:
+    print("\n" + "="*60)
+    print("🚀 DÉMARRAGE SUR RENDER")
+    print("="*60)
+    print(f"Python version: {sys.version}")
+    print(f"Working directory: {os.getcwd()}")
+    print(f"Files: {os.listdir('.')[:10]}")
+    print("="*60 + "\n")
 # ------------- OpenAI client (clé hardcodée à ta demande) ----------------
 # OPENAI_API_KEY_HARDCODED = "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"
 # Ligne ~45 dans votre code
@@ -4903,8 +4913,8 @@ app.validation_layout = html.Div([
     dcc.Download(id="download-data"),
     dcc.Download(id="download-po"),
     html.Div(id="debug-info"),
-    html.Div(id="action-feedback"),
-    html.Div(id="selection-counter"),
+    #html.Div(id="action-feedback"),
+    #html.Div(id="selection-counter"),
 
     # ==================== NAVIGATION ====================
     dbc.NavLink(id="nav-overview"),
@@ -4914,7 +4924,9 @@ app.validation_layout = html.Div([
 
     # ==================== PAGE CONTAINER ====================
     html.Div(id="page-container"),
-
+    html.Div(id="action-feedback"),
+    html.Div(id="qac-save-feedback"),  # ✅ AJOUTER CECI
+    html.Div(id="selection-counter"),
     # ==================== MAIN TABLE (CRITIQUE) ====================
     dash_table.DataTable(
         id="main-table",

@@ -3192,7 +3192,7 @@ def page_overview(master_df: pd.DataFrame = None):
     [Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
      Output("risk-banner", "children", allow_duplicate=True),
-     Output("main-table", "selected_rows", allow_duplicate=True)],  # Add the missing selected_rows output
+     Output("main-table", "selected_rows")],  # Add the missing selected_rows output
     [Input("search-input", "value"),
      Input("filter-supplier", "value"),
      Input("filter-category", "value"),
@@ -4407,133 +4407,125 @@ except Exception as e:
 initial_df = get_df_cached()
 initial_df['QAC edited']=' '
 #initial_df['delete']='delete'
+# ==================== LAYOUT CORRIGÉ (remplacer TOUT votre app.layout actuel) ====================
+
 app.layout = html.Div([
+    # ========== NAVIGATION & STORES ==========
     dcc.Location(id="url"),
     dcc.Store(id="master-data", data=initial_df.to_json(orient="records")),
     dcc.Store(id="filtered-data"),
     dcc.Store(id="uploaded-csv"),
     dcc.Store(id="chat-store", data=[]),
     dcc.Store(id="chat-open", data=False),
-    dcc.Store(id='selected-product-for-notes', data=None),
-    dcc.Store(id="qac-edits", storage_type="local"),
-    dcc.Input(id='edit-product', type='text', placeholder='Modifier produit', debounce=True),
-    dcc.Store(id="qac-edits-store", storage_type='local', data={}),
+    dcc.Store(id='selected-product-for-notes', data=None),  # ✅ Simple ID (pas de pattern-matching ici)
+    dcc.Store(id="qac-edits-store", storage_type='local', data={}),  # ✅ Un seul Store pour QAC
     dcc.Store(id="edit-mode"),
     dcc.Store(id="edit-original-product"),
-    # ==================== EDIT MODAL (VERSION COMPLÈTE SANS ELLIPSIS) ====================
-    html.Div(id='edit-product-output'),
-    html.Div(
-        id="global-edit-modal-holder",
+
+    # ========== COMPOSANTS CACHÉS (pour callbacks) ==========
+    html.Div(id='edit-product-output', style={"display": "none"}),
+
+    # ========== EDIT MODAL (VISIBLE AU NIVEAU RACINE) ==========
+    dbc.Modal(
+        id="edit-modal",
+        is_open=False,
+        backdrop="static",
         children=[
-            dbc.Modal(
-                id="edit-modal",
-                children=[
-                    dbc.ModalHeader(dbc.ModalTitle("Éditer produit", id="edit-modal-title")),
-                    dbc.ModalBody([
-                        # Nom du produit
-                        html.Div([
-                            html.Label("Nom du produit", style={"fontWeight": "600", "marginBottom": "5px"}),
-                            dbc.Input(id="edit-product-name", placeholder="Nom du produit", type="text"),
-                        ], style={"marginBottom": "15px"}),
+            dbc.ModalHeader(dbc.ModalTitle("Éditer produit", id="edit-modal-title")),
+            dbc.ModalBody([
+                # Nom du produit
+                html.Div([
+                    html.Label("Nom du produit", style={"fontWeight": "600", "marginBottom": "5px"}),
+                    dbc.Input(id="edit-product-name", placeholder="Nom du produit", type="text"),
+                ], style={"marginBottom": "15px"}),
 
-                        # Fournisseur
-                        html.Div([
-                            html.Label("Fournisseur", style={"fontWeight": "600", "marginBottom": "5px"}),
-                            dbc.Input(id="edit-supplier", placeholder="Fournisseur", type="text"),
-                        ], style={"marginBottom": "15px"}),
+                # Fournisseur
+                html.Div([
+                    html.Label("Fournisseur", style={"fontWeight": "600", "marginBottom": "5px"}),
+                    dbc.Input(id="edit-supplier", placeholder="Fournisseur", type="text"),
+                ], style={"marginBottom": "15px"}),
 
-                        # Catégorie
-                        html.Div([
-                            html.Label("Catégorie", style={"fontWeight": "600", "marginBottom": "5px"}),
-                            dbc.Input(id="edit-category", placeholder="Catégorie ABC/XYZ", type="text"),
-                        ], style={"marginBottom": "15px"}),
+                # Catégorie
+                html.Div([
+                    html.Label("Catégorie", style={"fontWeight": "600", "marginBottom": "5px"}),
+                    dbc.Input(id="edit-category", placeholder="Catégorie ABC/XYZ", type="text"),
+                ], style={"marginBottom": "15px"}),
 
-                        # Stock
-                        html.Div([
-                            html.Label("Stock actuel", style={"fontWeight": "600", "marginBottom": "5px"}),
-                            dbc.Input(id="edit-stock", placeholder="Stock", type="number", min=0),
-                        ], style={"marginBottom": "15px"}),
+                # Stock
+                html.Div([
+                    html.Label("Stock actuel", style={"fontWeight": "600", "marginBottom": "5px"}),
+                    dbc.Input(id="edit-stock", placeholder="Stock", type="number", min=0),
+                ], style={"marginBottom": "15px"}),
 
-                        # QAC
-                        html.Div([
-                            html.Label("QAC (Quantité à commander)",
-                                       style={"fontWeight": "600", "marginBottom": "5px"}),
-                            dbc.Input(id="edit-qac", placeholder="QAC", type="number", min=0),
-                        ], style={"marginBottom": "15px"}),
+                # QAC
+                html.Div([
+                    html.Label("QAC (Quantité à commander)", style={"fontWeight": "600", "marginBottom": "5px"}),
+                    dbc.Input(id="edit-qac", placeholder="QAC", type="number", min=0),
+                ], style={"marginBottom": "15px"}),
 
-                        # Average Daily Sales
-                        html.Div([
-                            html.Label("Average Daily Sales", style={"fontWeight": "600", "marginBottom": "5px"}),
-                            dbc.Input(id="edit-ads", placeholder="Ventes journalières moyennes", type="number", min=0,
-                                      step=0.1),
-                        ], style={"marginBottom": "15px"}),
+                # Average Daily Sales
+                html.Div([
+                    html.Label("Average Daily Sales", style={"fontWeight": "600", "marginBottom": "5px"}),
+                    dbc.Input(id="edit-ads", placeholder="Ventes journalières moyennes", type="number", min=0,
+                              step=0.1),
+                ], style={"marginBottom": "15px"}),
 
-                        # Crédit
-                        html.Div([
-                            html.Label("Jours de crédit", style={"fontWeight": "600", "marginBottom": "5px"}),
-                            dbc.Input(id="edit-credit", placeholder="Crédit (jours)", type="number", min=0),
-                        ], style={"marginBottom": "15px"}),
+                # Crédit
+                html.Div([
+                    html.Label("Jours de crédit", style={"fontWeight": "600", "marginBottom": "5px"}),
+                    dbc.Input(id="edit-credit", placeholder="Crédit (jours)", type="number", min=0),
+                ], style={"marginBottom": "15px"}),
 
-                        # Lead Time
-                        html.Div([
-                            html.Label("Lead Time ajusté", style={"fontWeight": "600", "marginBottom": "5px"}),
-                            dbc.Input(id="edit-leadtime", placeholder="Lead time (jours)", type="number", min=0),
-                        ], style={"marginBottom": "15px"}),
+                # Lead Time
+                html.Div([
+                    html.Label("Lead Time ajusté", style={"fontWeight": "600", "marginBottom": "5px"}),
+                    dbc.Input(id="edit-leadtime", placeholder="Lead time (jours)", type="number", min=0),
+                ], style={"marginBottom": "15px"}),
 
-                        # Buffer
-                        html.Div([
-                            html.Label("Buffer ajusté", style={"fontWeight": "600", "marginBottom": "5px"}),
-                            dbc.Input(id="edit-buffer", placeholder="Buffer (jours)", type="number", min=0),
-                        ], style={"marginBottom": "15px"}),
+                # Buffer
+                html.Div([
+                    html.Label("Buffer ajusté", style={"fontWeight": "600", "marginBottom": "5px"}),
+                    dbc.Input(id="edit-buffer", placeholder="Buffer (jours)", type="number", min=0),
+                ], style={"marginBottom": "15px"}),
 
-                        # Max Daily Sales
-                        html.Div([
-                            html.Label("Max Daily Sales", style={"fontWeight": "600", "marginBottom": "5px"}),
-                            dbc.Input(id="edit-max-sales", placeholder="Ventes max journalières", type="number", min=0),
-                        ], style={"marginBottom": "15px"}),
+                # Max Daily Sales
+                html.Div([
+                    html.Label("Max Daily Sales", style={"fontWeight": "600", "marginBottom": "5px"}),
+                    dbc.Input(id="edit-max-sales", placeholder="Ventes max journalières", type="number", min=0),
+                ], style={"marginBottom": "15px"}),
 
-                        # Feedback
-                        html.Div(id="edit-modal-feedback",
-                                 style={"color": "#10b981", "marginTop": "10px", "fontSize": "13px"})
-                    ]),
-                    dbc.ModalFooter([
-                        dbc.Button("Annuler", id="edit-modal-close", outline=True, size="sm",
-                                   style={"marginRight": "8px"}),
-                        dbc.Button("💾 Enregistrer", id="edit-modal-save", color="primary", size="sm", n_clicks=0),
-                    ])
-                ],
-                is_open=False,
-                backdrop="static",
-            )
-        ],
-        style={"display": "none"}
+                # Feedback
+                html.Div(id="edit-modal-feedback", style={"color": "#10b981", "marginTop": "10px", "fontSize": "13px"})
+            ]),
+            dbc.ModalFooter([
+                dbc.Button("Annuler", id="edit-modal-close", outline=True, size="sm", style={"marginRight": "8px"}),
+                dbc.Button("💾 Enregistrer", id="edit-modal-save", color="primary", size="sm", n_clicks=0),
+            ])
+        ]
     ),
-# Ajout du composant action-feedback
-   # html.Div(id='action-feedback', children='Aucune action effectuée encore.', style={"color": "#10b981", "marginTop": "10px"}),  # C'est là que le feedback apparaîtra
-    #html.Div("Cliquez pour stocker les données en:"),
 
-    # Le stockage en mémoire, il est vidé à chaque actualisation de la page
+    # ========== PATTERN-MATCHING STORES (pour localStorage) ==========
     dcc.Store(id={'type': 'storage', 'index': 'memory'}),
-
-    # Le stockage local, persiste même après une actualisation de la page
     dcc.Store(id={'type': 'storage', 'index': 'local'}, storage_type='local'),
 
-    # Boutons pour activer le stockage
-    html.Button('Stockage Local', id={'type': 'button-storage', 'index': 'local'}),
-    html.Button('Stockage Session', id={'type': 'button-storage', 'index': 'session'}),
+    # ========== BOUTONS CACHÉS (pour callbacks localStorage) ==========
+    html.Div(style={"display": "none"}, children=[
+        html.Button('Stockage Local', id={'type': 'button-storage', 'index': 'local'}),
+        html.Button('Stockage Session', id={'type': 'button-storage', 'index': 'session'}),
+        html.Div([html.Span(0, id={'type': 'output-storage', 'index': 'local'}), " Clics"]),
+    ]),
 
-    html.Hr(),
-
-    # Affichage du nombre de clics pour chaque type de stockage
-    html.Div([html.Span(0, id={'type': 'output-storage', 'index': 'local'}), " Clics en Local"]),
-# Bouton pour sauvegarder les données dans un fichier CSV
-    html.Button('💾 Enregistrer QAC', id={'type': 'btn-save-qac', 'index': 'html'}, className="btn-success", style={'fontSize': '14px', 'padding': '8px 16px'}),
-
+    # ========== SIDEBAR ==========
     make_sidebar(),
+
+    # ========== CONTENU PRINCIPAL ==========
     html.Div(id="page-container", children=page_overview(initial_df)),
+
+    # ========== FEEDBACKS & COMPTEURS ==========
     html.Div(id="action-feedback", style={"position": "fixed", "top": "80px", "right": "20px", "zIndex": 10000}),
     html.Div(id="selection-counter"),
 
+    # ========== CHATBOT FLOTTANT ==========
     html.Button(id="chat-fab", className="chat-fab", children=[html.Span("Assistant"), html.Span("💬")]),
     html.Div(id="chat-window", className="chat-window", style={"display": "none"}, children=[
         html.Div(className="chat-header", children=[
@@ -4542,20 +4534,25 @@ app.layout = html.Div([
         ]),
         html.Div(id="chat-messages", className="chat-body"),
         html.Div(style={"padding": "10px"}, children=[
-            dcc.Upload(id="chat-upload",
-                       children=html.Div(["📤 Glisser-déposer un CSV ici ou ", html.B("cliquer pour sélectionner")]),
-                       multiple=False, className="upload-box"),
+            dcc.Upload(
+                id="chat-upload",
+                children=html.Div(["📤 Glisser-déposer un CSV ici ou ", html.B("cliquer pour sélectionner")]),
+                multiple=False,
+                className="upload-box"
+            ),
             html.Small(id="upload-status", style={"color": "#6b7280"})
         ]),
         html.Div(className="chat-input-wrap", children=[
-            dbc.Textarea(id="chat-input", className="chat-textarea",
-                         placeholder="Écrire une question… (Enter = envoyer, Shift+Enter = nouvelle ligne)", rows=2),
+            dbc.Textarea(
+                id="chat-input",
+                className="chat-textarea",
+                placeholder="Écrire une question… (Enter = envoyer, Shift+Enter = nouvelle ligne)",
+                rows=2
+            ),
             dbc.Button("Envoyer", id="chat-send", className="btn-primary", n_clicks=0)
         ])
     ]),
 ])
-
-import dash
 
 
 @app.callback(
@@ -5743,7 +5740,7 @@ import numpy as np
     [Output("master-data", "data", allow_duplicate=True),
      Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
-     Output("main-table", "selected_rows", allow_duplicate=True),
+     Output("main-table", "selected_rows"),
      Output("risk-banner", "children", allow_duplicate=True)],  # ✅ Décommenté
     Input("main-table", "data"),
     Input("edit-modal-save", "n_clicks"),

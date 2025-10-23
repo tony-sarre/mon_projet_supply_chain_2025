@@ -3192,7 +3192,7 @@ def page_overview(master_df: pd.DataFrame = None):
     [Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
      Output("risk-banner", "children", allow_duplicate=True),
-     Output("main-table", "selected_rows")],  # Add the missing selected_rows output
+     Output("main-table", "selected_rows", allow_duplicate=True)],  # Add the missing selected_rows output
     [Input("search-input", "value"),
      Input("filter-supplier", "value"),
      Input("filter-category", "value"),
@@ -5143,10 +5143,10 @@ def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 # ==================== CALLBACK 1 : INITIALISATION (PRIORITÉ 1) ====================
 @app.callback(
-    [Output("filtered-data", "data"),
-     Output("main-table", "data"),
-     Output("main-table", "selected_rows"),
-     Output("risk-banner", "children")],
+    [Output("filtered-data", "data",allow_duplicate=True),
+     Output("main-table", "data",allow_duplicate=True),
+     Output("main-table", "selected_rows", allow_duplicate=True),
+     Output("risk-banner", "children",allow_duplicate=True)],
     Input("master-data", "data"),
     prevent_initial_call=False  # ✅ S'exécute AU DÉMARRAGE
 )
@@ -5738,7 +5738,7 @@ import json
     [Output("master-data", "data", allow_duplicate=True),
      Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
-     Output("main-table", "selected_rows"),
+     Output("main-table", "selected_rows", allow_duplicate=True),
      Output("risk-banner", "children", allow_duplicate=True)],  # ✅ Décommenté
     Input("main-table", "data"),
     Input("edit-modal-save", "n_clicks"),

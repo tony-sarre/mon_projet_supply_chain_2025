@@ -2307,9 +2307,9 @@ def train_optimal_order_quantity_model(df: pd.DataFrame) -> tuple:
 
 
 # ----------------------------- App & Cache ---------------------------------------
-app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
+#app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
 #server = app.server
-cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
+#cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
 
 # ------------------------------ Custom CSS & JS ----------------------------------
 app.index_string = """
@@ -4040,7 +4040,7 @@ def page_promotions():
 # =========================
 # ROUTING CALLBACK
 # =========================
-@app.callback(
+'''@app.callback(
     Output("page-content", "children"),
     Input("url", "pathname")
 )
@@ -4063,7 +4063,7 @@ def display_page(pathname):
             html.A("Retour à l'accueil", href="/")
         ], className="error-message")
 
-
+'''
 # ------------------------------ Chatbot helpers ----------------------------------
 
 # =============================== Chatbot helpers ================================
@@ -4554,6 +4554,10 @@ app.layout = html.Div([
     ]),
 ])
 
+
+app.layout = html.Div([
+    html.H1("My App")
+])
 
 @app.callback(
     Output('action-feedback', 'children'),

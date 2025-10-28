@@ -4691,8 +4691,8 @@ def restore_qac_from_storage(timestamp, stored_edits, table_data):
 
 
 # ==================== CALLBACK 3 : SAUVEGARDER EN CSV (BOUTON) ====================
-'''@app.callback(
-    [Output("action-feedback", "children"),
+@app.callback(
+    [Output("action-feedback", "children", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True)],
     Input('btn-save-qac', 'n_clicks'),
     [State("main-table", "data"),
@@ -4765,7 +4765,7 @@ def save_qac_to_csv(n_clicks, table_data, stored_edits):
             color="danger",
             duration=5000
         ), table_data
-'''
+
 
 # ==================== CALLBACK 4 : CHARGER QAC DEPUIS CSV AU DÉMARRAGE ====================
 '''@app.callback(

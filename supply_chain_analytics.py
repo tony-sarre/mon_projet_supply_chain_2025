@@ -4616,7 +4616,7 @@ def display_storage_data(ts, data):
 
 
 # ==================== CALLBACK 1 : CAPTURER LES MODIFICATIONS EN TEMPS RÉEL ====================
-'''@app.callback(
+@app.callback(
     Output("qac-edits-store", "data"),
     Input("main-table", "data"),
     State("qac-edits-store", "data"),
@@ -4659,7 +4659,7 @@ def capture_qac_edits(table_data, stored_edits):
     print(f"💾 [localStorage] {len(stored_edits)} QAC sauvegardés")
     return stored_edits
 
-'''
+
 # ==================== CALLBACK 2 : RESTAURER LES QAC AU CHARGEMENT ====================
 '''@app.callback(
     Output("main-table", "data", allow_duplicate=True),

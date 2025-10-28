@@ -3174,10 +3174,10 @@ def page_overview(master_df: pd.DataFrame = None):
             html.Div(dbc.Row([
                 dbc.Col(html.Div(f"Détails Produits - {len(available_cols)} colonnes", className="section-title"),
                         md=8),
-                dbc.Col(html.Div(action_buttons, style={"textAlign": "right"}), md=4)
+               # dbc.Col(html.Div(action_buttons, style={"textAlign": "right"}), md=4)
             ])),
             html.Br(),
-            table
+            #table
             #edit_modal,
         ]),
         notes_fab_button,  # ✅ Bouton flottant
@@ -4519,7 +4519,7 @@ app.layout = html.Div([
     make_sidebar(),
 
     # ========== CONTENU PRINCIPAL ==========
-    #html.Div(id="page-container", children=page_overview(initial_df)),
+    html.Div(id="page-container", children=page_overview(initial_df)),
 
     # ========== FEEDBACKS & COMPTEURS ==========
    # html.Div(id="action-feedback", style={"position": "fixed", "top": "80px", "right": "20px", "zIndex": 10000}),

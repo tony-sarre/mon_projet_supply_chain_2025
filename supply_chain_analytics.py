@@ -4519,11 +4519,11 @@ app.layout = html.Div([
     make_sidebar(),
 
     # ========== CONTENU PRINCIPAL ==========
-    html.Div(id="page-container", children=page_overview(initial_df)),
+    #html.Div(id="page-container", children=page_overview(initial_df)),
 
     # ========== FEEDBACKS & COMPTEURS ==========
-    html.Div(id="action-feedback", style={"position": "fixed", "top": "80px", "right": "20px", "zIndex": 10000}),
-    html.Div(id="selection-counter"),
+   # html.Div(id="action-feedback", style={"position": "fixed", "top": "80px", "right": "20px", "zIndex": 10000}),
+     #html.Div(id="selection-counter"),
 
     # ========== CHATBOT FLOTTANT ==========
     html.Button(id="chat-fab", className="chat-fab", children=[html.Span("Assistant"), html.Span("💬")]),
@@ -4554,10 +4554,6 @@ app.layout = html.Div([
     ]),
 ])
 
-
-app.layout = html.Div([
-    html.H1("My App")
-])
 
 @app.callback(
     Output('action-feedback', 'children'),

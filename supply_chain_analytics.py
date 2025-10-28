@@ -3471,7 +3471,7 @@ def refresh_data(n_clicks):
         updated_data = load_supply_data()  # Assure-toi d'avoir une fonction load_data() qui recharge les données
         return updated_data
     return no_update
-'''@app.callback(
+@app.callback(
     Output('main-table', 'data', allow_duplicate=True),
     Input('btn-add-row', 'n_clicks'),
     State('main-table', 'data'),
@@ -3489,7 +3489,7 @@ def add_new_product(n_clicks, current_data):
         return current_data
     return no_update
 
-'''
+
 def page_analytics(master_df: pd.DataFrame = None):
     df = master_df if master_df is not None else get_df_cached()
 

@@ -2322,15 +2322,24 @@ app.index_string = """
         {%css%}
         <style>
             :root {
-                --brand-accent:#22d3ee;
-                --badge-danger:#ef4444; --badge-warning:#f59e0b; --badge-ok:#10b981;
+                --brand-accent: #22d3ee;
+                --badge-danger: #ef4444;
+                --badge-warning: #f59e0b;
+                --badge-ok: #10b981;
+                --bg-primary: #0b1220;
+                --bg-secondary: #0f1625;
+                --bg-tertiary: #1a2332;
+                --text-primary: #ffffff;
+                --text-secondary: #ffffff;
+                --text-muted: #9ca3af;
+                --border-color: #1f2937;
             }
             .sidebar { position: fixed; top:0; bottom:0; left:0; width: 320px;
                 padding: 16px 14px; background: #0b1220; border-right:1px solid #1f2937; overflow-y:auto; }
-            .content { margin-left: 320px; padding: 18px 18px 120px 18px; }
+            .content { margin-left: 320px; padding: 18px 18px 120px 18px; background: var(--bg-primary) !important; color: var(--text-primary) !important; }
             .brand { font-weight:800; font-size:20px; letter-spacing:.6px; color:#fff; }
             .muted { color:#9ca3af; font-size:13px; }
-            .pill { border:1px solid #243244; padding:10px 12px; border-radius:12px; background:#0f1828; }
+            .pill { border:1px solid #243244; padding:10px 12px; border-radius:12px; background:#0f1828; color: var(--text-primary) !important;} }
             .kpi { border-radius:16px; padding:18px; border:1px solid #1f2937; background:linear-gradient(180deg,#0b1220,#0f1625);
                    box-shadow:0 10px 24px rgba(0,0,0,.25); }
             .banner-risk { border-left:4px solid var(--badge-danger); background: rgba(239,68,68,.08);
@@ -2340,8 +2349,8 @@ app.index_string = """
             .badge-warn{ background:rgba(245,158,11,.15); color:#fde68a; border-color:#78350f; }
             .badge-ok{ background:rgba(16,185,129,.15); color:#a7f3d0; border-color:#064e3b; }
             .btn-primary { background: var(--brand-accent); color:#001018; font-weight:700; border:none; }
-            .search-input input { background:#0a1320; color:#e5e7eb; border:1px solid #1f2937; border-radius:10px; }
-            .section-title { font-weight:700; font-size:18px; margin-bottom:10px; }
+            .search-input input { background:#0a1320; color: var(--text-primary) !important; border:1px solid #1f2937; border-radius:10px; }
+            .section-title { font-weight:700; font-size:18px; margin-bottom:10px; color: var(--text-primary) !important;}
             .soft-card { border:1px solid #1f2937; border-radius:16px; padding:14px; background:#0b1220; }
 
             /* --- Floating chat bubble (LIGHT THEME) --- */

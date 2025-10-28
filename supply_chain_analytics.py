@@ -3253,8 +3253,8 @@ def apply_filters(search, sup, cat, need, options, master_json):
     # Ensure that all 4 outputs are returned:
     return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner, []  # Empty list for selected_rows
 
-'''@app.callback(
-    Output("main-table", "selected_rows", allow_duplicate=True),
+@app.callback(
+    #Output("main-table", "selected_rows", allow_duplicate=True),
     [Input("search-input", "value"),
      Input("filter-supplier", "value"),
      Input("filter-category", "value"),
@@ -3269,7 +3269,7 @@ def reset_selection_on_filter(search, supplier, category, need, options):
     """
     print("🔄 Réinitialisation des sélections suite à filtrage")
     return []  # ✅ Aucune ligne sélectionnée
-'''
+
 
 
 # ==================== CALLBACKS NOTES ====================

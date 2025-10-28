@@ -2330,7 +2330,7 @@ app.index_string = """
                 --bg-secondary: #0f1625;
                 --bg-tertiary: #1a2332;
                 --text-primary: #ffffff;
-                --text-secondary: #ffffff;
+                --text-secondary: #969799;
                 --text-muted: #9ca3af;
                 --border-color: #1f2937;
             }
@@ -2339,10 +2339,10 @@ app.index_string = """
             .content { margin-left: 320px; padding: 18px 18px 120px 18px; background: var(--bg-primary) !important; color: var(--text-primary) !important; }
             .brand { font-weight:800; font-size:20px; letter-spacing:.6px; color:#fff; }
             .muted { color:#9ca3af; font-size:13px; }
-            .pill { border:1px solid #243244; padding:10px 12px; border-radius:12px; background:#0f1828; color: var(--text-primary) !important;} }
+            .pill { border:1px solid #243244; padding:10px 12px; border-radius:12px; background:#0f1828; color: var(--text-secondary) !important;} }
             .kpi { border-radius:16px; padding:18px; border:1px solid #1f2937; background:linear-gradient(180deg,#0b1220,#0f1625);
                    box-shadow:0 10px 24px rgba(0,0,0,.25); }
-            .banner-risk { border-left:4px solid var(--badge-danger); background: rgba(239,68,68,.08);
+            /*.banner-risk { border-left:4px solid var(--badge-danger); background: rgba(239,68,68,.08);*/
                 padding:10px 14px; border-radius:10px; margin-bottom:10px; }
             .badge{ padding:2px 8px; border-radius:10px; font-size:11px; border:1px solid #374151 }
             .badge-danger{ background:rgba(239,68,68,.15); color:#fecaca; border-color:#7f1d1d; }

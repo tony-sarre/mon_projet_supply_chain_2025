@@ -4768,7 +4768,7 @@ def save_qac_to_csv(n_clicks, table_data, stored_edits):
 
 
 # ==================== CALLBACK 4 : CHARGER QAC DEPUIS CSV AU DÉMARRAGE ====================
-'''@app.callback(
+@app.callback(
     Output("qac-edits-store", "data", allow_duplicate=True),
     Input("url", "pathname"),
     prevent_initial_call='initial_duplicate'
@@ -4807,7 +4807,7 @@ def load_qac_from_csv_on_startup(pathname):
     except Exception as e:
         print(f"⚠️ Erreur chargement CSV : {e}")
         return {}
-'''
+
 
 # Callback pour mettre à jour le Store 'selected-product-for-notes'
 @app.callback(

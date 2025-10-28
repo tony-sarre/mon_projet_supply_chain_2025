@@ -3460,7 +3460,7 @@ def send_note_with_notifications(n_clicks, message, author, product_name):
     feedback = f"✅ Note envoyée • {len(emails_sent)} email(s) : {', '.join(emails_sent)}" if emails_sent else "✅ Note enregistrée"
 
     return notes_display, "", author, feedback
-'''@app.callback(
+@app.callback(
     Output('main-table', 'data', allow_duplicate=True),  # Cela dépend de ce que tu veux actualiser
     Input('btn-refresh', 'n_clicks'),
     prevent_initial_call=True
@@ -3471,7 +3471,7 @@ def refresh_data(n_clicks):
         updated_data = load_supply_data()  # Assure-toi d'avoir une fonction load_data() qui recharge les données
         return updated_data
     return no_update
-@app.callback(
+'''@app.callback(
     Output('main-table', 'data', allow_duplicate=True),
     Input('btn-add-row', 'n_clicks'),
     State('main-table', 'data'),

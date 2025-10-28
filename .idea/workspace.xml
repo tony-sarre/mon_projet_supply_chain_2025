@@ -4,8 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="callback save to csv for QAC edit">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="callback load from csv for QAC edit">
       <change beforePath="$PROJECT_DIR$/supply_chain_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/supply_chain_analytics.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -76,38 +75,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00092" summary="Merge remote-tracking branch 'origin/main'">
-      <option name="closed" value="true" />
-      <created>1760874458579</created>
-      <option name="number" value="00092" />
-      <option name="presentableId" value="LOCAL-00092" />
-      <option name="project" value="LOCAL" />
-      <updated>1760874458579</updated>
-    </task>
-    <task id="LOCAL-00093" summary="Merge remote-tracking branch 'origin/main'">
-      <option name="closed" value="true" />
-      <created>1761087057166</created>
-      <option name="number" value="00093" />
-      <option name="presentableId" value="LOCAL-00093" />
-      <option name="project" value="LOCAL" />
-      <updated>1761087057166</updated>
-    </task>
-    <task id="LOCAL-00094" summary="Merge remote-tracking branch 'origin/main'">
-      <option name="closed" value="true" />
-      <created>1761119973055</created>
-      <option name="number" value="00094" />
-      <option name="presentableId" value="LOCAL-00094" />
-      <option name="project" value="LOCAL" />
-      <updated>1761119973055</updated>
-    </task>
-    <task id="LOCAL-00095" summary="Merge remote-tracking branch 'origin/main'">
-      <option name="closed" value="true" />
-      <created>1761120010821</created>
-      <option name="number" value="00095" />
-      <option name="presentableId" value="LOCAL-00095" />
-      <option name="project" value="LOCAL" />
-      <updated>1761120010821</updated>
     </task>
     <task id="LOCAL-00096" summary="Merge remote-tracking branch 'origin/main'">
       <option name="closed" value="true" />
@@ -469,7 +436,39 @@
       <option name="project" value="LOCAL" />
       <updated>1761666243865</updated>
     </task>
-    <option name="localTasksCounter" value="141" />
+    <task id="LOCAL-00141" summary="callback save to csv for QAC edit">
+      <option name="closed" value="true" />
+      <created>1761666655377</created>
+      <option name="number" value="00141" />
+      <option name="presentableId" value="LOCAL-00141" />
+      <option name="project" value="LOCAL" />
+      <updated>1761666655377</updated>
+    </task>
+    <task id="LOCAL-00142" summary="callback save to csv for QAC edit">
+      <option name="closed" value="true" />
+      <created>1761666756558</created>
+      <option name="number" value="00142" />
+      <option name="presentableId" value="LOCAL-00142" />
+      <option name="project" value="LOCAL" />
+      <updated>1761666756558</updated>
+    </task>
+    <task id="LOCAL-00143" summary="callback load from csv for QAC edit">
+      <option name="closed" value="true" />
+      <created>1761666815335</created>
+      <option name="number" value="00143" />
+      <option name="presentableId" value="LOCAL-00143" />
+      <option name="project" value="LOCAL" />
+      <updated>1761666815335</updated>
+    </task>
+    <task id="LOCAL-00144" summary="callback load from csv for QAC edit">
+      <option name="closed" value="true" />
+      <created>1761666865299</created>
+      <option name="number" value="00144" />
+      <option name="presentableId" value="LOCAL-00144" />
+      <option name="project" value="LOCAL" />
+      <updated>1761666865299</updated>
+    </task>
+    <option name="localTasksCounter" value="145" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -524,7 +523,8 @@
     <MESSAGE value="local storage for QAC edit" />
     <MESSAGE value="restore from storage for QAC edit" />
     <MESSAGE value="callback save to csv for QAC edit" />
-    <option name="LAST_COMMIT_MESSAGE" value="callback save to csv for QAC edit" />
+    <MESSAGE value="callback load from csv for QAC edit" />
+    <option name="LAST_COMMIT_MESSAGE" value="callback load from csv for QAC edit" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

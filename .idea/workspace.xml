@@ -4,9 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="refresh_data">
+    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="reset_selection_on_filter">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/supply_chain_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/supply_chain_analytics.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -76,14 +75,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00100" summary="Merge remote-tracking branch 'origin/main'">
-      <option name="closed" value="true" />
-      <created>1761126719281</created>
-      <option name="number" value="00100" />
-      <option name="presentableId" value="LOCAL-00100" />
-      <option name="project" value="LOCAL" />
-      <updated>1761126719281</updated>
     </task>
     <task id="LOCAL-00101" summary="Merge remote-tracking branch 'origin/main'">
       <option name="closed" value="true" />
@@ -469,7 +460,15 @@
       <option name="project" value="LOCAL" />
       <updated>1761667679631</updated>
     </task>
-    <option name="localTasksCounter" value="149" />
+    <task id="LOCAL-00149" summary="reset_selection_on_filter">
+      <option name="closed" value="true" />
+      <created>1761670140465</created>
+      <option name="number" value="00149" />
+      <option name="presentableId" value="LOCAL-00149" />
+      <option name="project" value="LOCAL" />
+      <updated>1761670140465</updated>
+    </task>
+    <option name="localTasksCounter" value="150" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -526,7 +525,8 @@
     <MESSAGE value="callback save to csv for QAC edit" />
     <MESSAGE value="callback load from csv for QAC edit" />
     <MESSAGE value="refresh_data" />
-    <option name="LAST_COMMIT_MESSAGE" value="refresh_data" />
+    <MESSAGE value="reset_selection_on_filter" />
+    <option name="LAST_COMMIT_MESSAGE" value="reset_selection_on_filter" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

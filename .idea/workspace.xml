@@ -4,8 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="reset: callback def reset_selection_on_filter">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="local storage for QAC edit">
       <change beforePath="$PROJECT_DIR$/supply_chain_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/supply_chain_analytics.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -76,14 +75,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00088" summary="Merge remote-tracking branch 'origin/main'">
-      <option name="closed" value="true" />
-      <created>1760452058170</created>
-      <option name="number" value="00088" />
-      <option name="presentableId" value="LOCAL-00088" />
-      <option name="project" value="LOCAL" />
-      <updated>1760452058170</updated>
     </task>
     <task id="LOCAL-00089" summary="Merge remote-tracking branch 'origin/main'">
       <option name="closed" value="true" />
@@ -469,7 +460,15 @@
       <option name="project" value="LOCAL" />
       <updated>1761662536677</updated>
     </task>
-    <option name="localTasksCounter" value="137" />
+    <task id="LOCAL-00137" summary="local storage for QAC edit">
+      <option name="closed" value="true" />
+      <created>1761664828571</created>
+      <option name="number" value="00137" />
+      <option name="presentableId" value="LOCAL-00137" />
+      <option name="project" value="LOCAL" />
+      <updated>1761664828571</updated>
+    </task>
+    <option name="localTasksCounter" value="138" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -521,7 +520,8 @@
     <MESSAGE value="Test : Commenting layout for deploy" />
     <MESSAGE value="html-style build" />
     <MESSAGE value="reset: callback def reset_selection_on_filter" />
-    <option name="LAST_COMMIT_MESSAGE" value="reset: callback def reset_selection_on_filter" />
+    <MESSAGE value="local storage for QAC edit" />
+    <option name="LAST_COMMIT_MESSAGE" value="local storage for QAC edit" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

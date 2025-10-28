@@ -4661,7 +4661,7 @@ def capture_qac_edits(table_data, stored_edits):
 
 
 # ==================== CALLBACK 2 : RESTAURER LES QAC AU CHARGEMENT ====================
-'''@app.callback(
+@app.callback(
     Output("main-table", "data", allow_duplicate=True),
     Input("qac-edits-store", "modified_timestamp"),
     State("qac-edits-store", "data"),
@@ -4688,7 +4688,7 @@ def restore_qac_from_storage(timestamp, stored_edits, table_data):
         print(f"✅ [localStorage] {restored_count} QAC restaurés")
 
     return table_data
-'''
+
 
 # ==================== CALLBACK 3 : SAUVEGARDER EN CSV (BOUTON) ====================
 '''@app.callback(

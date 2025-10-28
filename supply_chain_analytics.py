@@ -2952,7 +2952,7 @@ def page_overview(master_df: pd.DataFrame = None):
         dbc.Col(html.Div(risk_bell, style={"textAlign": "right"}), md=4),
     ])
     # Ajouter la nouvelle colonne 'QAC edited' dans available_cols
-    available_cols = available_cols + ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
+    available_cols = available_cols #+ ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
 
     # Générer dynamiquement les colonnes et rendre 'QAC edited' editable
     columns = [
@@ -4405,7 +4405,7 @@ except Exception as e:
     initial_df = pd.DataFrame(columns=['product_name', 'Supplier', 'total_stock'])
 
 initial_df = get_df_cached()
-#initial_df['QAC edited']=' '
+initial_df['QAC edited']=' '
 #initial_df['delete']='delete'
 # ==================== LAYOUT CORRIGÉ (remplacer TOUT votre app.layout actuel) ====================
 

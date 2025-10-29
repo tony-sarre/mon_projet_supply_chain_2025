@@ -3201,60 +3201,112 @@ def page_overview(master_df: pd.DataFrame = None):
     [Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
      Output("risk-banner", "children", allow_duplicate=True),
-     Output("main-table", "selected_rows", allow_duplicate=True)],  # Add the missing selected_rows output
+     Output("main-table", "selected_rows", allow_duplicate=True)],
     [Input("search-input", "value"),
      Input("filter-supplier", "value"),
      Input("filter-category", "value"),
      Input("filter-need", "value"),
      Input("toggle-options", "value")],
     State("master-data", "data"),
-    prevent_initial_call=True #"initial_duplicate"
+    prevent_initial_call=True
 )
 def apply_filters(search, sup, cat, need, options, master_json):
-    # Convert master_json to DataFrame
+    """Applique tous les filtres de manière cumulative"""
+
+    # Charger les données
     base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
     base = validate_core_columns(base)
 
-    # ✅ Remove promo columns before filtering
+    # Supprimer les colonnes promo
     promo_cols_to_remove = [
-        'promo_status', 'days_remaining', 'uplift_pct', 'roi_pct', 'promo_recommendation', 'promo_priority',
-        'net_profit_per_day', 'discount_pct', 'sales_with_promo', 'sales_without_promo', 'additional_sales_per_day',
-        'revenue_loss_per_day', 'additional_profit_per_day'
+        'promo_status', 'days_remaining', 'uplift_pct', 'roi_pct',
+        'promo_recommendation', 'promo_priority', 'net_profit_per_day',
+        'discount_pct', 'sales_with_promo', 'sales_without_promo',
+        'additional_sales_per_day', 'revenue_loss_per_day', 'additional_profit_per_day'
     ]
     base = base.drop(columns=[c for c in promo_cols_to_remove if c in base.columns], errors='ignore')
 
-    print(f"[apply_filters] Colonnes après suppression promo : {base.columns.tolist()[:15]}")
+    print(f"[apply_filters] Départ: {len(base)} lignes")
 
-    # Handle None values
-    sup = sup or []
-    cat = cat or []
-    need = need or []
-    options = options or []
+    # Commencer avec toutes les données
+    fdf = base.copy()
 
-    # Apply filtering based on search, supplier, category, and options
-    fdf = filter_dataframe(base, search, sup, [], cat, options)
+    # ========== FILTRE 1: RECHERCHE TEXTUELLE ==========
+    if search and search.strip():
+        search_lower = search.strip().lower()
+        print(f"[apply_filters] Recherche: '{search_lower}'")
 
-    # Apply filtering on 'Ajusted_total_need' column if needed
+        # Chercher dans plusieurs colonnes
+        mask = pd.Series([False] * len(fdf))
+        search_columns = ['product_name', 'Supplier', 'Product Category']
+
+        for col in search_columns:
+            if col in fdf.columns:
+                mask |= fdf[col].astype(str).str.lower().str.contains(search_lower, na=False)
+
+        fdf = fdf[mask]
+        print(f"[apply_filters] Après recherche: {len(fdf)} lignes")
+
+    # ========== FILTRE 2: FOURNISSEUR ==========
+    if sup and len(sup) > 0 and 'Supplier' in fdf.columns:
+        print(f"[apply_filters] Fournisseurs sélectionnés: {sup}")
+        fdf = fdf[fdf['Supplier'].isin(sup)]
+        print(f"[apply_filters] Après filtre fournisseur: {len(fdf)} lignes")
+
+    # ========== FILTRE 3: CATÉGORIE ==========
+    if cat and len(cat) > 0 and 'Product Category' in fdf.columns:
+        print(f"[apply_filters] Catégories sélectionnées: {cat}")
+        fdf = fdf[fdf['Product Category'].isin(cat)]
+        print(f"[apply_filters] Après filtre catégorie: {len(fdf)} lignes")
+
+    # ========== FILTRE 4: BESOIN (Ajusted_total_need) ==========
     if need and len(need) > 0 and 'Ajusted_total_need' in fdf.columns:
+        print(f"[apply_filters] Besoins sélectionnés: {need}")
         fdf = fdf[fdf['Ajusted_total_need'].isin(need)]
+        print(f"[apply_filters] Après filtre besoin: {len(fdf)} lignes")
 
-    print(f"[apply_filters] Résultat: {len(fdf)} lignes, {len(fdf.columns)} colonnes")
+    # ========== FILTRE 5: OPTIONS (Stock Status, etc.) ==========
+    if options and len(options) > 0:
+        print(f"[apply_filters] Options sélectionnées: {options}")
 
-    # Prepare the banner message
-    banner = " "
+        # Exemple de filtres basés sur options
+        if 'show_out_of_stock' in options and 'Stock Status' in fdf.columns:
+            fdf = fdf[fdf['Stock Status'] == 'Out of Stock']
 
-    # Add action columns to the filtered dataframe
+        if 'show_predicted_stockout' in options and 'Stock Status' in fdf.columns:
+            fdf = fdf[fdf['Stock Status'] == 'Predicted Stockout Soon']
+
+        if 'show_order_soon' in options and 'Stock Status' in fdf.columns:
+            fdf = fdf[fdf['Stock Status'] == 'Order Soon']
+
+        print(f"[apply_filters] Après options: {len(fdf)} lignes")
+
+    # ========== RÉSULTAT FINAL ==========
+    print(f"[apply_filters] ✅ Résultat final: {len(fdf)} lignes, {len(fdf.columns)} colonnes")
+    print("🔄 Réinitialisation des sélections suite à filtrage")
+
+    # Ajouter les colonnes d'action
     fdf_actions = add_action_cols(fdf)
 
-    # Final check: Ensure no promo columns remain
+    # Vérification finale
     final_cols = [c for c in fdf_actions.columns if c not in promo_cols_to_remove]
     fdf_actions = fdf_actions[final_cols]
 
-    # Ensure that all 4 outputs are returned:
-    return fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), banner, []  # Empty list for selected_rows
+    # Calculer le banner de risque (optionnel)
+    risk_count = 0
+    if 'Stock Status' in fdf_actions.columns:
+        risk_count = int(fdf_actions['Stock Status'].isin(['Out of Stock', 'Predicted Stockout Soon']).sum())
 
-@app.callback(
-    #Output("main-table", "selected_rows", allow_duplicate=True),
+    banner = f"⚠️ {risk_count} produits à risque" if risk_count > 0 else " "
+
+    return (
+        fdf_actions.to_json(orient="records"),  # filtered-data
+        fdf_actions.to_dict("records"),  # main-table data
+        banner,  # risk-banner
+        []  # selected_rows (réinitialisation)
+    )
+'''@app.callback(
+    Output("main-table", "selected_rows", allow_duplicate=True),
     [Input("search-input", "value"),
      Input("filter-supplier", "value"),
      Input("filter-category", "value"),
@@ -3269,7 +3321,7 @@ def reset_selection_on_filter(search, supplier, category, need, options):
     """
     print("🔄 Réinitialisation des sélections suite à filtrage")
     return []  # ✅ Aucune ligne sélectionnée
-
+'''
 
 
 # ==================== CALLBACKS NOTES ====================
@@ -5089,34 +5141,55 @@ def render_page(path, master_json):
 
 # ------------------------------ Filtering logic ----------------------------------
 def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: list, cats: list, options: list):
+    """Filtre le DataFrame de manière cumulative et robuste"""
+
+    # Toujours partir d'une copie
     out = df.copy()
 
-    # Filtre recherche par product_name
-    if query:
+    print(f"[filter_dataframe] Départ: {len(out)} lignes")
+    print(f"[filter_dataframe] Filtres: query='{query}', suppliers={suppliers}, cats={cats}, options={options}")
+
+    # ========== FILTRE 1: RECHERCHE TEXTUELLE ==========
+    if query and query.strip():
         q = str(query).strip().lower()
         if 'product_name' in out.columns:
             out = out[out['product_name'].astype(str).str.lower().str.contains(q, na=False, regex=False)]
+            print(f"[filter_dataframe] Après recherche '{q}': {len(out)} lignes")
 
-    # Filtre Supplier
+    # ========== FILTRE 2: FOURNISSEUR (CORRIGÉ) ==========
     if suppliers and len(suppliers) > 0:
         if 'Supplier' in out.columns:
-            mask = out['Supplier'].astype(str).str.lower().apply(
-                lambda x: any(sup.lower() in x for sup in suppliers)
-            )
-            out = out[mask]
+            # ✅ CORRECTION: Utiliser .isin() au lieu de any()
+            # Normaliser les fournisseurs pour comparaison insensible à la casse
+            suppliers_lower = [str(s).lower() for s in suppliers]
+            out = out[out['Supplier'].astype(str).str.lower().isin(suppliers_lower)]
+            print(f"[filter_dataframe] Après filtre fournisseurs {suppliers}: {len(out)} lignes")
 
-    # Filtre Product Category
+    # ========== FILTRE 3: CATÉGORIE ==========
     if cats and len(cats) > 0:
         if 'Product Category' in out.columns:
-            out = out[out['Product Category'].astype(str).str.lower().isin([c.lower() for c in cats])]
+            cats_lower = [str(c).lower() for c in cats]
+            out = out[out['Product Category'].astype(str).str.lower().isin(cats_lower)]
+            print(f"[filter_dataframe] Après filtre catégories {cats}: {len(out)} lignes")
+
+    # ========== FILTRE 4: STATUTS (si utilisé) ==========
+    if statuses and len(statuses) > 0:
+        if 'Stock Status' in out.columns:
+            statuses_lower = [str(s).lower() for s in statuses]
+            out = out[out['Stock Status'].astype(str).str.lower().isin(statuses_lower)]
+            print(f"[filter_dataframe] Après filtre statuts {statuses}: {len(out)} lignes")
+
+    # ========== OPTIONS SPÉCIALES ==========
+    options = options or []
 
     # Agrégation par produit
-    options = options or []
     if 'by_product' in options:
+        print(f"[filter_dataframe] Agrégation par produit...")
         out = aggregate_by_product(out)
+        print(f"[filter_dataframe] Après agrégation: {len(out)} lignes")
 
+    print(f"[filter_dataframe] ✅ Résultat final: {len(out)} lignes")
     return out
-
 
 def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Garantit que les colonnes critiques existent et sont valides"""

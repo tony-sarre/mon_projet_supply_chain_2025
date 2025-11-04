@@ -323,6 +323,11 @@ TEAM_MEMBERS = {
     "samuel": {"name": "Samuel Essodeke", "email": "essodeke@maad.io"},
     "maimouna": {"name": "Maimouna Dagois", "email": "maimouna@maad.io"},
     "seydouna": {"name": "Seydouna Oumar Niang", "email": "seydouna@maad.io"},
+    "Arame": {"name": "Arame Toure", "email": "arame.toure@maad.io"},
+    "Coumba": {"name": "Coumba Cisse", "email": "ndeyecoumba.cisse@maad.io"},
+    "Fallou": {"name": "Fallou Diop", "email": "serigne.diop@maad.io"},
+    "Ravane": {"name": "Ravane Diop", "email": "pr.diop@maad.io"},
+    "Insa": {"name": "Insa Niang", "email": "insa.niang@maad.io"},
 }
 
 
@@ -2980,6 +2985,9 @@ def page_overview(master_df: pd.DataFrame = None):
         sort_mode="multi",
         column_selectable="single",
         editable=True,  # La table entière est éditable, mais 'QAC edited' est précisément rendue éditable
+        active_cell=None,
+        # ✅ ✅ ✅ PROPRIÉTÉS D'ÉDITION ✅ ✅ ✅
+        dropdown_conditional=[],
         row_selectable="multi",
         selected_rows=[],
         style_table={"overflowX": "auto", "maxWidth": "100%"},
@@ -3008,6 +3016,12 @@ def page_overview(master_df: pd.DataFrame = None):
                 "fontWeight": "bold",
                 "fontSize": "16px",
                 "backgroundColor": "#0f1625"
+            },
+            # ✅ ✅ ✅ STYLE POUR CELLULES ÉDITABLES ✅ ✅ ✅
+            {
+                "if": {"column_id": "QAC"},
+                "backgroundColor": "#1a2332",  # ✅ Fond légèrement différent pour indiquer éditable
+                "cursor": "text",  # ✅ Curseur texte
             }
         ],
         style_data_conditional=[
@@ -3017,6 +3031,23 @@ def page_overview(master_df: pd.DataFrame = None):
              "backgroundColor": "rgba(245,158,11,.2)", "color": "#fef3c7"},
             {"if": {"filter_query": "{Ajusted_total_need} = 'NO NEED'"},
              "backgroundColor": "rgba(16,185,129,.15)", "color": "#d1fae5"},
+
+            {
+                "if": {"state": "selected"},
+                "backgroundColor": "rgba(34,211,238,.25)",
+                "border": "2px solid #22d3ee",
+                "fontWeight": "600"
+            },
+
+            # ✅ ✅ ✅ STYLE POUR CELLULE EN COURS D'ÉDITION ✅ ✅ ✅
+            {
+                "if": {"state": "active"},
+                "backgroundColor": "#1e293b",
+                "border": "2px solid #22d3ee",
+                "outline": "none",  # ✅ Pas d'outline qui pourrait bloquer
+            },
+
+            {"if": {"column_id": "QAC edited"}, "backgroundColor": "#1a2332"},
         ],
         style_data={"whiteSpace": "normal", "height": "auto"},
         export_format="csv",
@@ -3031,6 +3062,7 @@ def page_overview(master_df: pd.DataFrame = None):
         dbc.Button("➕ Ajouter produit", id="btn-add-row", className="btn-primary", size="sm"),
         dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, className="btn-success", size="sm"), # ✅ nouveau
     ], style={"marginBottom": "15px"})
+
 
     # Dropdown filter-status
     #dcc.Dropdown(
@@ -3133,7 +3165,7 @@ def page_overview(master_df: pd.DataFrame = None):
                 html.Label("Nouvelle note", style={"color": "#e5e7eb", "fontWeight": "600", "marginBottom": "8px"}),
                 dbc.Textarea(
                     id="note-text-input",
-                    placeholder="Votre message... Utilisez @tony, @samuel, @maimouna ou @seydouna",
+                    placeholder="Votre message... Utilisez @tony, @samuel, @maimouna, @seydouna",
                     rows=3,
                     style={
                         "background": "#0a1320",
@@ -3156,7 +3188,7 @@ def page_overview(master_df: pd.DataFrame = None):
                     }
                 ),
                 html.Small(
-                    "💡 @tony • @samuel • @maimouna • @seydouna → email auto",
+                    "💡 @tony • @samuel • @maimouna • @seydouna  • @Arame • @Coumba • @Fallou • @Ravane • @Insa → email auto",
                     style={"color": "#6b7280", "fontSize": "11px"}
                 ),
                 html.Div(id="note-feedback-new", style={"color": "#10b981", "fontSize": "12px", "marginTop": "8px"})
@@ -3211,13 +3243,16 @@ def page_overview(master_df: pd.DataFrame = None):
     prevent_initial_call=True
 )
 def apply_filters(search, sup, cat, need, options, master_json):
-    """Applique tous les filtres de manière cumulative"""
+    """Applique tous les filtres de manière cumulative SANS corrompre master-data"""
 
-    # Charger les données
-    base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+    # ✅ FIX 1: TOUJOURS recharger depuis la source fraîche
+    # Ne JAMAIS faire confiance à master_json qui peut être corrompu
+    base = get_df_cached()  # ← Recharge depuis cache Redis (données complètes)
+
+    # Validation colonnes critiques
     base = validate_core_columns(base)
 
-    # Supprimer les colonnes promo
+    # Supprimer colonnes promo
     promo_cols_to_remove = [
         'promo_status', 'days_remaining', 'uplift_pct', 'roi_pct',
         'promo_recommendation', 'promo_priority', 'net_profit_per_day',
@@ -3226,85 +3261,110 @@ def apply_filters(search, sup, cat, need, options, master_json):
     ]
     base = base.drop(columns=[c for c in promo_cols_to_remove if c in base.columns], errors='ignore')
 
-    print(f"[apply_filters] Départ: {len(base)} lignes")
+    print(f"\n{'=' * 60}")
+    print(f"🔍 FILTRAGE EN COURS")
+    print(f"{'=' * 60}")
+    print(f"📊 Base de départ: {len(base)} produits")
 
-    # Commencer avec toutes les données
+    # Travailler sur une copie
     fdf = base.copy()
 
     # ========== FILTRE 1: RECHERCHE TEXTUELLE ==========
     if search and search.strip():
         search_lower = search.strip().lower()
-        print(f"[apply_filters] Recherche: '{search_lower}'")
+        print(f"🔎 Recherche: '{search_lower}'")
 
-        # Chercher dans plusieurs colonnes
-        mask = pd.Series([False] * len(fdf))
+        mask = pd.Series([False] * len(fdf), index=fdf.index)
         search_columns = ['product_name', 'Supplier', 'Product Category']
 
         for col in search_columns:
             if col in fdf.columns:
-                mask |= fdf[col].astype(str).str.lower().str.contains(search_lower, na=False)
+                mask |= fdf[col].astype(str).str.lower().str.contains(search_lower, na=False, regex=False)
 
-        fdf = fdf[mask]
-        print(f"[apply_filters] Après recherche: {len(fdf)} lignes")
+        fdf = fdf[mask].reset_index(drop=True)
+        print(f"   → Résultat: {len(fdf)} produits")
 
     # ========== FILTRE 2: FOURNISSEUR ==========
     if sup and len(sup) > 0 and 'Supplier' in fdf.columns:
-        print(f"[apply_filters] Fournisseurs sélectionnés: {sup}")
+        print(f"🏭 Fournisseurs: {sup}")
         fdf = fdf[fdf['Supplier'].isin(sup)]
-        print(f"[apply_filters] Après filtre fournisseur: {len(fdf)} lignes")
+        print(f"   → Résultat: {len(fdf)} produits")
 
     # ========== FILTRE 3: CATÉGORIE ==========
     if cat and len(cat) > 0 and 'Product Category' in fdf.columns:
-        print(f"[apply_filters] Catégories sélectionnées: {cat}")
+        print(f"🏷️ Catégories: {cat}")
         fdf = fdf[fdf['Product Category'].isin(cat)]
-        print(f"[apply_filters] Après filtre catégorie: {len(fdf)} lignes")
+        print(f"   → Résultat: {len(fdf)} produits")
 
-    # ========== FILTRE 4: BESOIN (Ajusted_total_need) ==========
+    # ========== FILTRE 4: BESOIN ==========
     if need and len(need) > 0 and 'Ajusted_total_need' in fdf.columns:
-        print(f"[apply_filters] Besoins sélectionnés: {need}")
+        print(f"📦 Besoins: {need}")
         fdf = fdf[fdf['Ajusted_total_need'].isin(need)]
-        print(f"[apply_filters] Après filtre besoin: {len(fdf)} lignes")
+        print(f"   → Résultat: {len(fdf)} produits")
 
-    # ========== FILTRE 5: OPTIONS (Stock Status, etc.) ==========
+    # ========== FILTRE 5: OPTIONS ==========
     if options and len(options) > 0:
-        print(f"[apply_filters] Options sélectionnées: {options}")
+        print(f"⚙️ Options: {options}")
 
-        # Exemple de filtres basés sur options
         if 'show_out_of_stock' in options and 'Stock Status' in fdf.columns:
             fdf = fdf[fdf['Stock Status'] == 'Out of Stock']
+            print(f"   → Filtre OOS: {len(fdf)} produits")
 
         if 'show_predicted_stockout' in options and 'Stock Status' in fdf.columns:
             fdf = fdf[fdf['Stock Status'] == 'Predicted Stockout Soon']
+            print(f"   → Filtre Predicted: {len(fdf)} produits")
 
         if 'show_order_soon' in options and 'Stock Status' in fdf.columns:
             fdf = fdf[fdf['Stock Status'] == 'Order Soon']
+            print(f"   → Filtre Order Soon: {len(fdf)} produits")
 
-        print(f"[apply_filters] Après options: {len(fdf)} lignes")
+    # ========== NETTOYAGE FINAL ==========
+    # Supprimer colonnes actions si présentes (pour éviter doublons)
+    for action_col in ["QAC edited", "Delete"]:
+        if action_col in fdf.columns:
+            fdf = fdf.drop(columns=[action_col])
 
-    # ========== RÉSULTAT FINAL ==========
-    print(f"[apply_filters] ✅ Résultat final: {len(fdf)} lignes, {len(fdf.columns)} colonnes")
-    print("🔄 Réinitialisation des sélections suite à filtrage")
-
-    # Ajouter les colonnes d'action
+    # Ajouter colonnes actions proprement
     fdf_actions = add_action_cols(fdf)
 
-    # Vérification finale
+    # Sécurité: vérifier qu'aucune colonne promo ne subsiste
     final_cols = [c for c in fdf_actions.columns if c not in promo_cols_to_remove]
     fdf_actions = fdf_actions[final_cols]
 
-    # Calculer le banner de risque (optionnel)
+    # ========== BANNER ==========
     risk_count = 0
     if 'Stock Status' in fdf_actions.columns:
         risk_count = int(fdf_actions['Stock Status'].isin(['Out of Stock', 'Predicted Stockout Soon']).sum())
 
-    banner = f"⚠️ {risk_count} produits à risque" if risk_count > 0 else " "
+    banner = html.Div([
+        html.Span("🔔 ", style={"fontSize": "16px"}),
+        html.B(f"{risk_count} produits à risque", style={"color": "#f59e0b" if risk_count > 0 else "#10b981"})
+    ])
+
+    # ========== RÉSULTAT ==========
+    print(f"{'=' * 60}")
+    print(f"✅ FILTRAGE TERMINÉ: {len(fdf_actions)} produits affichés")
+    print(f"{'=' * 60}\n")
 
     return (
         fdf_actions.to_json(orient="records"),  # filtered-data
         fdf_actions.to_dict("records"),  # main-table data
         banner,  # risk-banner
-        []  # selected_rows (réinitialisation)
+        []  # Reset selected_rows
     )
+
+@app.callback(
+    Output("master-data", "data", allow_duplicate=True),
+    Input("btn-refresh", "n_clicks"),
+    prevent_initial_call=True
+)
+def force_refresh_master(n_clicks):
+    """Force le rechargement complet des données"""
+    if n_clicks:
+        df = load_supply_data()  # Recharge depuis sources
+        print(f"🔄 Données rechargées : {len(df)} produits")
+        return df.to_json(orient="records")
+    return no_update
 '''@app.callback(
     Output("main-table", "selected_rows", allow_duplicate=True),
     [Input("search-input", "value"),
@@ -4668,9 +4728,10 @@ def display_storage_data(ts, data):
 
 
 # ==================== CALLBACK 1 : CAPTURER LES MODIFICATIONS EN TEMPS RÉEL ====================
-@app.callback(
+'''@app.callback(
     Output("qac-edits-store", "data"),
     Input("main-table", "data"),
+    State("main-table", "data_previous"),
     State("qac-edits-store", "data"),
     prevent_initial_call=True
 )
@@ -4710,6 +4771,8 @@ def capture_qac_edits(table_data, stored_edits):
 
     print(f"💾 [localStorage] {len(stored_edits)} QAC sauvegardés")
     return stored_edits
+'''
+
 
 
 # ==================== CALLBACK 2 : RESTAURER LES QAC AU CHARGEMENT ====================
@@ -4819,7 +4882,122 @@ def save_qac_to_csv(n_clicks, table_data, stored_edits):
         ), table_data
 
 
-# ==================== CALLBACK 4 : CHARGER QAC DEPUIS CSV AU DÉMARRAGE ====================
+#========================Callback =================================#
+@app.callback(
+    Output("qac-edits-store", "data"),
+    Input("main-table", "data"),
+    State("main-table", "data_previous"),
+    State("qac-edits-store", "data"),
+    prevent_initial_call=True
+)
+def capture_qac_edits(current_data, previous_data, current_edits):
+    """
+    Détecte les modifications de QAC SANS BLOQUER l'édition.
+
+    IMPORTANT : Ce callback NE TOUCHE PAS au tableau, seulement au Store.
+    """
+    from datetime import datetime
+    import threading
+
+    # ✅ Guards légers
+    if not current_data or not previous_data:
+        return current_edits or {}
+
+    if not isinstance(current_data, list) or not isinstance(previous_data, list):
+        return current_edits or {}
+
+    try:
+        df_current = pd.DataFrame(current_data)
+        df_previous = pd.DataFrame(previous_data)
+    except Exception as e:
+        print(f"⚠️ Erreur création DataFrame: {e}")
+        return current_edits or {}
+
+    # Vérifier que QAC existe
+    if 'QAC edited' not in df_current.columns or 'QAC edited' not in df_previous.columns:
+        return current_edits or {}
+
+    # Initialiser
+    current_edits = current_edits or {}
+    new_edits = {}
+    has_changes = False
+
+    # Helper pour conversion safe en float
+    def safe_float(value, default=0.0):
+        """Convertit n'importe quelle valeur en float de manière sûre"""
+        if value is None or value == '':
+            return default
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return default
+
+    # Détecter SEULEMENT les vraies modifications
+    for idx, row in df_current.iterrows():
+        try:
+            product_name = str(row.get('product_name', '')).strip()
+            supplier = str(row.get('Supplier', '')).strip()
+
+            if not product_name or not supplier:
+                continue
+
+            product_key = f"{product_name}|{supplier}"
+
+            # ✅ CORRECTION: Conversion sûre avec safe_float
+            current_qac = safe_float(row.get('QAC edited'))
+
+            # Trouver ligne correspondante dans previous
+            prev_row = df_previous[
+                (df_previous['product_name'] == product_name) &
+                (df_previous['Supplier'] == supplier)
+                ]
+
+            if prev_row.empty:
+                continue
+
+            # ✅ CORRECTION: Conversion sûre avec safe_float
+            previous_qac = safe_float(prev_row.iloc[0].get('QAC edited'))
+
+            # ✅ Détecter changement RÉEL (avec tolérance pour éviter faux positifs)
+            if abs(current_qac - previous_qac) > 0.01 and current_qac > 0:
+                new_edits[product_key] = {
+                    'QAC edited': current_qac,
+                    'timestamp': datetime.now().isoformat(),
+                    'product_name': product_name,
+                    'Supplier': supplier
+                }
+                has_changes = True
+
+                print(f"✏️ QAC modifiée : {product_name} ({supplier}) : {previous_qac:.1f} → {current_qac:.1f}")
+
+        except Exception as e:
+            print(f"⚠️ Erreur traitement ligne {idx}: {e}")
+            continue  # Passer à la ligne suivante sans crasher
+
+    # ✅ Si modifications détectées
+    if has_changes:
+        updated_edits = {**current_edits, **new_edits}
+
+        # Sauvegarde CSV asynchrone (non-bloquante)
+        def save_async():
+            try:
+                save_qac_to_csv(new_edits)
+            except Exception as e:
+                print(f"⚠️ Erreur sauvegarde CSV (non bloquante) : {e}")
+
+        # ✅ Exécuter dans un thread séparé pour ne pas bloquer l'UI
+        thread = threading.Thread(target=save_async, daemon=True)
+        thread.start()
+
+        print(f"💾 {len(new_edits)} modif(s) QAC en cours de sauvegarde (total: {len(updated_edits)})")
+
+        return updated_edits
+
+    # ✅ Aucun changement → retourner l'état actuel
+    return current_edits or {}
+
+
+# ==================== CALLBACK 4 : CHARGER QAC DEPUIS CSV AU DÉMARRAGE =====================
 @app.callback(
     Output("qac-edits-store", "data", allow_duplicate=True),
     Input("url", "pathname"),
@@ -5589,7 +5767,7 @@ def export_po_word(n_clicks, selected_rows, table_data):
             prod_name = str(prod.get("product_name", "")).strip()
 
             # ✅ ✅ ✅ UTILISER QAC ÉDITÉE (priorité absolue) ✅ ✅ ✅
-            qty = float(prod.get("QAC", 0))
+            qty = float(prod.get("QAC edited", 0))
 
             # Si QAC est vide ou 0, fallback sur target_quantity
             if qty <= 0:

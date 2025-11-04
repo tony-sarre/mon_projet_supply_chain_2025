@@ -3042,7 +3042,7 @@ def page_overview(master_df: pd.DataFrame = None):
             # ✅ ✅ ✅ STYLE POUR CELLULE EN COURS D'ÉDITION ✅ ✅ ✅
             {
                 "if": {"state": "active"},
-                "backgroundColor": "#1e293b",
+                "backgroundColor": "#f8f8f8",
                 "border": "2px solid #22d3ee",
                 "outline": "none",  # ✅ Pas d'outline qui pourrait bloquer
             },
@@ -5767,7 +5767,7 @@ def export_po_word(n_clicks, selected_rows, table_data):
             prod_name = str(prod.get("product_name", "")).strip()
 
             # ✅ ✅ ✅ UTILISER QAC ÉDITÉE (priorité absolue) ✅ ✅ ✅
-            qty = float(prod.get("QAC edited", 0))
+            qty = float(prod.get("QAC", 0))
 
             # Si QAC est vide ou 0, fallback sur target_quantity
             if qty <= 0:

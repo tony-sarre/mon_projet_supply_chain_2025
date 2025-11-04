@@ -6,8 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="debug QAC edited">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/po_counter.json" beforeDir="false" afterPath="$PROJECT_DIR$/po_counter.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/supply_chain_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/supply_chain_analytics.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

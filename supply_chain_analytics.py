@@ -449,6 +449,57 @@ def get_logo_for_reportlab():
 # ------------------------------ PO Numbering -------------------------------------
 PO_COUNTER_PATH = Path("./po_counter.json")
 
+
+
+# ==============================
+#  ⚡️ CACHE GLOBAL POUR SPEED
+# ==============================
+from datetime import datetime, timedelta
+
+PRICE_MAP_CACHE = {"data": {}, "last_update": None}
+PACKAGING_MAP_CACHE = {"data": {}, "last_update": None}
+CACHE_TTL = timedelta(minutes=10)  # durée de vie du cache
+
+def get_price_map():
+    """Retourne le price_map mis en cache (rechargé toutes les 10 min)."""
+    global PRICE_MAP_CACHE
+    now = datetime.now()
+    if PRICE_MAP_CACHE["last_update"] and now - PRICE_MAP_CACHE["last_update"] < CACHE_TTL:
+        return PRICE_MAP_CACHE["data"]
+
+    try:
+        cat_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrpcAiktxAPBiwznGOh35kVetc4O8-z5rQdFDgBaDE4OC3Jnb7JDGm59c55Cwm2pWCktcsBirWT_0b/pub?gid=751531326&single=true&output=csv"
+        catalog = pd.read_csv(cat_url, skiprows=1)
+        catalog_subset = catalog.iloc[:, [0, 1, 3, 10]].copy()
+        catalog_subset.columns = ['product_id', 'product_name', 'selling_price', 'purchase_price']
+        catalog_subset['product_name_clean'] = catalog_subset['product_name'].astype(str).str.lower().str.strip()
+        PRICE_MAP_CACHE["data"] = dict(zip(
+            catalog_subset['product_name_clean'],
+            pd.to_numeric(catalog_subset['purchase_price'], errors='coerce').fillna(1000)
+        ))
+        PRICE_MAP_CACHE["last_update"] = now
+        print(f"✅ price_map rechargé ({len(PRICE_MAP_CACHE['data'])} produits)")
+    except Exception as e:
+        print(f"⚠️ get_price_map: {e}")
+    return PRICE_MAP_CACHE["data"]
+
+def get_packaging_map():
+    """Retourne le packaging_map mis en cache (rechargé toutes les 10 min)."""
+    global PACKAGING_MAP_CACHE
+    now = datetime.now()
+    if PACKAGING_MAP_CACHE["last_update"] and now - PACKAGING_MAP_CACHE["last_update"] < CACHE_TTL:
+        return PACKAGING_MAP_CACHE["data"]
+
+    try:
+        PACKAGING_MAP_CACHE["data"] = load_packaging_map()
+        PACKAGING_MAP_CACHE["last_update"] = now
+        print(f"✅ packaging_map rechargé ({len(PACKAGING_MAP_CACHE['data'])} produits)")
+    except Exception as e:
+        print(f"⚠️ get_packaging_map: {e}")
+    return PACKAGING_MAP_CACHE["data"]
+
+
+
 # ------------------------------ Notes System -------------------------------------
 NOTES_DB_PATH = Path("./notes_database.json")
 NOTES_LOCK = threading.Lock()
@@ -5572,23 +5623,21 @@ def get_logo_for_reportlab():
 
 # ====== IMPORTS NÉCESSAIRES ======
 # ===== Helpers packaging (ROBUSTES) =====
-import re, math, csv, os
+# ===== Helpers packaging (ROBUSTES) =====
+import re, math, csv, os, io
 from datetime import datetime
 
 PACKAGING_URL = "https://data.heroku.com/dataclips/cnmhrqqjneeunkbqibxklyxwcsrl.csv"
 
 def load_packaging_map():
-    """Charge une map nom_produit->packaging depuis la dataclip (si dispo).
-       Clés et valeurs sont normalisées (minuscules / trim)."""
+    """Map: product_name_lower -> packaging (ex: '1/2 carton')."""
     try:
         dfp = pd.read_csv(PACKAGING_URL)
-        # Cherche des colonnes plausibles
         name_col = next((c for c in dfp.columns if c.lower() in ("name", "product_name", "designation")), None)
         pack_col = next((c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
         if not name_col or not pack_col:
             print("⚠️ Dataclip: colonnes name/packaging non trouvées.")
             return {}
-
         dfp["__key__"]  = dfp[name_col].astype(str).str.lower().str.strip()
         dfp["__pack__"] = dfp[pack_col].astype(str).str.lower().str.strip()
         return dict(zip(dfp["__key__"], dfp["__pack__"]))
@@ -5596,48 +5645,30 @@ def load_packaging_map():
         print(f"❌ load_packaging_map: {e}")
         return {}
 
-# Exemples capturés: "1/2 carton", "1/4 sac", "Carton", "Sac", "12 x 1/6 carton", etc.
-# On veut détecter la PREMIÈRE fraction présente (1/2, 1/3, 1/4, 1/6, 1/8...) si elle existe.
 FRACTION_FINDER = re.compile(r"(\d+)\s*/\s*(\d+)", re.IGNORECASE)
 
 def detect_fraction_from_text(txt: str) -> float:
-    """Renvoie la fraction d’unité majeure trouvée dans le texte, ex: '1/2' -> 0.5.
-       S’il n’y a pas de fraction explicite, renvoie 1.0 (unité majeure)."""
+    """Retourne la fraction trouvée (ex: '1/2' -> 0.5) ou 1.0 si rien."""
     if not txt:
         return 1.0
     s = str(txt).lower()
     m = FRACTION_FINDER.search(s)
     if m:
         try:
-            num = int(m.group(1))
-            den = int(m.group(2))
+            num = int(m.group(1)); den = int(m.group(2))
             if den > 0:
                 return num / den
         except:
             pass
-    # Pas de fraction → on suppose unité majeure
     return 1.0
 
 def consolidate_to_major(qty_units: float, packaging_text: str, product_name: str) -> int:
-    """Convertit une quantité exprimée dans le conditionnement (potentiellement fractionnaire)
-       en nombre entier d’unités MAJEURES, avec fallback sur le nom du produit.
-       - qty_units: valeur 'QAC edited'
-       - packaging_text: ex. '1/2 carton' (ou vide)
-       - product_name: pour fallback si packaging_text est manquant
-       Renvoie un entier >= 0 (arrondi au supérieur).
-    """
-    # 1) Fraction depuis le packaging explicite
+    """Convertit la QAC (éventuellement en sous-unité) → unités majeures entières (ceil)."""
     frac = detect_fraction_from_text(packaging_text)
-
-    # 2) Fallback: si pas de fraction trouvée, regarder le nom du produit
     if frac == 1.0 and product_name:
         frac = detect_fraction_from_text(product_name)
-
-    # Sécurité
     if frac <= 0:
         frac = 1.0
-
-    # 3) Conversion → unités majeures
     maj = float(qty_units) * float(frac)
     return max(0, int(math.ceil(maj)))
 
@@ -5649,7 +5680,9 @@ def safe_float(v, default=0.0):
     except:
         return default
 
+
 # ====== EXPORT BON DE COMMANDE WORD ======
+# ===== Génération BON DE COMMANDE (DOCX) avec conversion QAC edited -> unités majeures =====
 @app.callback(
     Output("download-po", "data"),
     Input("btn-po-pdf", "n_clicks"),
@@ -5659,23 +5692,23 @@ def safe_float(v, default=0.0):
 )
 def export_po_word(n_clicks, selected_rows, table_data):
     """
-    Génère un bon de commande .docx pour les lignes sélectionnées.
-    Utilise la QAC edited, convertie en unités majeures selon le packaging Dataclip.
-    N'affiche pas 'carton/sac' dans la colonne Qté : uniquement l'entier converti.
+    Génère un bon de commande WORD (.docx) pour plusieurs produits.
+    Qté = QAC edited convertie en unités MAJEURES (ceil) selon conditionnement.
+    Garde les calculs HT / TVA / TTC comme la version d’origine.
     """
-    # Préconditions
     if not DOCX_AVAILABLE:
         print(f"❌ python-docx indisponible: {DOCX_IMPORT_ERROR}")
         raise RuntimeError("La génération Word est indisponible sur cet environnement.")
-    if not n_clicks or not table_data or not selected_rows:
+    if not n_clicks or not table_data or not selected_rows or len(selected_rows) == 0:
         return no_update
 
-    selected_products = [table_data[idx] for idx in selected_rows if 0 <= idx < len(table_data)]
+    # 1) Produits sélectionnés
+    selected_products = [table_data[idx] for idx in selected_rows if idx < len(table_data)]
     if not selected_products:
         return no_update
 
-    # --- PRIX depuis Google Sheets (si indispo, fallback = 1000) ---
-    try:
+    # 2) Catalogue → prix d'achat
+    '''try:
         cat_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrpcAiktxAPBiwznGOh35kVetc4O8-z5rQdFDgBaDE4OC3Jnb7JDGm59c55Cwm2pWCktcsBirWT_0b/pub?gid=751531326&single=true&output=csv"
         catalog = pd.read_csv(cat_url, skiprows=1)
         catalog_subset = catalog.iloc[:, [0, 1, 3, 10]].copy()
@@ -5683,22 +5716,28 @@ def export_po_word(n_clicks, selected_rows, table_data):
         catalog_subset['product_name_clean'] = catalog_subset['product_name'].astype(str).str.lower().str.strip()
         price_map = dict(zip(
             catalog_subset['product_name_clean'],
-            pd.to_numeric(catalog_subset['purchase_price'], errors='coerce').fillna(1000.0)
+            pd.to_numeric(catalog_subset['purchase_price'], errors='coerce').fillna(1000)
         ))
     except Exception as e:
         print(f"❌ Erreur chargement catalogue : {e}")
-        price_map = {}
+        price_map = {}'''
+    # --- PRIX (chargés depuis le cache)
+    price_map = get_price_map()
 
-    # --- PACKAGING (Dataclip) ---
-    packaging_map = load_packaging_map()  # product_name_lower -> "1/2 Carton" / "Carton" / "1/4 Sac" ...
+    # 3) Packaging map (dataclip)
+    #packaging_map = load_packaging_map()  # product_name_lower -> "1/2 carton" / "carton" / ...
+    # --- PACKAGING (chargé depuis le cache)
+    packaging_map = get_packaging_map()
 
-    # --- Regroupement par fournisseur ---
+    # 4) Regrouper par fournisseur
     suppliers = {}
     for prod in selected_products:
-        supplier = str(prod.get("Supplier", "")).strip() or "Fournisseur non spécifié"
-        suppliers.setdefault(supplier, []).append(prod)
+        sup = str(prod.get("Supplier", "")).strip()
+        if not sup or sup.lower() == "nan":
+            sup = "Fournisseur non spécifié"
+        suppliers.setdefault(sup, []).append(prod)
 
-    # --- Document Word ---
+    # 5) DOCX mise en page (identique à l’ancienne)
     doc = Document()
     for section in doc.sections:
         section.top_margin = Inches(0.8)
@@ -5706,9 +5745,16 @@ def export_po_word(n_clicks, selected_rows, table_data):
         section.left_margin = Inches(0.6)
         section.right_margin = Inches(0.6)
 
-    po_number = get_next_po_number()
+    # Logo éventuel
+    logo_path = Path("logo_maad.jpg")
+    if logo_path.exists():
+        try:
+            doc.add_picture(str(logo_path), width=Inches(1.2))
+            doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.LEFT
+        except Exception as e:
+            print(f"⚠️ Logo non ajouté : {e}")
 
-    # En-tête
+    po_number = get_next_po_number()
     title = doc.add_heading(f'BON DE COMMANDE N° {po_number}', level=1)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     title.runs[0].font.color.rgb = RGBColor(0, 51, 102)
@@ -5722,11 +5768,12 @@ def export_po_word(n_clicks, selected_rows, table_data):
     doc.add_paragraph().add_run(f"Date : {datetime.now().strftime('%d/%m/%Y')}").bold = True
     doc.add_paragraph()
 
+    # 6) TVA et totaux globaux (comme avant)
     TVA_RATE = 0.18
     total_ht_global = 0.0
     total_tva_global = 0.0
 
-    # ----- Tableau par fournisseur -----
+    # 7) Tableau par fournisseur (même headers / styles)
     for supplier, products in suppliers.items():
         doc.add_heading(f'📦 Fournisseur : {supplier}', level=2).runs[0].font.color.rgb = RGBColor(34, 139, 34)
 
@@ -5736,100 +5783,146 @@ def export_po_word(n_clicks, selected_rows, table_data):
         table.allow_autofit = False
 
         headers = ['Réf.', 'Désignation', 'Qté', 'PU HT', 'Total HT', 'Remise (%)', 'TVA 18%', 'Total TTC']
-        hdr = table.rows[0].cells
-        for i, h in enumerate(headers):
-            hdr[i].text = h
-            for p in hdr[i].paragraphs:
-                for r in p.runs:
-                    r.font.bold = True; r.font.size = Pt(10); r.font.color.rgb = RGBColor(255, 255, 255)
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            sh = OxmlElement('w:shd'); sh.set(qn('w:fill'), '4472C4'); hdr[i]._element.get_or_add_tcPr().append(sh)
+        hdr_cells = table.rows[0].cells
+        for i, header in enumerate(headers):
+            hdr_cells[i].text = header
+            for paragraph in hdr_cells[i].paragraphs:
+                for run in paragraph.runs:
+                    run.font.bold = True
+                    run.font.size = Pt(10)
+                    run.font.color.rgb = RGBColor(255, 255, 255)
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            shading_elm = OxmlElement('w:shd')
+            shading_elm.set(qn('w:fill'), '4472C4')
+            hdr_cells[i]._element.get_or_add_tcPr().append(shading_elm)
 
-        widths = [Inches(0.6), Inches(2.8), Inches(0.7), Inches(0.9), Inches(1.0), Inches(0.8), Inches(0.8), Inches(1.1)]
-        for i, w in enumerate(widths):
-            for c in table.columns[i].cells:
-                c.width = w
+        widths = [Inches(0.6), Inches(2.5), Inches(0.5), Inches(0.8), Inches(0.9), Inches(0.8), Inches(0.8), Inches(1.0)]
+        for i, width in enumerate(widths):
+            for cell in table.columns[i].cells:
+                cell.width = width
 
         total_ht_supplier = 0.0
         total_tva_supplier = 0.0
 
+        # 8) Lignes produit
         for prod in products:
             prod_name = str(prod.get("product_name", "")).strip()
-            prod_key = prod_name.lower()
+            prod_key  = prod_name.lower()
 
-            # 1) Quantité source = QAC edited (fallbacks)
-            qac_val = prod.get("QAC edited", None)
-            qty_units = safe_float(qac_val, 0.0)
+            # Qté source = QAC edited; fallback target_quantity; min 1
+            qty_units = safe_float(prod.get("QAC edited"), 0.0)
             if qty_units <= 0:
-                qty_units = safe_float(prod.get("target_quantity", 0.0), 0.0)
+                qty_units = safe_float(prod.get("target_quantity"), 0.0)
             if qty_units <= 0:
                 qty_units = 1.0
 
-            # 2) Packaging → consolidation en unité majeure (toujours)
-            packaging_text = packaging_map.get(prod_key, "")  # peut être vide si non trouvé
+            # Conversion vers unités majeures (ceil) selon packaging (ou le nom s’il contient 1/2, 1/4, etc.)
+            packaging_text = packaging_map.get(prod_key, "")
             qty_major = consolidate_to_major(qty_units, packaging_text, prod_name)
 
-            # 3) Prix
-            unit_price = price_map.get(prod_key, 1000.0) or 1000.0
-            total_ht = qty_major * unit_price
+            # Prix, totaux (identique à avant)
+            unit_price = safe_float(price_map.get(prod_key, 1000.0), 1000.0)
+            if unit_price <= 0: unit_price = 1000.0
+            total_ht  = qty_major * unit_price
             total_tva = total_ht * TVA_RATE
             total_ttc = total_ht + total_tva
 
-            # 4) Remplir la ligne du tableau
+            total_ht_supplier += total_ht
+            total_tva_supplier += total_tva
+
+            # Réf + ligne
             ref_code = ref_from_name(prod_name)
             row_cells = table.add_row().cells
-
             row_cells[0].text = ref_code
-            row_cells[1].text = prod_name  # Désignation (pas besoin d’ajouter l’unité)
-            row_cells[2].text = f"{qty_major}"  # ✅ Qté = ENTIER converti, sans unité
+            row_cells[1].text = prod_name[:50]     # Désignation
+            row_cells[2].text = f"{qty_major}"     # ✅ quantité MAJEURE sans unité ('carton', 'sac'…)
             row_cells[3].text = f"{unit_price:,.0f}"
             row_cells[4].text = f"{total_ht:,.0f}"
-            row_cells[5].text = ""  # Remise manuelle
+            row_cells[5].text = ""                 # Remise manuelle
             row_cells[6].text = f"{total_tva:,.0f}"
             row_cells[7].text = f"{total_ttc:,.0f}"
 
-            for i_col in [2, 3, 4, 5, 6, 7]:
+            for i_col in [2,3,4,5,6,7]:
                 row_cells[i_col].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            for c in row_cells:
-                for p in c.paragraphs:
+            for cell in row_cells:
+                for p in cell.paragraphs:
                     for r in p.runs:
                         r.font.size = Pt(9)
 
-        # Sous-total fournisseur
-        sub = table.add_row().cells
-        sub[0].merge(sub[3])
-        sub[0].text = f"SOUS-TOTAL {supplier.upper()}"; sub[0].paragraphs[0].runs[0].font.bold = True
-        sub[4].text = f"{total_ht_supplier:,.0f}"
-        sub[5].text = "-"
-        sub[6].text = f"{total_tva_supplier:,.0f}"
-        sub[7].text = f"{(total_ht_supplier + total_tva_supplier):,.0f}"
-        for i_col in [4, 6, 7]:
-            sub[i_col].paragraphs[0].runs[0].font.bold = True
-            sub[i_col].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        for c in sub:
-            sh = OxmlElement('w:shd'); sh.set(qn('w:fill'), 'E7E6E6'); c._element.get_or_add_tcPr().append(sh)
+        # 9) Sous-total fournisseur (identique à avant)
+        subtotal_row = table.add_row().cells
+        subtotal_row[0].merge(subtotal_row[3])
+        subtotal_row[0].text = f"SOUS-TOTAL {supplier.upper()}"
+        subtotal_row[0].paragraphs[0].runs[0].font.bold = True
+
+        subtotal_row[4].text = f"{total_ht_supplier:,.0f}"
+        subtotal_row[5].text = "-"
+        subtotal_row[6].text = f"{total_tva_supplier:,.0f}"
+        subtotal_row[7].text = f"{(total_ht_supplier + total_tva_supplier):,.0f}"
+
+        for i in [4, 6, 7]:
+            subtotal_row[i].paragraphs[0].runs[0].font.bold = True
+            subtotal_row[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+        for cell in subtotal_row:
+            shading_elm = OxmlElement('w:shd')
+            shading_elm.set(qn('w:fill'), 'E7E6E6')
+            cell._element.get_or_add_tcPr().append(shading_elm)
 
         total_ht_global += total_ht_supplier
         total_tva_global += total_tva_supplier
+
         doc.add_paragraph()
 
-    # Totaux globaux
+    # 10) Totaux globaux (identique à avant)
     total_ttc_global = total_ht_global + total_tva_global
-    p = doc.add_paragraph()
-    p.add_run(f"TOTAL HT : {total_ht_global:,.0f} FCFA\n").bold = True
-    p.add_run(f"TVA (18%) : {total_tva_global:,.0f} FCFA\n").bold = True
-    r = p.add_run(f"TOTAL TTC : {total_ttc_global:,.0f} FCFA")
-    r.bold = True; r.font.size = Pt(14); r.font.color.rgb = RGBColor(0, 102, 204)
 
-    doc.add_paragraph().add_run(
-        f"Document généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}"
-    ).font.size = Pt(8)
+    doc.add_paragraph()
+    totals_para = doc.add_paragraph()
+    totals_para.add_run(f"TOTAL HT : {total_ht_global:,.0f} FCFA\n").bold = True
+    totals_para.add_run(f"TVA (18%) : {total_tva_global:,.0f} FCFA\n").bold = True
+    ttc_run = totals_para.add_run(f"TOTAL TTC : {total_ttc_global:,.0f} FCFA")
+    ttc_run.bold = True
+    ttc_run.font.size = Pt(14)
+    ttc_run.font.color.rgb = RGBColor(0, 102, 204)
 
-    # Envoi
+    # 11) Notes / conditions (identique)
+    doc.add_paragraph()
+    notes_heading = doc.add_heading('Notes importantes :', level=3)
+    notes_list = doc.add_paragraph(style='List Bullet')
+    notes_list.add_run("La colonne 'Remise (%)' est à remplir manuellement selon négociations\n")
+    notes_list.add_run("Les totaux seront recalculés après application des remises\n")
+    notes_list.add_run("Formule : Total TTC = (Total HT × (1 - Remise/100)) × 1.18")
+    doc.add_paragraph()
+    conditions = doc.add_paragraph()
+    conditions.add_run("Conditions de livraison : ").bold = True
+    conditions.add_run("À convenir avec les fournisseurs\n")
+    conditions.add_run("Modalités de paiement : ").bold = True
+    conditions.add_run("Selon termes contractuels")
+
+    # 12) Pied de page
+    doc.add_paragraph()
+    footer_para = doc.add_paragraph()
+    footer_run = footer_para.add_run(f"Document généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}")
+    footer_run.font.size = Pt(8)
+    footer_run.font.color.rgb = RGBColor(128, 128, 128)
+    footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # 13) Envoi
     buf = io.BytesIO()
-    doc.save(buf); buf.seek(0)
+    doc.save(buf)
+    buf.seek(0)
     fname = f"bon_commande_{po_number}_{len(selected_products)}_produits.docx"
+
+    print(f"✅ Document Word généré : {fname}")
+    print(f"   - {len(selected_products)} produits")
+    print(f"   - {len(suppliers)} fournisseur(s)")
+    print(f"   - Total HT : {total_ht_global:,.0f} FCFA")
+    print(f"   - Total TTC : {total_ttc_global:,.0f} FCFA")
+    print("=" * 60)
+
     return dcc.send_bytes(buf.read(), filename=fname)
+
 
 
 '''

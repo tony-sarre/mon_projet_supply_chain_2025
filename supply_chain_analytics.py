@@ -5726,8 +5726,6 @@ def export_po_word(n_clicks, selected_rows, table_data):
 
     # 3) Packaging map (dataclip)
     #packaging_map = load_packaging_map()  # product_name_lower -> "1/2 carton" / "carton" / ...
-    # --- PACKAGING (chargé depuis le cache)
-    packaging_map = get_packaging_map()
 
     # 4) Regrouper par fournisseur
     suppliers = {}

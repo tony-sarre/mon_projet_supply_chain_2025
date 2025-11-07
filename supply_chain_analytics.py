@@ -449,57 +449,6 @@ def get_logo_for_reportlab():
 # ------------------------------ PO Numbering -------------------------------------
 PO_COUNTER_PATH = Path("./po_counter.json")
 
-
-
-# ==============================
-#  ⚡️ CACHE GLOBAL POUR SPEED
-# ==============================
-from datetime import datetime, timedelta
-
-PRICE_MAP_CACHE = {"data": {}, "last_update": None}
-PACKAGING_MAP_CACHE = {"data": {}, "last_update": None}
-CACHE_TTL = timedelta(minutes=10)  # durée de vie du cache
-
-def get_price_map():
-    """Retourne le price_map mis en cache (rechargé toutes les 10 min)."""
-    global PRICE_MAP_CACHE
-    now = datetime.now()
-    if PRICE_MAP_CACHE["last_update"] and now - PRICE_MAP_CACHE["last_update"] < CACHE_TTL:
-        return PRICE_MAP_CACHE["data"]
-
-    try:
-        cat_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrpcAiktxAPBiwznGOh35kVetc4O8-z5rQdFDgBaDE4OC3Jnb7JDGm59c55Cwm2pWCktcsBirWT_0b/pub?gid=751531326&single=true&output=csv"
-        catalog = pd.read_csv(cat_url, skiprows=1)
-        catalog_subset = catalog.iloc[:, [0, 1, 3, 10]].copy()
-        catalog_subset.columns = ['product_id', 'product_name', 'selling_price', 'purchase_price']
-        catalog_subset['product_name_clean'] = catalog_subset['product_name'].astype(str).str.lower().str.strip()
-        PRICE_MAP_CACHE["data"] = dict(zip(
-            catalog_subset['product_name_clean'],
-            pd.to_numeric(catalog_subset['purchase_price'], errors='coerce').fillna(1000)
-        ))
-        PRICE_MAP_CACHE["last_update"] = now
-        print(f"✅ price_map rechargé ({len(PRICE_MAP_CACHE['data'])} produits)")
-    except Exception as e:
-        print(f"⚠️ get_price_map: {e}")
-    return PRICE_MAP_CACHE["data"]
-
-def get_packaging_map():
-    """Retourne le packaging_map mis en cache (rechargé toutes les 10 min)."""
-    global PACKAGING_MAP_CACHE
-    now = datetime.now()
-    if PACKAGING_MAP_CACHE["last_update"] and now - PACKAGING_MAP_CACHE["last_update"] < CACHE_TTL:
-        return PACKAGING_MAP_CACHE["data"]
-
-    try:
-        PACKAGING_MAP_CACHE["data"] = load_packaging_map()
-        PACKAGING_MAP_CACHE["last_update"] = now
-        print(f"✅ packaging_map rechargé ({len(PACKAGING_MAP_CACHE['data'])} produits)")
-    except Exception as e:
-        print(f"⚠️ get_packaging_map: {e}")
-    return PACKAGING_MAP_CACHE["data"]
-
-
-
 # ------------------------------ Notes System -------------------------------------
 NOTES_DB_PATH = Path("./notes_database.json")
 NOTES_LOCK = threading.Lock()
@@ -2580,6 +2529,23 @@ def make_sidebar():
         html.Div([
             html.Span(" "),
             dbc.Button("📄 Bon de commande WORD", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True), # Le bouton est désactivé par défaut
+            # ✅ AJOUTER : Modal de chargement
+            dbc.Modal(
+                [
+                    dbc.ModalBody([
+                        html.Div([
+                            dbc.Spinner(color="primary", size="lg"),
+                            html.H5("Génération du bon de commande...", className="mt-3", style={"color": "#22d3ee"}),
+                            html.P("Veuillez patienter (5-10 secondes)", style={"color": "#9ca3af"})
+                        ], style={"textAlign": "center", "padding": "30px"})
+                    ], style={"background": "#0b1220"})
+                ],
+                id="po-loading-overlay",
+                is_open=False,
+                centered=True,
+                backdrop="static",  # ✅ Empêche fermeture manuelle
+                keyboard=False
+            ),
             dcc.Download(id="download-data"),
             dcc.Download(id="download-po"),
         ]),
@@ -5620,9 +5586,46 @@ def get_logo_for_reportlab():
 
 
 # Remplacer TOUTE la section PDF (lignes ~1850-2000) par ceci :
+# ============================== CACHE CATALOGUE & PACKAGING ==============================
 
+@cache.memoize(timeout=3600)  # Cache 1h
+def get_catalog_prices():
+    """Charge les prix du catalogue (avec cache Redis)"""
+    try:
+        cat_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrpcAiktxAPBiwznGOh35kVetc4O8-z5rQdFDgBaDE4OC3Jnb7JDGm59c55Cwm2pWCktcsBirWT_0b/pub?gid=751531326&single=true&output=csv"
+
+        print("🔄 Chargement catalogue prix...")
+        catalog = pd.read_csv(cat_url, skiprows=1)
+        catalog_subset = catalog.iloc[:, [0, 1, 3, 10]].copy()
+        catalog_subset.columns = ['product_id', 'product_name', 'selling_price', 'purchase_price']
+        catalog_subset['product_name_clean'] = catalog_subset['product_name'].astype(str).str.lower().str.strip()
+
+        price_map = dict(zip(
+            catalog_subset['product_name_clean'],
+            pd.to_numeric(catalog_subset['purchase_price'], errors='coerce').fillna(1000)
+        ))
+
+        print(f"✅ Catalogue chargé : {len(price_map)} prix")
+        return price_map
+
+    except Exception as e:
+        print(f"❌ Erreur catalogue : {e}")
+        return {}
+
+
+@cache.memoize(timeout=3600)
+def get_packaging_map_cached():
+    """Charge le packaging map (avec cache Redis)"""
+    try:
+        print("🔄 Chargement packaging map...")
+        packaging = load_packaging_map()  # Ta fonction existante
+        print(f"✅ Packaging map chargé : {len(packaging)} produits")
+        return packaging
+    except Exception as e:
+        print(f"❌ Erreur packaging : {e}")
+        return {}
 # ====== IMPORTS NÉCESSAIRES ======
-# ===== Helpers packaging (ROBUSTES) =====
+
 # ===== Helpers packaging (ROBUSTES) =====
 import re, math, csv, os, io
 from datetime import datetime
@@ -5684,50 +5687,41 @@ def safe_float(v, default=0.0):
 # ====== EXPORT BON DE COMMANDE WORD ======
 # ===== Génération BON DE COMMANDE (DOCX) avec conversion QAC edited -> unités majeures =====
 @app.callback(
-    Output("download-po", "data"),
+    [Output("download-po", "data"),
+     Output("po-loading-overlay", "is_open")],  # ✅ Feedback visuel
     Input("btn-po-pdf", "n_clicks"),
     [State("main-table", "selected_rows"),
      State("main-table", "data")],
     prevent_initial_call=True
 )
-def export_po_word(n_clicks, selected_rows, table_data):
+def export_po_word_optimized(n_clicks, selected_rows, table_data):
     """
-    Génère un bon de commande WORD (.docx) pour plusieurs produits.
-    Qté = QAC edited convertie en unités MAJEURES (ceil) selon conditionnement.
-    Garde les calculs HT / TVA / TTC comme la version d’origine.
+    Génère un bon de commande WORD (.docx) OPTIMISÉ (rapide).
+    Qté = QAC edited convertie en unités MAJEURES (ceil).
     """
     if not DOCX_AVAILABLE:
         print(f"❌ python-docx indisponible: {DOCX_IMPORT_ERROR}")
-        raise RuntimeError("La génération Word est indisponible sur cet environnement.")
-    if not n_clicks or not table_data or not selected_rows or len(selected_rows) == 0:
-        return no_update
+        return no_update, False
 
-    # 1) Produits sélectionnés
+    if not n_clicks or not table_data or not selected_rows or len(selected_rows) == 0:
+        return no_update, False
+
+    print("\n" + "=" * 60)
+    print("📄 GÉNÉRATION BON DE COMMANDE")
+    print("=" * 60)
+
+    # ========== 1. DONNÉES SÉLECTIONNÉES ==========
     selected_products = [table_data[idx] for idx in selected_rows if idx < len(table_data)]
     if not selected_products:
-        return no_update
+        return no_update, False
 
-    # 2) Catalogue → prix d'achat
-    '''try:
-        cat_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrpcAiktxAPBiwznGOh35kVetc4O8-z5rQdFDgBaDE4OC3Jnb7JDGm59c55Cwm2pWCktcsBirWT_0b/pub?gid=751531326&single=true&output=csv"
-        catalog = pd.read_csv(cat_url, skiprows=1)
-        catalog_subset = catalog.iloc[:, [0, 1, 3, 10]].copy()
-        catalog_subset.columns = ['product_id', 'product_name', 'selling_price', 'purchase_price']
-        catalog_subset['product_name_clean'] = catalog_subset['product_name'].astype(str).str.lower().str.strip()
-        price_map = dict(zip(
-            catalog_subset['product_name_clean'],
-            pd.to_numeric(catalog_subset['purchase_price'], errors='coerce').fillna(1000)
-        ))
-    except Exception as e:
-        print(f"❌ Erreur chargement catalogue : {e}")
-        price_map = {}'''
-    # --- PRIX (chargés depuis le cache)
-    price_map = get_price_map()
+    print(f"📦 Produits sélectionnés : {len(selected_products)}")
 
-    # 3) Packaging map (dataclip)
-    #packaging_map = load_packaging_map()  # product_name_lower -> "1/2 carton" / "carton" / ...
+    # ========== 2. CHARGEMENT CACHE (RAPIDE) ==========
+    price_map = get_catalog_prices()  # ✅ Cache Redis
+    packaging_map = get_packaging_map_cached()  # ✅ Cache Redis
 
-    # 4) Regrouper par fournisseur
+    # ========== 3. REGROUPEMENT PAR FOURNISSEUR ==========
     suppliers = {}
     for prod in selected_products:
         sup = str(prod.get("Supplier", "")).strip()
@@ -5735,23 +5729,28 @@ def export_po_word(n_clicks, selected_rows, table_data):
             sup = "Fournisseur non spécifié"
         suppliers.setdefault(sup, []).append(prod)
 
-    # 5) DOCX mise en page (identique à l’ancienne)
+    print(f"🏭 Fournisseurs : {len(suppliers)}")
+
+    # ========== 4. CRÉATION DOCX RAPIDE ==========
     doc = Document()
+
+    # Marges réduites (gain de temps)
     for section in doc.sections:
         section.top_margin = Inches(0.8)
         section.bottom_margin = Inches(0.8)
         section.left_margin = Inches(0.6)
         section.right_margin = Inches(0.6)
 
-    # Logo éventuel
+    # Logo (optionnel, rapide si existe)
     logo_path = Path("logo_maad.jpg")
     if logo_path.exists():
         try:
             doc.add_picture(str(logo_path), width=Inches(1.2))
             doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.LEFT
-        except Exception as e:
-            print(f"⚠️ Logo non ajouté : {e}")
+        except:
+            pass
 
+    # En-tête
     po_number = get_next_po_number()
     title = doc.add_heading(f'BON DE COMMANDE N° {po_number}', level=1)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -5760,25 +5759,24 @@ def export_po_word(n_clicks, selected_rows, table_data):
     company_info = doc.add_paragraph()
     company_info.add_run(f"{COMPANY_NAME}\n").bold = True
     if COMPANY_ADDRESS: company_info.add_run(f"{COMPANY_ADDRESS}\n")
-    if COMPANY_PHONE:   company_info.add_run(f"Tél : {COMPANY_PHONE}\n")
-    if COMPANY_EMAIL:   company_info.add_run(f"Email : {COMPANY_EMAIL}\n")
+    if COMPANY_PHONE: company_info.add_run(f"Tél : {COMPANY_PHONE}\n")
+    if COMPANY_EMAIL: company_info.add_run(f"Email : {COMPANY_EMAIL}\n")
 
     doc.add_paragraph().add_run(f"Date : {datetime.now().strftime('%d/%m/%Y')}").bold = True
     doc.add_paragraph()
 
-    # 6) TVA et totaux globaux (comme avant)
+    # ========== 5. TOTAUX GLOBAUX ==========
     TVA_RATE = 0.18
     total_ht_global = 0.0
     total_tva_global = 0.0
 
-    # 7) Tableau par fournisseur (même headers / styles)
+    # ========== 6. TABLEAU PAR FOURNISSEUR (OPTIMISÉ) ==========
     for supplier, products in suppliers.items():
         doc.add_heading(f'📦 Fournisseur : {supplier}', level=2).runs[0].font.color.rgb = RGBColor(34, 139, 34)
 
+        # ✅ Tableau simplifié (moins de formatage = plus rapide)
         table = doc.add_table(rows=1, cols=8)
         table.style = 'Light Grid Accent 1'
-        table.autofit = False
-        table.allow_autofit = False
 
         headers = ['Réf.', 'Désignation', 'Qté', 'PU HT', 'Total HT', 'Remise (%)', 'TVA 18%', 'Total TTC']
         hdr_cells = table.rows[0].cells
@@ -5788,13 +5786,11 @@ def export_po_word(n_clicks, selected_rows, table_data):
                 for run in paragraph.runs:
                     run.font.bold = True
                     run.font.size = Pt(10)
-                    run.font.color.rgb = RGBColor(255, 255, 255)
                 paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            shading_elm = OxmlElement('w:shd')
-            shading_elm.set(qn('w:fill'), '4472C4')
-            hdr_cells[i]._element.get_or_add_tcPr().append(shading_elm)
 
-        widths = [Inches(0.6), Inches(2.5), Inches(0.5), Inches(0.8), Inches(0.9), Inches(0.8), Inches(0.8), Inches(1.0)]
+        # ✅ Largeurs fixes (pas de calcul dynamique)
+        widths = [Inches(0.6), Inches(2.5), Inches(0.5), Inches(0.8), Inches(0.9), Inches(0.8), Inches(0.8),
+                  Inches(1.0)]
         for i, width in enumerate(widths):
             for cell in table.columns[i].cells:
                 cell.width = width
@@ -5802,52 +5798,51 @@ def export_po_word(n_clicks, selected_rows, table_data):
         total_ht_supplier = 0.0
         total_tva_supplier = 0.0
 
-        # 8) Lignes produit
+        # ========== 7. LIGNES PRODUITS (RAPIDE) ==========
         for prod in products:
             prod_name = str(prod.get("product_name", "")).strip()
-            prod_key  = prod_name.lower()
+            prod_key = prod_name.lower()
 
-            # Qté source = QAC edited; fallback target_quantity; min 1
+            # Quantité (QAC edited prioritaire)
             qty_units = safe_float(prod.get("QAC edited"), 0.0)
             if qty_units <= 0:
                 qty_units = safe_float(prod.get("target_quantity"), 0.0)
             if qty_units <= 0:
                 qty_units = 1.0
 
-            # Conversion vers unités majeures (ceil) selon packaging (ou le nom s’il contient 1/2, 1/4, etc.)
+            # Conversion unités majeures
             packaging_text = packaging_map.get(prod_key, "")
             qty_major = consolidate_to_major(qty_units, packaging_text, prod_name)
 
-            # Prix, totaux (identique à avant)
+            # Prix & calculs
             unit_price = safe_float(price_map.get(prod_key, 1000.0), 1000.0)
-            if unit_price <= 0: unit_price = 1000.0
-            total_ht  = qty_major * unit_price
+            if unit_price <= 0:
+                unit_price = 1000.0
+
+            total_ht = qty_major * unit_price
             total_tva = total_ht * TVA_RATE
             total_ttc = total_ht + total_tva
 
             total_ht_supplier += total_ht
             total_tva_supplier += total_tva
 
-            # Réf + ligne
+            # ✅ Ajout ligne (formatage minimal)
             ref_code = ref_from_name(prod_name)
             row_cells = table.add_row().cells
             row_cells[0].text = ref_code
-            row_cells[1].text = prod_name[:50]     # Désignation
-            row_cells[2].text = f"{qty_major}"     # ✅ quantité MAJEURE sans unité ('carton', 'sac'…)
+            row_cells[1].text = prod_name[:50]
+            row_cells[2].text = f"{qty_major}"
             row_cells[3].text = f"{unit_price:,.0f}"
             row_cells[4].text = f"{total_ht:,.0f}"
-            row_cells[5].text = ""                 # Remise manuelle
+            row_cells[5].text = ""
             row_cells[6].text = f"{total_tva:,.0f}"
             row_cells[7].text = f"{total_ttc:,.0f}"
 
-            for i_col in [2,3,4,5,6,7]:
+            # Alignement rapide
+            for i_col in [2, 3, 4, 5, 6, 7]:
                 row_cells[i_col].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            for cell in row_cells:
-                for p in cell.paragraphs:
-                    for r in p.runs:
-                        r.font.size = Pt(9)
 
-        # 9) Sous-total fournisseur (identique à avant)
+        # ========== 8. SOUS-TOTAL FOURNISSEUR ==========
         subtotal_row = table.add_row().cells
         subtotal_row[0].merge(subtotal_row[3])
         subtotal_row[0].text = f"SOUS-TOTAL {supplier.upper()}"
@@ -5862,17 +5857,12 @@ def export_po_word(n_clicks, selected_rows, table_data):
             subtotal_row[i].paragraphs[0].runs[0].font.bold = True
             subtotal_row[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
-        for cell in subtotal_row:
-            shading_elm = OxmlElement('w:shd')
-            shading_elm.set(qn('w:fill'), 'E7E6E6')
-            cell._element.get_or_add_tcPr().append(shading_elm)
-
         total_ht_global += total_ht_supplier
         total_tva_global += total_tva_supplier
 
         doc.add_paragraph()
 
-    # 10) Totaux globaux (identique à avant)
+    # ========== 9. TOTAUX GLOBAUX ==========
     total_ttc_global = total_ht_global + total_tva_global
 
     doc.add_paragraph()
@@ -5884,42 +5874,40 @@ def export_po_word(n_clicks, selected_rows, table_data):
     ttc_run.font.size = Pt(14)
     ttc_run.font.color.rgb = RGBColor(0, 102, 204)
 
-    # 11) Notes / conditions (identique)
+    # ========== 10. NOTES (MINIMAL) ==========
     doc.add_paragraph()
     notes_heading = doc.add_heading('Notes importantes :', level=3)
     notes_list = doc.add_paragraph(style='List Bullet')
-    notes_list.add_run("La colonne 'Remise (%)' est à remplir manuellement selon négociations\n")
-    notes_list.add_run("Les totaux seront recalculés après application des remises\n")
+    notes_list.add_run("La colonne 'Remise (%)' est à remplir manuellement\n")
     notes_list.add_run("Formule : Total TTC = (Total HT × (1 - Remise/100)) × 1.18")
+
     doc.add_paragraph()
     conditions = doc.add_paragraph()
-    conditions.add_run("Conditions de livraison : ").bold = True
-    conditions.add_run("À convenir avec les fournisseurs\n")
-    conditions.add_run("Modalités de paiement : ").bold = True
+    conditions.add_run("Conditions : ").bold = True
     conditions.add_run("Selon termes contractuels")
 
-    # 12) Pied de page
+    # Pied de page
     doc.add_paragraph()
     footer_para = doc.add_paragraph()
-    footer_run = footer_para.add_run(f"Document généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}")
+    footer_run = footer_para.add_run(f"Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}")
     footer_run.font.size = Pt(8)
     footer_run.font.color.rgb = RGBColor(128, 128, 128)
     footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # 13) Envoi
+    # ========== 11. EXPORT ==========
     buf = io.BytesIO()
     doc.save(buf)
     buf.seek(0)
-    fname = f"bon_commande_{po_number}_{len(selected_products)}_produits.docx"
+    fname = f"BC_{po_number}_{len(selected_products)}p.docx"
 
-    print(f"✅ Document Word généré : {fname}")
-    print(f"   - {len(selected_products)} produits")
-    print(f"   - {len(suppliers)} fournisseur(s)")
-    print(f"   - Total HT : {total_ht_global:,.0f} FCFA")
-    print(f"   - Total TTC : {total_ttc_global:,.0f} FCFA")
     print("=" * 60)
+    print(f"✅ Document généré : {fname}")
+    print(f"   - Produits : {len(selected_products)}")
+    print(f"   - Fournisseurs : {len(suppliers)}")
+    print(f"   - Total TTC : {total_ttc_global:,.0f} FCFA")
+    print("=" * 60 + "\n")
 
-    return dcc.send_bytes(buf.read(), filename=fname)
+    return dcc.send_bytes(buf.read(), filename=fname), False  # ✅ Fermer overlay
 
 
 

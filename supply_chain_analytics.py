@@ -94,6 +94,8 @@ if RENDER_ENV:
     print(f"Working directory: {os.getcwd()}")
     print(f"Files: {os.listdir('.')[:10]}")
     print("="*60 + "\n")
+
+
 # ------------- OpenAI client (clé hardcodée à ta demande) ----------------
 # OPENAI_API_KEY_HARDCODED = "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"
 # Ligne ~45 dans votre code
@@ -529,14 +531,14 @@ def get_next_po_number() -> str:
         return f"PO-{today}-{st['seq']:03d}"
 
 
-import pandas as pd
-import numpy as np
+#import pandas as pd
+#import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
-import warnings
+#import warnings
 
 warnings.filterwarnings('ignore')
 

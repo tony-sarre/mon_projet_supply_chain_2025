@@ -2707,10 +2707,11 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ------------------------------ Pages --------------------------------------------
-def make_kpis(df: pd.DataFrame):
-    """Calcule les KPIs pour la page overview"""
 
-    # Helper pour format
+def make_kpis(df: pd.DataFrame):
+    """Calcule les KPIs (SKUs, ruptures, fournisseurs) + alerte dropdown produits à risque (ML)."""
+
+    # ---------- helpers ----------
     def fmt(n):
         if pd.isna(n):
             return "-"
@@ -2721,94 +2722,233 @@ def make_kpis(df: pd.DataFrame):
                 return str(n)
         return str(n)
 
-    # Nettoyage : exclure delisted
-    mask_valid = df['delisting_status'].str.lower().ne('delisted') if 'delisting_status' in df.columns else [
-                                                                                                                True] * len(
-        df)
-    df_valid = df[mask_valid].copy()
+    def as_float(s, default=0.0):
+        return pd.to_numeric(s, errors="coerce").fillna(default)
 
-    # SKUs total
+    # ---------- nettoyage : exclure les delisted sans planter sur dtypes ----------
+    if 'delisting_status' in df.columns:
+        delist = df['delisting_status'].astype(str).str.lower()
+        mask_valid = delist != 'delisted'
+        df_valid = df.loc[mask_valid].copy()
+    else:
+        df_valid = df.copy()
+
+    # ---------- KPI 1 : SKUs ----------
     total_skus = df_valid['product_name'].nunique() if 'product_name' in df_valid.columns else len(df_valid)
 
-    # ✅ RUPTURE RÉELLE : Plusieurs méthodes selon colonnes disponibles
-    out_of_stock = 0
-
-    # Méthode 1 : Via Stock Status (si disponible)
+    # ---------- KPI 2 : Ruptures réelles ----------
     if 'Stock Status' in df_valid.columns:
         out_of_stock = int((df_valid['Stock Status'] == 'Out of Stock').sum())
-
-    # Méthode 2 : Calculer directement depuis total_stock
     elif 'total_stock' in df_valid.columns:
-        out_of_stock = int((df_valid['total_stock'] <= 0).sum())
-
-    # Méthode 3 : Via Ajusted_total_need
+        out_of_stock = int(as_float(df_valid['total_stock']) <= 0.0)
     elif 'Ajusted_total_need' in df_valid.columns:
         out_of_stock = int((df_valid['Ajusted_total_need'] == 'ORDER NOW').sum())
+    else:
+        out_of_stock = 0
 
-    # Fournisseurs
-    suppliers = 0
+    # ---------- KPI 3 : Fournisseurs ----------
     if 'Suppliers (all)' in df_valid.columns:
         suppliers = df_valid['Suppliers (all)'].nunique()
     elif 'Supplier' in df_valid.columns:
         suppliers = df_valid['Supplier'].nunique()
+    else:
+        suppliers = 0
 
-    # ✅ RISQUE DE RUPTURE : Produits avec faible couverture
-    risk_count = 0
+    # ---------- Produits à risque (pour dropdown) ----------
+    risk_products = []
 
-    # Méthode 1 : Via ML (Predicted Stockout + Score < 0.5)
-    if 'Predicted Stockout' in df_valid.columns and 'Credit Adequacy Score' in df_valid.columns:
-        risk_count = int((
-                                 (df_valid['Predicted Stockout'] == True) &
-                                 (df_valid['Credit Adequacy Score'] < 0.5)
-                         ).sum())
+    if {'Predicted Stockout', 'Credit Adequacy Score'}.issubset(df_valid.columns):
+        risk_mask = (df_valid['Predicted Stockout'] == True) & (as_float(df_valid['Credit Adequacy Score']) < 0.5)
+        risk_df = df_valid.loc[risk_mask].copy()
 
-    # Méthode 2 : Via couverture en jours (< lead time + crédit)
-    elif 'Max Coverage Day' in df_valid.columns and 'ADJUSTED_LEADTIME' in df_valid.columns and 'credit_days' in df_valid.columns:
-        df_valid['replenishment_days'] = df_valid['ADJUSTED_LEADTIME'].fillna(7) + df_valid['credit_days'].fillna(14)
-        risk_count = int((
-                                 (df_valid['Max Coverage Day'] > 0) &  # Pas en rupture totale
-                                 (df_valid['Max Coverage Day'] < df_valid['replenishment_days'])
-                         ).sum())
+        if 'Max Coverage Day' in risk_df.columns:
+            risk_df = risk_df.sort_values('Max Coverage Day', ascending=True)
 
-    # Méthode 3 : Via Ajusted_total_need
+        for _, row in risk_df.head(50).iterrows():
+            risk_products.append({
+                'product_name': str(row.get('product_name', 'N/A'))[:60],
+                'supplier'    : str(row.get('Supplier', 'N/A')),
+                'coverage_days': float(row.get('Max Coverage Day', 0) or 0),
+                'stock'       : float(row.get('total_stock', 0) or 0),
+                'ads'         : float(row.get('Average Daily Sales', 0) or 0),
+                'category'    : str(row.get('Product Category', 'N/A')),
+                'credit_score': float(row.get('Credit Adequacy Score', 0) or 0),
+            })
+
+    elif {'Max Coverage Day', 'ADJUSTED_LEADTIME', 'credit_days'}.issubset(df_valid.columns):
+        tmp = df_valid.assign(
+            replenishment_days = as_float(df_valid['ADJUSTED_LEADTIME'], 7) + as_float(df_valid['credit_days'], 14),
+            mcd                = as_float(df_valid['Max Coverage Day'])
+        )
+        risk_mask = (tmp['mcd'] > 0) & (tmp['mcd'] < tmp['replenishment_days'])
+        risk_df = tmp.loc[risk_mask].sort_values('mcd', ascending=True)
+
+        for _, row in risk_df.head(50).iterrows():
+            risk_products.append({
+                'product_name': str(row.get('product_name', 'N/A'))[:60],
+                'supplier'    : str(row.get('Supplier', 'N/A')),
+                'coverage_days': float(row.get('mcd', 0) or 0),
+                'stock'       : float(row.get('total_stock', 0) or 0),
+                'ads'         : float(row.get('Average Daily Sales', 0) or 0),
+                'category'    : str(row.get('Product Category', 'N/A')),
+                'credit_score': 0.3,
+            })
+
     elif 'Ajusted_total_need' in df_valid.columns:
-        risk_count = int((df_valid['Ajusted_total_need'].isin(['ORDER NOW', 'ORDER NOT URGENT'])).sum())
+        tmp = df_valid.copy()
+        tmp['priority'] = tmp['Ajusted_total_need'].map({'ORDER NOW': 1, 'ORDER NOT URGENT': 2}).fillna(9)
+        risk_df = tmp.loc[tmp['Ajusted_total_need'].isin(['ORDER NOW', 'ORDER NOT URGENT'])] \
+                     .sort_values('priority', ascending=True)
 
-    # Cartes KPI
-    cards = dbc.Row([
-        dbc.Col(html.Div(className="kpi", children=[
-            html.Small("SKUs"),
-            html.H3(fmt(total_skus))
-        ]), md=4),
+        for _, row in risk_df.head(50).iterrows():
+            risk_products.append({
+                'product_name': str(row.get('product_name', 'N/A'))[:60],
+                'supplier'    : str(row.get('Supplier', 'N/A')),
+                'coverage_days': float(row.get('Max Coverage Day', 0) or 0),
+                'stock'       : float(row.get('total_stock', 0) or 0),
+                'ads'         : float(row.get('Average Daily Sales', 0) or 0),
+                'category'    : str(row.get('Product Category', 'N/A')),
+                'credit_score': 0.3,
+            })
 
-        dbc.Col(html.Div(className="kpi", children=[
-            html.Small("Produits en rupture"),
-            html.H3(fmt(out_of_stock), style={"color": "#ef4444" if out_of_stock > 0 else "#10b981"})
-        ]), md=4),
+    risk_count = len(risk_products)
 
-        dbc.Col(html.Div(className="kpi", children=[
-            html.Small("Fournisseurs actifs"),
-            html.H3(fmt(suppliers))
-        ]), md=4),
-    ], className="gy-3")
-
-    # Cloche d'alerte
-    # Cloche d’alerte basée uniquement sur ML
-    bell = html.Div(
-        className="pill",
-        children=[
-            html.Span("🔔", style={"fontSize": "16px", "marginRight": "8px"}),
-            html.B("À risque de rupture (ML) : "),
-            html.Span(f"{risk_count}", className="badge badge-warn", style={"marginLeft": "6px"})
+    # ---------- Cartes KPI ----------
+    cards = dbc.Row(
+        [
+            dbc.Col(html.Div(className="kpi", children=[html.Small("SKUs"), html.H3(fmt(total_skus))]), md=4),
+            dbc.Col(html.Div(className="kpi", children=[
+                html.Small("Produits en rupture"),
+                html.H3(fmt(out_of_stock), style={"color": "#ef4444" if out_of_stock > 0 else "#10b981"})
+            ]), md=4),
+            dbc.Col(html.Div(className="kpi", children=[html.Small("Fournisseurs actifs"), html.H3(fmt(suppliers))]), md=4),
         ],
-        style={"display": "inline-block", "marginTop": "10px"}
+        className="gy-3"
     )
 
-    print(f"📊 KPIs calculés : SKUs={total_skus}, Ruptures={out_of_stock}, Risques={risk_count}")
+    # ---------- Alerte dropdown ----------
+    # (pas de pseudo-sélecteurs CSS comme ':hover' dans style inline → ignorés par Dash)
+    dropdown_children = []
+
+    if risk_products:
+        for prod in risk_products:
+            color_border = '#ef4444' if prod['coverage_days'] < 7 else '#f59e0b'
+            dropdown_children.append(
+                html.Div(
+                    style={
+                        "padding": "10px",
+                        "marginBottom": "8px",
+                        "background": "#0f1625",
+                        "border": "1px solid #1f2937",
+                        "borderLeft": f"4px solid {color_border}",
+                        "borderRadius": "8px",
+                    },
+                    children=[
+                        html.Div([
+                            html.Strong(prod['product_name'], style={"color": "#22d3ee", "fontSize": "13px", "marginRight": "8px"}),
+                            dbc.Badge("URGENT" if prod['coverage_days'] < 7 else "À surveiller",
+                                      color="danger" if prod['coverage_days'] < 7 else "warning",
+                                      pill=True, style={"fontSize": "9px"})
+                        ], style={"marginBottom": "6px"}),
+                        html.Div([
+                            html.Span(" "),
+                            html.Small(f"{prod['supplier']}", style={"color": "#9ca3af", "fontSize": "11px"}),
+                            html.Span(" • ", style={"color": "#4b5563"}),
+                            html.Span(" "),
+                            html.Small(f"Stock: {prod['stock']:.0f}", style={"color": "#9ca3af", "fontSize": "11px"}),
+                        ], style={"marginBottom": "4px"}),
+                        html.Div([
+                            html.Span(" "),
+                            html.Small(
+                                f"Couverture: {prod['coverage_days']:.1f} jours",
+                                style={
+                                    "color": "#ef4444" if prod['coverage_days'] < 7 else "#f59e0b",
+                                    "fontSize": "11px", "fontWeight": "700", "marginRight": "12px"
+                                }
+                            ),
+                            html.Span(" "),
+                            html.Small(f"ADS: {prod['ads']:.1f}/j", style={"color": "#6b7280", "fontSize": "11px"}),
+                        ], style={"marginBottom": "6px"}),
+                        html.Div([
+                            dbc.Badge(prod['category'], color="secondary", pill=True, className="me-1", style={"fontSize": "9px"}),
+                            dbc.Badge(f"Score: {prod['credit_score']:.2f}",
+                                      color="danger" if prod['credit_score'] < 0.3 else "warning",
+                                      pill=True, style={"fontSize": "9px"}),
+                        ])
+                    ]
+                )
+            )
+    else:
+        dropdown_children = [
+            html.Div(
+                children=[
+                    html.Span("✅", style={"fontSize": "24px", "marginBottom": "8px"}),
+                    html.Div("Aucun produit à risque détecté", style={"color": "#10b981", "fontSize": "13px", "fontWeight": "600"}),
+                    html.Small("Tous les produits ont une couverture adéquate", style={"color": "#6b7280", "fontSize": "11px", "marginTop": "4px"})
+                ],
+                style={"textAlign": "center", "padding": "30px 20px", "display": "flex", "flexDirection": "column", "alignItems": "center"}
+            )
+        ]
+
+    bell = html.Div(
+        className="pill",
+        style={"marginTop": "10px"},
+        children=[
+            dbc.Button(
+                [
+                    html.Span("🔔", style={"fontSize": "16px", "marginRight": "8px"}),
+                    html.B("À risque de rupture (ML) : "),
+                    dbc.Badge(f"{risk_count}", color="warning" if risk_count > 0 else "success", pill=True, className="ms-2")
+                ],
+                id="risk-alert-toggle",
+                color="link",
+                className="p-2 text-start w-100",
+                style={
+                    "textDecoration": "none",
+                    "color": "#e5e7eb",
+                    "border": "1px solid #374151",
+                    "borderRadius": "10px",
+                    "background": "rgba(245, 158, 11, 0.1)" if risk_count > 0 else "rgba(16, 185, 129, 0.1)",
+                    "cursor": "pointer" if risk_count > 0 else "not-allowed"
+                },
+                disabled=(risk_count == 0)
+            ),
+            dbc.Collapse(
+                id="risk-alert-collapse",
+                is_open=False,
+                children=html.Div(
+                    dropdown_children + [
+                        html.Hr(style={"borderColor": "#374151", "margin": "12px 0"}),
+                        html.Div([
+                            html.Small(
+                                f" Affichant {min(len(risk_products), 50)} produit(s)",
+                                style={"color": "#6b7280", "fontSize": "10px", "marginRight": "10px"}
+                            ),
+                            html.Small("• Calculé avec ML (Predicted Stockout + Credit Adequacy)",
+                                       style={"color": "#4b5563", "fontSize": "10px"})
+                        ], style={"display": "flex", "alignItems": "center", "justifyContent": "center"})
+                    ],
+                    style={
+                        "maxHeight": "450px", "overflowY": "auto", "marginTop": "10px",
+                        "padding": "12px", "background": "#0a1320", "border": "1px solid #1f2937",
+                        "borderRadius": "10px", "boxShadow": "0 4px 12px rgba(0,0,0,0.3)"
+                    }
+                )
+            )
+        ]
+    )
 
     return cards, bell
-
-
+@app.callback(
+    Output("risk-alert-collapse", "is_open"),
+    Input("risk-alert-toggle", "n_clicks"),
+    State("risk-alert-collapse", "is_open"),
+    prevent_initial_call=True
+)
+def _toggle_risk_dropdown(n, is_open):
+    if not n:
+        raise dash.exceptions.PreventUpdate
+    return not is_open
 def page_overview(master_df: pd.DataFrame = None):
     # Charger les données
 

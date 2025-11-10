@@ -6397,31 +6397,31 @@ def export_po_word(n_clicks, selected_rows, table_data):
     return dcc.send_bytes(buf.read(), filename=fname)
 '''
 
-# Activer le bouton PO si une cellule/ligne est sélectionnée et contient product_name + Supplier
+# Activer le bouton PO si au moins une ligne valide est sélectionnée
 @app.callback(
     Output("btn-po-pdf", "disabled"),
-    [Input("main-table", "selected_rows"),  # ✅ Écoute les sélections multiples
-     Input("main-table", "data")],
+    Input("main-table", "selected_rows"),     # <-- seul déclencheur
+    State("main-table", "data"),              # <-- lecture, ne déclenche pas
     prevent_initial_call=True
 )
 def toggle_po_button(selected_rows, data):
-    """
-    Active le bouton "Bon de commande PDF" si AU MOINS une ligne est sélectionnée.
-    """
-    if not data or len(data) == 0:
-        return True  # Désactiver si pas de données
+    # Désactiver si pas de données
+    if not data:
+        return True
 
-    # ✅ Activer si au moins une ligne sélectionnée
-    if selected_rows and len(selected_rows) > 0:
-        # Vérifier que les lignes sélectionnées ont des produits valides
-        valid_selections = [
-            idx for idx in selected_rows
-            if idx < len(data) and data[idx].get("product_name") and data[idx].get("Supplier")
-        ]
-        return len(valid_selections) == 0  # False = activé, True = désactivé
+    # Désactiver si aucune ligne sélectionnée
+    if not selected_rows:
+        return True
 
-    return True  # Désactivé par défaut
+    # Activer si AU MOINS une ligne sélectionnée possède product_name + Supplier
+    for idx in selected_rows:
+        if 0 <= idx < len(data):
+            row = data[idx] or {}
+            if row.get("product_name") and row.get("Supplier"):
+                return False  # bouton activé
 
+    # Sinon, désactiver
+    return True
 
 # ==================== CALLBACK 4 : COMPTEUR DE SÉLECTION ====================
 @app.callback(

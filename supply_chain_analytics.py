@@ -6,6 +6,7 @@
 # Optional: pip install openai
 import csv
 import os, sys
+from functools import lru_cache
 
 #import MATCH
 
@@ -998,7 +999,105 @@ def calculate_promo_roi_analysis(sales_df: pd.DataFrame, promo_df: pd.DataFrame,
     return roi_df
 
 
-def load_supply_data() -> pd.DataFrame:
+# ==================== CALCUL ADS DYNAMIQUE DEPUIS HISTORIQUE ====================
+def calculate_ads_by_period(period_days: int = 7) -> pd.DataFrame:
+    """
+    Calcule Average Daily Sales sur N jours depuis l'historique sales_pikine.
+
+    Args:
+        period_days: Nombre de jours (3, 7 ou 30)
+
+    Returns:
+        DataFrame avec colonnes ['product_name', 'Average Daily Sales ({period}d)']
+    """
+    SALES_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAK0IcIDJS8ysyCB0wnLp-rR-t-zu_2_6bYV4-YIhPuL3fZQyo7fgMXZnJ4rcz-5mNur_UHgMenRiU/pub?gid=1493123930&single=true&output=csv"
+
+    print(f"\n📊 Calcul ADS {period_days} jours depuis historique...")
+
+    try:
+        # ✅ Charger historique ventes (skiprows=1 comme dans votre code)
+        sales_df = pd.read_csv(SALES_URL, skiprows=1, low_memory=False)
+
+        print(f"   📥 {len(sales_df)} lignes chargées")
+
+        # ✅ Extraire colonnes pertinentes (indices 0, 1, 2 selon votre structure)
+        # Colonne 0 = date, Colonne 1 = product_name, Colonne 2 = quantity_sold
+        if sales_df.shape[1] >= 3:
+            sales_clean = sales_df.iloc[:, [0, 1, 2]].copy()
+            sales_clean.columns = ['date', 'product_name', 'quantity_sold']
+        else:
+            print(f"   ❌ Structure inattendue ({sales_df.shape[1]} colonnes)")
+            return pd.DataFrame(columns=['product_name', f'Average Daily Sales ({period_days}d)'])
+
+        # ✅ Nettoyer données
+        sales_clean['date'] = pd.to_datetime(sales_clean['date'], errors='coerce')
+        sales_clean['product_name'] = sales_clean['product_name'].astype(str).str.lower().str.strip()
+        sales_clean['quantity_sold'] = pd.to_numeric(sales_clean['quantity_sold'], errors='coerce')
+
+        # Filtrer données valides
+        sales_clean = sales_clean[
+            (sales_clean['date'].notna()) &
+            (sales_clean['product_name'].notna()) &
+            (sales_clean['product_name'] != 'nan') &
+            (sales_clean['quantity_sold'].notna()) &
+            (sales_clean['quantity_sold'] > 0)
+            ].copy()
+
+        if sales_clean.empty:
+            print(f"   ⚠️ Aucune vente valide")
+            return pd.DataFrame(columns=['product_name', f'Average Daily Sales ({period_days}d)'])
+
+        print(f"   ✅ {len(sales_clean)} ventes valides")
+
+        # ✅ Filtrer sur les N derniers jours
+        max_date = sales_clean['date'].max()
+        cutoff_date = max_date - pd.Timedelta(days=period_days)
+
+        sales_period = sales_clean[sales_clean['date'] >= cutoff_date].copy()
+
+        if sales_period.empty:
+            print(f"   ⚠️ Pas de ventes dans les {period_days} derniers jours")
+            return pd.DataFrame(columns=['product_name', f'Average Daily Sales ({period_days}d)'])
+
+        print(f"   📅 Période : {cutoff_date.date()} → {max_date.date()}")
+        print(f"   📦 {len(sales_period)} ventes sur {period_days} jours")
+
+        # ✅ Calculer moyenne par produit
+        # Total ventes / Nombre de jours réels
+        actual_days = (max_date - cutoff_date).days + 1
+
+        ads = (
+            sales_period.groupby('product_name')['quantity_sold']
+            .sum()
+            .reset_index()
+        )
+
+        ads['avg_daily_sales'] = ads['quantity_sold'] / actual_days
+        ads = ads[['product_name', 'avg_daily_sales']].copy()
+        ads.columns = ['product_name', f'Average Daily Sales ({period_days}d)']
+
+        # ✅ Valeur minimale = 0.1 (éviter division par zéro)
+        ads[f'Average Daily Sales ({period_days}d)'] = (
+            ads[f'Average Daily Sales ({period_days}d)']
+            .clip(lower=0.1)
+            .round(2)
+        )
+
+        print(f"   ✅ {len(ads)} produits avec ADS calculée")
+        print(f"   📊 ADS min : {ads[f'Average Daily Sales ({period_days}d)'].min():.2f}")
+        print(f"   📊 ADS médiane : {ads[f'Average Daily Sales ({period_days}d)'].median():.2f}")
+        print(f"   📊 ADS max : {ads[f'Average Daily Sales ({period_days}d)'].max():.2f}")
+        print(f"   📊 ADS moyenne : {ads[f'Average Daily Sales ({period_days}d)'].mean():.2f}")
+
+        return ads
+
+    except Exception as e:
+        print(f"   ❌ Erreur calcul ADS {period_days}j : {e}")
+        import traceback
+        traceback.print_exc()
+        return pd.DataFrame(columns=['product_name', f'Average Daily Sales ({period_days}d)'])
+
+def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     import numpy as np
     import pandas as pd
     from sklearn.ensemble import RandomForestClassifier
@@ -1306,7 +1405,239 @@ def load_supply_data() -> pd.DataFrame:
     # =========================
     # ADS 7d / ADS 30d + OOS 7d / OOS 30d - MERGE UNIQUE
     # =========================
+    # =========================
+    # ✅ ADS MULTI-PÉRIODES - LOGIQUE ORIGINALE PRÉSERVÉE
+    # =========================
+    print(f"\n{'=' * 60}")
+    print(f"📊 CALCUL AVERAGE DAILY SALES - Période : {period_days}")
+    print(f"{'=' * 60}")
+
+    # ✅ ÉTAPE 1 : Merger ADS 7j et 30j (VOTRE CODE ORIGINAL)
     if {"2", "9"}.issubset(Tbh_7dsales_df.columns):
+        ads7 = (
+            Tbh_7dsales_df[["2", "9"]]
+            .rename(columns={"2": "product_name", "9": "Average Daily Sales (7d)"})
+            .drop_duplicates(subset=["product_name"])
+        )
+        ads7["product_name"] = ads7["product_name"].astype(str).str.lower().str.strip()
+        ads7["Average Daily Sales (7d)"] = safe_numeric(ads7["Average Daily Sales (7d)"], 0)
+    else:
+        ads7 = pd.DataFrame(columns=["product_name", "Average Daily Sales (7d)"])
+
+    if {"2", "9"}.issubset(Tbh_30dsales_products_df.columns):
+        ads30 = (
+            Tbh_30dsales_products_df[["2", "9"]]
+            .rename(columns={"2": "product_name", "9": "Average Daily Sales (30d)"})
+            .drop_duplicates(subset=["product_name"])
+        )
+        ads30["product_name"] = ads30["product_name"].astype(str).str.lower().str.strip()
+        ads30["Average Daily Sales (30d)"] = safe_numeric(ads30["Average Daily Sales (30d)"], 0)
+    else:
+        ads30 = pd.DataFrame(columns=["product_name", "Average Daily Sales (30d)"])
+
+    # ✅ Merger OOS Rates (VOTRE CODE ORIGINAL)
+    if {"2", "12"}.issubset(Tbh_7dsales_df.columns):
+        oos7 = (
+            Tbh_7dsales_df[["2", "12"]]
+            .rename(columns={"2": "product_name", "12": "Daily OOS Rate (7d)"})
+            .drop_duplicates(subset=["product_name"])
+        )
+        oos7["product_name"] = oos7["product_name"].astype(str).str.lower().str.strip()
+        oos7["Daily OOS Rate (7d)"] = safe_numeric(
+            oos7["Daily OOS Rate (7d)"].astype(str).str.replace("%", "", regex=False), 100
+        ) / 100.0
+    else:
+        oos7 = pd.DataFrame(columns=["product_name", "Daily OOS Rate (7d)"])
+
+    if {"2", "28"}.issubset(Tbh_30dsales_products_df.columns):
+        oos30 = (
+            Tbh_30dsales_products_df[["2", "28"]]
+            .rename(columns={"2": "product_name", "28": "Daily OOS Rate (30d)"})
+            .drop_duplicates(subset=["product_name"])
+        )
+        oos30["product_name"] = oos30["product_name"].astype(str).str.lower().str.strip()
+        oos30["Daily OOS Rate (30d)"] = safe_numeric(
+            oos30["Daily OOS Rate (30d)"].astype(str).str.replace("%", "", regex=False), 0
+        ) / 100.0
+    else:
+        oos30 = pd.DataFrame(columns=["product_name", "Daily OOS Rate (30d)"])
+
+    # ✅ MERGE UNIQUE (VOTRE CODE ORIGINAL)
+    final_stock_sales_df = final_stock_sales_df.merge(ads7, on="product_name", how="left", validate="m:1")
+    final_stock_sales_df = final_stock_sales_df.merge(ads30, on="product_name", how="left", validate="m:1")
+    final_stock_sales_df = final_stock_sales_df.merge(oos7, on="product_name", how="left", validate="m:1")
+    final_stock_sales_df = final_stock_sales_df.merge(oos30, on="product_name", how="left", validate="m:1")
+
+    print(f"   ✅ ADS 7j mergée : {(final_stock_sales_df['Average Daily Sales (7d)'].notna()).sum()} produits")
+    print(f"   ✅ ADS 30j mergée : {(final_stock_sales_df['Average Daily Sales (30d)'].notna()).sum()} produits")
+
+    # =========================
+    # ✅ NOUVEAU : Calcul ADS selon période sélectionnée
+    # =========================
+    period_map = {"3d": 3, "7d": 7, "30d": 30}
+    n_days = period_map.get(period_days, 7)
+
+    print(f"\n🎯 Application période {period_days} ({n_days} jours)...")
+
+    if period_days == "3d":
+        # ✅ POUR 3J : Tenter calcul depuis historique, sinon utiliser ADS 7j
+        try:
+            ads_3d = calculate_ads_by_period(period_days=3)
+
+            if not ads_3d.empty:
+                # Nettoyer product_name
+                final_stock_sales_df['product_name'] = (
+                    final_stock_sales_df['product_name']
+                    .astype(str).str.lower().str.strip()
+                )
+
+                # Renommer colonne
+                if 'Average Daily Sales (3d)' in ads_3d.columns:
+                    ads_3d.rename(columns={'Average Daily Sales (3d)': 'Average Daily Sales'}, inplace=True)
+
+                # Merger
+                final_stock_sales_df = final_stock_sales_df.merge(
+                    ads_3d[['product_name', 'Average Daily Sales']],
+                    on='product_name',
+                    how='left',
+                    suffixes=('_old', '')
+                )
+
+                # Supprimer colonne temporaire si existe
+                if 'Average Daily Sales_old' in final_stock_sales_df.columns:
+                    final_stock_sales_df.drop(columns=['Average Daily Sales_old'], inplace=True)
+
+                # Remplir manquants avec ADS 7j
+                final_stock_sales_df['Average Daily Sales'] = (
+                    final_stock_sales_df['Average Daily Sales']
+                    .fillna(final_stock_sales_df.get('Average Daily Sales (7d)', 0.1))
+                    .clip(lower=0.1)
+                )
+
+                print(f"   ✅ ADS 3j calculée depuis historique")
+            else:
+                raise ValueError("Historique vide")
+
+        except Exception as e:
+            print(f"   ⚠️ Erreur ADS 3j : {e}")
+            print(f"   → Fallback : ADS 3j = ADS 7j")
+
+            # Fallback : utiliser ADS 7j
+            final_stock_sales_df['Average Daily Sales'] = (
+                final_stock_sales_df.get('Average Daily Sales (7d)', pd.Series([0.1] * len(final_stock_sales_df)))
+                .fillna(0.1)
+                .clip(lower=0.1)
+            )
+
+    elif period_days == "7d":
+        # ✅ POUR 7J : VOTRE LOGIQUE ORIGINALE calc_recalculated_ads
+        def calc_recalculated_ads(row):
+            oos_7d = row.get("Daily OOS Rate (7d)", 1.0)
+            oos_30d = row.get("Daily OOS Rate (30d)", 1.0)
+            sales_7d = row.get("Average Daily Sales (7d)", np.nan)
+            sales_30d = row.get("Average Daily Sales (30d)", np.nan)
+
+            if pd.isna(sales_7d) and pd.isna(sales_30d):
+                return 0.1
+
+            if pd.isna(sales_7d) or pd.isna(oos_7d) or (oos_7d >= 0.6):
+                if pd.notna(sales_30d):
+                    if pd.notna(oos_30d) and (oos_30d >= 0.6):
+                        if pd.notna(sales_7d):
+                            return (sales_7d + sales_30d) / 2.0 + 0.1
+                        else:
+                            return sales_30d + 0.1
+                    else:
+                        return sales_30d + 0.1
+                else:
+                    return (sales_7d + 0.1) if pd.notna(sales_7d) else 0.1
+
+            return sales_7d + 0.1
+
+        final_stock_sales_df["Recalculated Average Daily Sales"] = (
+            final_stock_sales_df.apply(calc_recalculated_ads, axis=1)
+        )
+
+        # ✅ Renommer immédiatement
+        final_stock_sales_df.rename(
+            columns={"Recalculated Average Daily Sales": "Average Daily Sales"},
+            inplace=True
+        )
+
+        print(f"   ✅ ADS 7j calculée (logique originale)")
+
+    elif period_days == "30d":
+        # ✅ POUR 30J : Privilégier ADS 30j, sinon moyenne 7j/30j
+        def calc_ads_30d(row):
+            sales_30d = row.get("Average Daily Sales (30d)", np.nan)
+            sales_7d = row.get("Average Daily Sales (7d)", np.nan)
+            oos_30d = row.get("Daily OOS Rate (30d)", 1.0)
+
+            if pd.notna(sales_30d):
+                # Si OOS élevé, pondérer avec 7j
+                if pd.notna(oos_30d) and (oos_30d >= 0.6) and pd.notna(sales_7d):
+                    return (sales_30d + sales_7d) / 2.0 + 0.1
+                return sales_30d + 0.1
+            elif pd.notna(sales_7d):
+                return sales_7d + 0.1
+            else:
+                return 0.1
+
+        final_stock_sales_df['Average Daily Sales'] = (
+            final_stock_sales_df.apply(calc_ads_30d, axis=1)
+        )
+
+        print(f"   ✅ ADS 30j calculée")
+
+    # =========================
+    # ✅ GARANTIE FINALE (au cas où)
+    # =========================
+    if 'Average Daily Sales' not in final_stock_sales_df.columns:
+        print("   ⚠️ ERREUR : Colonne ADS manquante, création par défaut")
+        final_stock_sales_df['Average Daily Sales'] = 0.1
+
+    # ✅ Validation et nettoyage
+    final_stock_sales_df['Average Daily Sales'] = (
+        pd.to_numeric(final_stock_sales_df['Average Daily Sales'], errors='coerce')
+        .fillna(0.1)
+        .clip(lower=0.1)
+    )
+
+    # ✅ Statistiques
+    print(f"\n✅ Average Daily Sales {period_days} - Stats finales :")
+    print(f"   Min     : {final_stock_sales_df['Average Daily Sales'].min():.2f}")
+    print(f"   Max     : {final_stock_sales_df['Average Daily Sales'].max():.2f}")
+    print(f"   Médiane : {final_stock_sales_df['Average Daily Sales'].median():.2f}")
+    print(f"   Moyenne : {final_stock_sales_df['Average Daily Sales'].mean():.2f}")
+    print(f"{'=' * 60}\n")
+
+    # =========================
+    # ✅ Max Coverage Day (VOTRE CODE ORIGINAL)
+    # =========================
+    final_stock_sales_df["Max Coverage Day"] = np.minimum(
+        safe_numeric(final_stock_sales_df["total_stock"], 0) /
+        np.maximum(safe_numeric(final_stock_sales_df["Average Daily Sales"], 0.01), 0.01),
+        365
+    )
+
+    print(f"✅ Max Coverage Day recalculé")
+
+    # =========================
+    # Lead time (suite de votre code EXACT)
+    # =========================
+    if {"supplier", "avg_leadtime"}.issubset(df_leadtime.columns):
+        lt = (
+            df_leadtime[["supplier", "avg_leadtime"]]
+            .rename(columns={"supplier": "Supplier", "avg_leadtime": "Avg Lead Time"})
+        )
+        lt["Supplier"] = lt["Supplier"].astype(str).str.lower().str.strip()
+        lt = lt.drop_duplicates(subset=["Supplier"])
+        final_stock_sales_df = final_stock_sales_df.merge(
+            lt, on="Supplier", how="left", validate="m:1"
+        )
+    else:
+        final_stock_sales_df["Avg Lead Time"] = np.nan
+    '''if {"2", "9"}.issubset(Tbh_7dsales_df.columns):
         ads7 = (
             Tbh_7dsales_df[["2", "9"]]
             .rename(columns={"2": "product_name", "9": "Average Daily Sales (7d)"})
@@ -1416,7 +1747,7 @@ def load_supply_data() -> pd.DataFrame:
         )
     else:
         final_stock_sales_df["Avg Lead Time"] = np.nan
-
+'''
     # =========================
     # ✅ DÉPLACER ICI : Supplier credit info (AVANT supplier categorization)
     # =========================
@@ -1689,46 +2020,73 @@ def load_supply_data() -> pd.DataFrame:
         print(f"   Médiane : {final_stock_sales_df['target_quantity'].median():.0f}")
 
     # ✅ PROMOTIONS avec analyse ROI
+    # =========================
+    # ✅ PROMOTIONS avec analyse ROI (CORRECTION)
+    # =========================
     print("\nChargement et analyse des promotions...")
-    promo_history = load_and_analyze_promotions()
 
-    if not sales_history.empty and not promo_history.empty:
-        print("Calcul ROI des promotions...")
-        promo_roi = calculate_promo_roi_analysis(
-            sales_history,
-            promo_history,
-            final_stock_sales_df
-        )
+    # ✅ Initialiser promo_roi AVANT de l'utiliser
+    promo_roi = pd.DataFrame()
+    promo_history = pd.DataFrame()
 
-        if not promo_roi.empty:
-            # Merger avec données principales
-            final_stock_sales_df = final_stock_sales_df.merge(
-                promo_roi[[
-                    'product_name',
-                    'uplift_pct',
-                    'roi_pct',
-                    'net_profit_per_day',
-                    'promo_recommendation',
-                    'promo_priority'
-                ]],
-                on='product_name',
-                how='left'
+    try:
+        promo_history = load_and_analyze_promotions()
+
+        if not sales_history.empty and not promo_history.empty:
+            print("Calcul ROI des promotions...")
+            promo_roi = calculate_promo_roi_analysis(
+                sales_history,
+                promo_history,
+                final_stock_sales_df
             )
 
-            # Statut promo actuel
-            promo_active = promo_history[promo_history['promo_status'] == 'Active'][
-                ['product_name', 'promo_status', 'days_remaining', 'discount_pct']
-            ].drop_duplicates()
+            if not promo_roi.empty:
+                # Merger avec données principales
+                final_stock_sales_df = final_stock_sales_df.merge(
+                    promo_roi[[
+                        'product_name',
+                        'uplift_pct',
+                        'roi_pct',
+                        'net_profit_per_day',
+                        'promo_recommendation',
+                        'promo_priority'
+                    ]],
+                    on='product_name',
+                    how='left'
+                )
 
-            final_stock_sales_df = final_stock_sales_df.merge(
-                promo_active,
-                on='product_name',
-                how='left'
-            )
+                # Statut promo actuel
+                promo_active = promo_history[promo_history['promo_status'] == 'Active'][
+                    ['product_name', 'promo_status', 'days_remaining', 'discount_pct']
+                ].drop_duplicates()
 
-            final_stock_sales_df['promo_status'] = final_stock_sales_df['promo_status'].fillna('Pas de promo')
+                final_stock_sales_df = final_stock_sales_df.merge(
+                    promo_active,
+                    on='product_name',
+                    how='left'
+                )
 
-            print(f"✅ Analyse ROI promotions intégrée")
+                final_stock_sales_df['promo_status'] = final_stock_sales_df['promo_status'].fillna('Pas de promo')
+
+                print(f"✅ Analyse ROI promotions intégrée")
+
+                # Debug : vérifier colonnes créées
+                print(f"\n✅ Colonnes promo ajoutées :")
+                for col in ['uplift_pct', 'roi_pct', 'promo_recommendation', 'promo_priority']:
+                    if col in final_stock_sales_df.columns:
+                        print(f"   ✓ {col}")
+                    else:
+                        print(f"   ✗ {col} MANQUANTE")
+            else:
+                print("⚠️ Analyse ROI vide, pas de données promo")
+        else:
+            print("⚠️ Pas d'historique ventes ou promo disponible")
+
+    except Exception as e:
+        print(f"⚠️ Erreur analyse promotions : {e}")
+        import traceback
+        traceback.print_exc()
+        # Continuer sans les promos
 
         # Ajusted_total_need
 
@@ -2008,6 +2366,226 @@ def load_supply_data() -> pd.DataFrame:
 
         return final_stock_sales_df
 
+
+# ==================== CALLBACK ROTATION ADS ====================
+@app.callback(
+    [Output("master-data", "data", allow_duplicate=True),
+     Output("filtered-data", "data", allow_duplicate=True),
+     Output("main-table", "data", allow_duplicate=True),
+     Output("rotation-indicator", "children")],
+    Input("rotation-period", "value"),
+    prevent_initial_call=True
+)
+def update_rotation_period(period_value):
+    """
+    Recalcule toutes les données avec nouvelle période de rotation
+    ✅ GARANTI de toujours retourner 4 valeurs
+    """
+    print(f"\n{'=' * 70}")
+    print(f"🔥 CALLBACK ROTATION DÉCLENCHÉ : {period_value}")
+    print(f"{'=' * 70}")
+
+    # ✅ PROTECTION #1 : Valeur vide
+    if not period_value:
+        print("❌ Valeur vide reçue")
+        error_msg = html.Div("⚠️ Erreur : valeur vide", style={"color": "#ef4444"})
+        return no_update, no_update, no_update, error_msg
+
+    try:
+        # ✅ Invalider cache
+        print("🗑️ Invalidation cache...")
+        get_df_cached.cache_clear()
+
+        # ✅ Recharger données
+        print(f"📥 Chargement données pour période {period_value}...")
+        df = load_supply_data(period_days=period_value)
+        print(f"✅ {len(df)} produits chargés")
+
+        # ✅ PROTECTION #2 : DataFrame vide
+        if df.empty:
+            print("⚠️ DataFrame vide reçu")
+            error_msg = html.Div("⚠️ Aucune donnée chargée", style={"color": "#ef4444"})
+            return no_update, no_update, no_update, error_msg
+
+        # ✅ Validation colonnes critiques
+        print("🔍 Validation colonnes...")
+
+        # Supplier
+        if "Supplier" not in df.columns:
+            df["Supplier"] = "unknown"
+        else:
+            df["Supplier"] = (
+                df["Supplier"]
+                .fillna("unknown")
+                .astype(str)
+                .str.strip()
+                .replace("", "unknown")
+            )
+
+        # Average Daily Sales
+        if "Average Daily Sales" not in df.columns:
+            print("⚠️ Colonne ADS manquante, création par défaut")
+            df["Average Daily Sales"] = 0.1
+        else:
+            df["Average Daily Sales"] = (
+                pd.to_numeric(df["Average Daily Sales"], errors="coerce")
+                .fillna(0.1)
+                .clip(lower=0.1)
+            )
+
+        # product_id
+        if "product_id" not in df.columns:
+            df["product_id"] = 0
+        else:
+            df["product_id"] = (
+                pd.to_numeric(df["product_id"], errors="coerce")
+                .fillna(0)
+                .astype(int)
+            )
+
+        # ✅ Préparer colonnes table
+        print("📋 Préparation colonnes...")
+
+        cols_priority = [
+            "product_id", "product_name", "Supplier", "total_stock",
+            "Average Daily Sales", "Max Daily Sales (Pikine)", "optimal stock",
+            "Ajusted_total_need", "QAC", "target_quantity",
+            "Max Coverage Day", "Product Category", "credit_days"
+        ]
+
+        cols_banned = [
+            "Average Daily Sales (7d)", "Average Daily Sales (30d)",
+            "Average Daily Sales (3d)", "Daily OOS Rate (7d)",
+            "Daily OOS Rate (30d)", "Stockout Probability",
+            "is_active", "promo_status", "uplift_pct"
+        ]
+
+        # Filtrer colonnes disponibles
+        available_priority = [c for c in cols_priority if c in df.columns]
+        extra_cols = [
+            c for c in df.columns
+            if c not in cols_priority and c not in cols_banned
+        ]
+
+        # Supprimer colonnes bannies
+        df_overview = df.drop(
+            columns=[c for c in cols_banned if c in df.columns],
+            errors='ignore'
+        )
+
+        available_cols = available_priority + extra_cols
+
+        # ✅ PROTECTION #3 : Garantir product_name
+        if "product_name" not in available_cols and "product_name" in df_overview.columns:
+            available_cols.insert(0, "product_name")
+
+        print(f"✅ Colonnes disponibles : {len(available_cols)}")
+
+        # ✅ Créer indicateur visuel
+        period_labels = {
+            "3d": " 3 jours ",
+            "7d": " 7 jours ",
+            "30d": " 30 jours "
+        }
+
+        stats_text = (
+            f"Min: {df['Average Daily Sales'].min():.2f} • "
+            f"Med: {df['Average Daily Sales'].median():.2f} • "
+            f"Max: {df['Average Daily Sales'].max():.2f} • "
+            f"Moy: {df['Average Daily Sales'].mean():.2f}"
+        )
+
+        indicator = html.Div([
+            html.Div([
+                html.Span("✓ ", style={
+                    "color": "#10b981",
+                    "fontSize": "18px",
+                    "marginRight": "6px"
+                }),
+                html.Strong(
+                    period_labels.get(period_value, f"Période {period_value}"),
+                    style={
+                        "color": "#3b82f6",
+                        "fontSize": "14px",
+                        "fontWeight": "700"
+                    }
+                )
+            ], style={"marginBottom": "6px"}),
+            html.Div([
+                html.Span(
+                    f"📦 {len(df)} produits • ",
+                    style={
+                        "color": "#94a3b8",
+                        "marginRight": "10px",
+                        "fontWeight": "600"
+                    }
+                ),
+                html.Span(
+                    f"ADS : {stats_text}",
+                    style={
+                        "color": "#64748b",
+                        "fontSize": "11px"
+                    }
+                )
+            ]),
+            html.Small(
+                f"Mis à jour : {datetime.now().strftime('%H:%M:%S')}",
+                style={
+                    "color": "#6b7280",
+                    "fontSize": "10px",
+                    "display": "block",
+                    "marginTop": "4px"
+                }
+            )
+        ])
+
+        # ✅ PROTECTION #4 : Vérifier colonnes avant to_dict
+        missing_cols = [c for c in available_cols if c not in df_overview.columns]
+        if missing_cols:
+            print(f"⚠️ Colonnes manquantes : {missing_cols}")
+            # Retirer colonnes manquantes
+            available_cols = [c for c in available_cols if c in df_overview.columns]
+
+        # ✅ Préparer données retour
+        print("📤 Préparation données retour...")
+
+        master_json = df.to_json(orient="records")
+        filtered_json = df_overview.to_json(orient="records")
+        table_data = df_overview[available_cols].to_dict("records")
+
+        print(f"✅ CALLBACK TERMINÉ AVEC SUCCÈS")
+        print(f"   - Master data : {len(master_json)} chars")
+        print(f"   - Filtered data : {len(filtered_json)} chars")
+        print(f"   - Table rows : {len(table_data)}")
+        print(f"{'=' * 70}\n")
+
+        # ✅ RETOUR GARANTI (4 valeurs)
+        return master_json, filtered_json, table_data, indicator
+
+    except Exception as e:
+        print(f"❌ ERREUR DANS CALLBACK : {e}")
+        import traceback
+        traceback.print_exc()
+
+        # ✅ En cas d'erreur, retourner 4 valeurs quand même
+        error_indicator = html.Div([
+            html.Span("⚠️ ", style={
+                "fontSize": "18px",
+                "marginRight": "6px",
+                "color": "#ef4444"
+            }),
+            html.Span(
+                f"Erreur : {str(e)[:100]}",
+                style={
+                    "color": "#ef4444",
+                    "fontWeight": "600",
+                    "fontSize": "12px"
+                }
+            )
+        ])
+
+        # ✅ RETOUR EN CAS D'ERREUR (4 valeurs)
+        return no_update, no_update, no_update, error_indicator
 
 # Utility: add Actions columns
 def add_action_cols(df: pd.DataFrame) -> pd.DataFrame:
@@ -2453,10 +3031,15 @@ app.index_string = """
 
 
 # ------------------------------ Data cache layer ---------------------------------
-@cache.memoize()
+'''@cache.memoize()
 def get_df_cached():
     return load_supply_data()
+'''
 
+@lru_cache(maxsize=10)
+def get_df_cached(period: str = "7d"):
+    """Cache avec support période rotation"""
+    return load_supply_data(period_days=period)
 
 # ------------------------------ Sidebar ------------------------------------------
 def make_sidebar():
@@ -2951,6 +3534,7 @@ def _toggle_risk_dropdown(n, is_open):
     if not n:
         raise dash.exceptions.PreventUpdate
     return not is_open
+
 def page_overview(master_df: pd.DataFrame = None):
     # Charger les données
 
@@ -3124,6 +3708,65 @@ def page_overview(master_df: pd.DataFrame = None):
         dbc.Col(html.H2("Overview"), md=8),
         dbc.Col(html.Div(risk_bell, style={"textAlign": "right"}), md=4),
     ])
+
+    # Dans page_overview(), AVANT le tableau
+
+    # ✅ Dropdown rotation
+    rotation_dropdown = html.Div([
+        html.Div([
+            html.Label("rotation ADS :",
+                       style={
+                           "fontWeight": "700",
+                           "marginRight": "12px",
+                           "color": "#f0f4f8",
+                           "fontSize": "14px"
+                       }),
+            dcc.Dropdown(
+                id="rotation-period",
+                options=[
+                    {"label": "3 jours ", "value": "3d"},
+                    {"label": " 7 jours ", "value": "7d"},
+                    {"label": " 30 jours ", "value": "30d"},
+                ],
+                value="7d",
+                clearable=False,
+                searchable=False,
+                style={"width": "400px"},
+                className="dark-dropdown"
+            ),
+
+            html.Div(id="rotation-indicator", style={
+                "marginLeft": "15px",
+                "padding": "6px 12px",
+                "background": "rgba(59, 130, 246, 0.15)",
+                "border": "1px solid #3b82f6",
+                "borderRadius": "8px",
+                "fontSize": "12px",
+                "color": "#93c5fd",
+                "fontWeight": "600"
+            })
+        ], style={"display": "flex", "alignItems": "center", "gap": "10px"}),
+
+        #html.Small([
+         #   "💡 ADS calculée depuis l'historique ",
+          #  html.Code("sales_pikine", style={"background": "#1a2332", "padding": "2px 6px", "borderRadius": "4px"}),
+         #   ". Les périodes courtes détectent les tendances récentes."
+        #], style={
+         #   "display": "block",
+         #   "marginTop": "10px",
+          #  "color": "#94a3b8",
+          #  "fontSize": "12px"
+       # })
+    ], style={
+        "padding": "16px 18px",
+        "background": "linear-gradient(135deg, #1a2332 0%, #141b2d 100%)",
+        "borderRadius": "12px",
+        "border": "1px solid #334155",
+        "marginBottom": "20px",
+        "boxShadow": "0 4px 12px rgba(0,0,0,0.2)"
+    })
+
+
     # Ajouter la nouvelle colonne 'QAC edited' dans available_cols
     available_cols = available_cols #+ ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
 
@@ -3377,6 +4020,8 @@ def page_overview(master_df: pd.DataFrame = None):
                 dbc.Col(html.Div(action_buttons, style={"textAlign": "right"}), md=4)
             ])),
             html.Br(),
+            rotation_dropdown,
+            html.Br(),
             table
             #edit_modal,
         ]),
@@ -3397,7 +4042,8 @@ def page_overview(master_df: pd.DataFrame = None):
      Input("filter-supplier", "value"),
      Input("filter-category", "value"),
      Input("filter-need", "value"),
-     Input("toggle-options", "value")],
+     Input("toggle-options", "value"),
+     Input("master-data", "data")],
     State("master-data", "data"),
     prevent_initial_call=True
 )
@@ -5311,6 +5957,9 @@ app.validation_layout = html.Div([
     html.Div(id="debug-info"),
     #html.Div(id="action-feedback"),
     #html.Div(id="selection-counter"),
+    dbc.Button("✅ Tout sélectionner (vue filtrée)", id="btn-select-all", size="sm", color="secondary", className="me-2"),
+    dbc.Button("🧹 Vider la sélection", id="btn-clear-selection", size="sm", color="secondary", className="me-2"),
+    dbc.Button("🧾 Générer le bon de commande", id="btn-po-pdf", size="sm", color="primary", disabled=True),
 
     # ==================== NAVIGATION ====================
     dbc.NavLink(id="nav-overview"),
@@ -6446,6 +7095,37 @@ def update_selection_counter(selected_rows):
         pill=True,
         style={"fontSize": "13px", "padding": "8px 12px"}
     )
+
+
+@app.callback(
+    Output("main-table", "selected_rows", allow_duplicate=True),
+    Input("btn-select-all", "n_clicks"),
+    State("main-table", "data"),
+    prevent_initial_call=True
+)
+def select_all_rows(n_clicks, table_data):
+    """
+    Sélectionne toutes les lignes actuellement affichées dans le DataTable (vue filtrée).
+    """
+    if not n_clicks:
+        return no_update
+    if not table_data:
+        return []
+
+    # Indices 0..N-1 de la vue affichée
+    return list(range(len(table_data)))
+
+
+@app.callback(
+    Output("main-table", "selected_rows", allow_duplicate=True),
+    Input("btn-clear-selection", "n_clicks"),
+    prevent_initial_call=True
+)
+def clear_selection(n_clicks):
+    """Vide la sélection."""
+    if not n_clicks:
+        return no_update
+    return []
 
 # ------------------------------ Edit/Add/Delete rows -----------------------------
 '''@app.callback(

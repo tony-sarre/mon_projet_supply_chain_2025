@@ -7133,6 +7133,7 @@ def _agent_local(produits):
 
 
 # ===== CALLBACK : AGENT IA =====
+'''
 # ===== CALLBACK : AGENT IA (MODIFIÉ) =====
 @app.callback(
     [Output("main-table", "data", allow_duplicate=True),
@@ -7179,6 +7180,7 @@ def run_agent_ia_calcul(n_clicks, table_data):
     button_disabled = not can_enable
 
     return updated_data, sorted(indices_selection), button_disabled
+'''
 # ============================================
 # FONCTION 2 : VALIDATION QAC
 # ============================================

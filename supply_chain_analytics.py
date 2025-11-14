@@ -79,6 +79,7 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 import requests
 # ✅ AJOUTER POUR WINDOWS
 import threading
+import plotly.graph_objects as go
 import time
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
@@ -6035,7 +6036,7 @@ def add_new_product(n_clicks, current_data):
         current_data.append(new_product)
         return current_data
     return no_update
-
+'''
 
 def page_analytics(master_df: pd.DataFrame = None):
     """Page Analytics avec filtres dynamiques"""
@@ -6067,7 +6068,7 @@ def page_analytics(master_df: pd.DataFrame = None):
     filters_section = html.Div([
         dbc.Row([
             dbc.Col([
-                html.Label("🏭 Fournisseur", style={
+                html.Label(" Fournisseur", style={
                     "fontWeight": "700",
                     "color": "#f0f4f8",
                     "marginBottom": "8px",
@@ -6083,7 +6084,7 @@ def page_analytics(master_df: pd.DataFrame = None):
             ], md=4),
 
             dbc.Col([
-                html.Label("🏷️ Catégorie", style={
+                html.Label(" Catégorie", style={
                     "fontWeight": "700",
                     "color": "#f0f4f8",
                     "marginBottom": "8px",
@@ -6099,7 +6100,7 @@ def page_analytics(master_df: pd.DataFrame = None):
             ], md=4),
 
             dbc.Col([
-                html.Label("📦 Besoin d'achat", style={
+                html.Label(" Besoin d'achat", style={
                     "fontWeight": "700",
                     "color": "#f0f4f8",
                     "marginBottom": "8px",
@@ -6137,7 +6138,7 @@ def page_analytics(master_df: pd.DataFrame = None):
 
     return html.Div(className="content", children=[
         dbc.Row([
-            dbc.Col(html.H2("📊 Analyses Avancées", style={"color": "#22d3ee"}), md=12)
+            dbc.Col(html.H2(" Analyses Avancées", style={"color": "#22d3ee"}), md=12)
         ]),
         html.Div(kpi_cards),
         html.Br(),
@@ -6149,13 +6150,13 @@ def page_analytics(master_df: pd.DataFrame = None):
         dbc.Row([
             dbc.Col([
                 html.Div(className="soft-card", children=[
-                    html.H5("🎯 Lead Time vs Couverture Stock", className="section-title"),
+                    html.H5(" Lead Time vs Couverture Stock", className="section-title"),
                     dcc.Graph(id="analytics-scatter")
                 ])
             ], md=6),
             dbc.Col([
                 html.Div(className="soft-card", children=[
-                    html.H5("📊 Distribution du Stock", className="section-title"),
+                    html.H5(" Distribution du Stock", className="section-title"),
                     dcc.Graph(id="analytics-hist-stock")
                 ])
             ], md=6)
@@ -6165,13 +6166,13 @@ def page_analytics(master_df: pd.DataFrame = None):
         dbc.Row([
             dbc.Col([
                 html.Div(className="soft-card", children=[
-                    html.H5("📦 Ventes Moyennes par Catégorie", className="section-title"),
+                    html.H5(" Ventes Moyennes par Catégorie", className="section-title"),
                     dcc.Graph(id="analytics-box-category")
                 ])
             ], md=6),
             dbc.Col([
                 html.Div(className="soft-card", children=[
-                    html.H5("🏭 Top 10 Besoins par Fournisseur", className="section-title"),
+                    html.H5(" Top 10 Besoins par Fournisseur", className="section-title"),
                     dcc.Graph(id="analytics-purchase-supplier")
                 ])
             ], md=6)
@@ -6181,13 +6182,13 @@ def page_analytics(master_df: pd.DataFrame = None):
         dbc.Row([
             dbc.Col([
                 html.Div(className="soft-card", children=[
-                    html.H5("🎯 QAC vs Stock Optimal", className="section-title"),
+                    html.H5(" QAC vs Stock Optimal", className="section-title"),
                     dcc.Graph(id="analytics-qac-optimal")
                 ])
             ], md=6),
             dbc.Col([
                 html.Div(className="soft-card", children=[
-                    html.H5("📈 Répartition par Besoin d'Achat", className="section-title"),
+                    html.H5(" Répartition par Besoin d'Achat", className="section-title"),
                     dcc.Graph(id="analytics-pie-need")
                 ])
             ], md=6)
@@ -6197,6 +6198,10 @@ def page_analytics(master_df: pd.DataFrame = None):
 
 # ==========================================
 # 📊 CALLBACKS ANALYTICS DYNAMIQUES
+# ==========================================
+
+# ==========================================
+# 📊 CALLBACK ANALYTICS AVEC GESTION D'ERREURS
 # ==========================================
 
 @app.callback(
@@ -6217,221 +6222,370 @@ def update_analytics_charts(supplier_value, category_value, need_value, master_j
     """
     Met à jour tous les graphiques analytics selon les filtres
     """
-    import time
-    start = time.time()
+    print(f"\n{'=' * 60}")
+    print(f"🔄 UPDATE ANALYTICS")
+    print(f"{'=' * 60}")
+    print(f"Filtres: Supplier={supplier_value}, Category={category_value}, Need={need_value}")
 
-    print(f"\n🔄 Update Analytics - Filtres: {supplier_value}, {category_value}, {need_value}")
+    try:
+        # ✅ Charger données
+        if master_json:
+            df = pd.DataFrame(json.loads(master_json))
+            print(f"📥 Données chargées depuis master-data : {len(df)} lignes")
+        else:
+            df = get_df_cached()
+            print(f"📥 Données chargées depuis cache : {len(df)} lignes")
 
-    # Charger données
-    if master_json:
-        df = pd.DataFrame(json.loads(master_json))
-    else:
-        df = get_df_cached()
+        # ✅ Vérifier colonnes disponibles
+        required_cols = [
+            "product_name", "Supplier", "Product Category",
+            "total_stock", "Average Daily Sales",
+            "Max Coverage Day", "ADJUSTED_LEADTIME",
+            "Ajusted_total_need", "purchase_need",
+            "QAC", "optimal stock"
+        ]
 
-    # Colonnes nécessaires
-    cols = [
-        "product_name", "Supplier", "Product Category",
-        "total_stock", "Average Daily Sales",
-        "Max Coverage Day", "ADJUSTED_LEADTIME",
-        "Ajusted_total_need", "purchase_need",
-        "QAC", "optimal stock"
-    ]
-    df = df[[c for c in cols if c in df.columns]].dropna()
+        available_cols = [c for c in required_cols if c in df.columns]
+        missing_cols = [c for c in required_cols if c not in df.columns]
 
-    initial_count = len(df)
+        print(f"✅ Colonnes disponibles : {len(available_cols)}/{len(required_cols)}")
+        if missing_cols:
+            print(f"⚠️  Colonnes manquantes : {missing_cols}")
 
-    # ✅ APPLIQUER FILTRES
-    if supplier_value and supplier_value != "Tous":
-        df = df[df["Supplier"] == supplier_value]
+        # ✅ Filtrer colonnes et nettoyer
+        df = df[available_cols].copy()
 
-    if category_value and category_value != "Toutes":
-        df = df[df["Product Category"] == category_value]
+        # Nettoyer les NaN
+        initial_len = len(df)
+        df = df.dropna(subset=['product_name', 'Supplier'])
+        print(f"🧹 Nettoyage NaN : {initial_len} → {len(df)} lignes")
 
-    if need_value and need_value != "Tous":
-        df = df[df["Ajusted_total_need"] == need_value]
+        # Remplir les NaN numériques avec 0
+        numeric_cols = ['total_stock', 'Average Daily Sales', 'Max Coverage Day',
+                        'ADJUSTED_LEADTIME', 'purchase_need', 'QAC', 'optimal stock']
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-    filtered_count = len(df)
+        initial_count = len(df)
+        print(f"📊 Dataset initial : {initial_count} produits")
 
-    print(f"   📊 {initial_count} → {filtered_count} produits après filtres")
+        # ✅ APPLIQUER FILTRES
+        if supplier_value and supplier_value != "Tous":
+            df = df[df["Supplier"] == supplier_value]
+            print(f"   🏭 Filtre fournisseur '{supplier_value}' : {len(df)} produits")
 
-    # ✅ INDICATEUR DE FILTRE
-    filter_text = []
-    if supplier_value != "Tous":
-        filter_text.append(f"🏭 {supplier_value}")
-    if category_value != "Toutes":
-        filter_text.append(f"🏷️ {category_value}")
-    if need_value != "Tous":
-        filter_text.append(f"📦 {need_value}")
+        if category_value and category_value != "Toutes":
+            df = df[df["Product Category"] == category_value]
+            print(f"   🏷️ Filtre catégorie '{category_value}' : {len(df)} produits")
 
-    if filter_text:
-        indicator = html.Div([
-            html.Span("🔍 Filtres actifs : ", style={"fontWeight": "700"}),
-            html.Span(" • ".join(filter_text)),
-            html.Span(f" ({filtered_count} produits)", style={"marginLeft": "10px", "opacity": "0.8"})
-        ])
-    else:
-        indicator = html.Div([
-            html.Span("✨ Tous les produits affichés", style={"fontWeight": "700"}),
-            html.Span(f" ({filtered_count} produits)", style={"marginLeft": "10px", "opacity": "0.8"})
-        ])
+        if need_value and need_value != "Tous":
+            df = df[df["Ajusted_total_need"] == need_value]
+            print(f"   📦 Filtre besoin '{need_value}' : {len(df)} produits")
 
-    # ========================================
-    # 📊 GRAPHIQUE 1 : SCATTER LEAD TIME VS COVERAGE
-    # ========================================
-    fig_scatter = px.scatter(
-        df,
-        x="ADJUSTED_LEADTIME",
-        y="Max Coverage Day",
-        color="Ajusted_total_need",
-        hover_data=["product_name", "Supplier", "purchase_need", "QAC"],
-        labels={
-            "ADJUSTED_LEADTIME": "Lead Time Ajusté (jours)",
-            "Max Coverage Day": "Couverture Stock (jours)"
-        },
-        color_discrete_map={
-            "ORDER NOW": "#ef4444",
-            "ORDER NOT URGENT": "#f59e0b",
-            "NO NEED": "#10b981"
-        }
-    )
+        filtered_count = len(df)
+        print(f"✅ Dataset filtré : {filtered_count} produits")
 
-    fig_scatter.update_layout(
-        plot_bgcolor="#0b1220",
-        paper_bgcolor="#0b1220",
-        font=dict(color="#e5e7eb"),
-        showlegend=True,
-        legend=dict(
-            bgcolor="rgba(15, 22, 37, 0.8)",
-            bordercolor="#2d3748",
-            borderwidth=1
+        # ✅ VÉRIFICATION : Dataset vide ?
+        if filtered_count == 0:
+            print("⚠️  AUCUNE DONNÉE après filtrage !")
+
+            # Créer des graphiques vides avec message
+            empty_fig = go.Figure()
+            empty_fig.add_annotation(
+                text="Aucune donnée disponible avec ces filtres",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False,
+                font=dict(size=16, color="#94a3b8")
+            )
+            empty_fig.update_layout(
+                plot_bgcolor="#0b1220",
+                paper_bgcolor="#0b1220",
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False)
+            )
+
+            indicator = html.Div([
+                html.Span("⚠️ Aucune donnée avec ces filtres", style={
+                    "fontWeight": "700",
+                    "color": "#ef4444"
+                })
+            ])
+
+            return (empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, indicator)
+
+        # ✅ INDICATEUR DE FILTRE
+        filter_text = []
+        if supplier_value != "Tous":
+            filter_text.append(f"🏭 {supplier_value}")
+        if category_value != "Toutes":
+            filter_text.append(f"🏷️ {category_value}")
+        if need_value != "Tous":
+            filter_text.append(f"📦 {need_value}")
+
+        if filter_text:
+            indicator = html.Div([
+                html.Span("🔍 Filtres actifs : ", style={"fontWeight": "700"}),
+                html.Span(" • ".join(filter_text)),
+                html.Span(f" ({filtered_count} produits)", style={
+                    "marginLeft": "10px",
+                    "opacity": "0.8"
+                })
+            ])
+        else:
+            indicator = html.Div([
+                html.Span("✨ Tous les produits", style={"fontWeight": "700"}),
+                html.Span(f" ({filtered_count} produits)", style={
+                    "marginLeft": "10px",
+                    "opacity": "0.8"
+                })
+            ])
+
+        # ========================================
+        # 📊 GRAPHIQUE 1 : SCATTER LEAD TIME VS COVERAGE
+        # ========================================
+        print("📊 Création scatter plot...")
+
+        if all(col in df.columns for col in ["ADJUSTED_LEADTIME", "Max Coverage Day"]):
+            fig_scatter = px.scatter(
+                df,
+                x="ADJUSTED_LEADTIME",
+                y="Max Coverage Day",
+                color="Ajusted_total_need" if "Ajusted_total_need" in df.columns else None,
+                hover_data=["product_name", "Supplier", "purchase_need", "QAC"],
+                labels={
+                    "ADJUSTED_LEADTIME": "Lead Time Ajusté (jours)",
+                    "Max Coverage Day": "Couverture Stock (jours)"
+                },
+                color_discrete_map={
+                    "ORDER NOW": "#ef4444",
+                    "ORDER NOT URGENT": "#f59e0b",
+                    "NO NEED": "#10b981"
+                }
+            )
+
+            fig_scatter.update_layout(
+                plot_bgcolor="#0b1220",
+                paper_bgcolor="#0b1220",
+                font=dict(color="#e5e7eb", size=12),
+                showlegend=True,
+                legend=dict(
+                    bgcolor="rgba(15, 22, 37, 0.8)",
+                    bordercolor="#2d3748",
+                    borderwidth=1
+                ),
+                height=400
+            )
+            print("   ✅ Scatter plot créé")
+        else:
+            fig_scatter = go.Figure()
+            fig_scatter.add_annotation(
+                text="Colonnes manquantes pour ce graphique",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False
+            )
+            print("   ⚠️ Scatter plot - colonnes manquantes")
+
+        # ========================================
+        # 📊 GRAPHIQUE 2 : HISTOGRAMME STOCK
+        # ========================================
+        print("📊 Création histogramme...")
+
+        if "total_stock" in df.columns:
+            fig_hist_stock = px.histogram(
+                df,
+                x="total_stock",
+                nbins=30,
+                labels={"total_stock": "Stock Total"},
+                color_discrete_sequence=["#22d3ee"]
+            )
+
+            fig_hist_stock.update_layout(
+                plot_bgcolor="#0b1220",
+                paper_bgcolor="#0b1220",
+                font=dict(color="#e5e7eb", size=12),
+                showlegend=False,
+                height=400
+            )
+            print("   ✅ Histogramme créé")
+        else:
+            fig_hist_stock = go.Figure()
+            print("   ⚠️ Histogramme - colonne manquante")
+
+        # ========================================
+        # 📊 GRAPHIQUE 3 : BOXPLOT PAR CATÉGORIE
+        # ========================================
+        print("📊 Création boxplot...")
+
+        if all(col in df.columns for col in ["Product Category", "Average Daily Sales"]):
+            fig_box_category = px.box(
+                df,
+                x="Product Category",
+                y="Average Daily Sales",
+                color="Product Category",
+                labels={"Average Daily Sales": "Ventes Moyennes (ADS)"}
+            )
+
+            fig_box_category.update_layout(
+                plot_bgcolor="#0b1220",
+                paper_bgcolor="#0b1220",
+                font=dict(color="#e5e7eb", size=12),
+                showlegend=False,
+                height=400
+            )
+            print("   ✅ Boxplot créé")
+        else:
+            fig_box_category = go.Figure()
+            print("   ⚠️ Boxplot - colonnes manquantes")
+
+        # ========================================
+        # 📊 GRAPHIQUE 4 : TOP 10 FOURNISSEURS
+        # ========================================
+        print("📊 Création bar chart fournisseurs...")
+
+        if all(col in df.columns for col in ["Supplier", "purchase_need"]):
+            purchase_by_supplier = (
+                df.groupby("Supplier")["purchase_need"]
+                .sum()
+                .reset_index()
+                .sort_values("purchase_need", ascending=False)
+                .head(10)
+            )
+
+            print(f"   📊 Top 10 fournisseurs : {len(purchase_by_supplier)} lignes")
+
+            if len(purchase_by_supplier) > 0:
+                fig_purchase_supplier = px.bar(
+                    purchase_by_supplier,
+                    x="Supplier",
+                    y="purchase_need",
+                    labels={"purchase_need": "Besoin d'Achat Total"},
+                    color="purchase_need",
+                    color_continuous_scale="Reds"
+                )
+
+                fig_purchase_supplier.update_layout(
+                    plot_bgcolor="#0b1220",
+                    paper_bgcolor="#0b1220",
+                    font=dict(color="#e5e7eb", size=12),
+                    xaxis=dict(tickangle=-45),
+                    showlegend=False,
+                    height=400
+                )
+                print("   ✅ Bar chart fournisseurs créé")
+            else:
+                fig_purchase_supplier = go.Figure()
+                print("   ⚠️ Bar chart fournisseurs - pas de données")
+        else:
+            fig_purchase_supplier = go.Figure()
+            print("   ⚠️ Bar chart fournisseurs - colonnes manquantes")
+
+        # ========================================
+        # 📊 GRAPHIQUE 5 : QAC VS OPTIMAL
+        # ========================================
+        print("📊 Création scatter QAC vs Optimal...")
+
+        if all(col in df.columns for col in ["QAC", "optimal stock"]):
+            fig_qac_optimal = px.scatter(
+                df,
+                x="QAC",
+                y="optimal stock",
+                color="Ajusted_total_need" if "Ajusted_total_need" in df.columns else None,
+                hover_data=["product_name", "Supplier"],
+                labels={"QAC": "Quantité Ajustée Commandée"},
+                color_discrete_map={
+                    "ORDER NOW": "#ef4444",
+                    "ORDER NOT URGENT": "#f59e0b",
+                    "NO NEED": "#10b981"
+                }
+            )
+
+            fig_qac_optimal.update_layout(
+                plot_bgcolor="#0b1220",
+                paper_bgcolor="#0b1220",
+                font=dict(color="#e5e7eb", size=12),
+                showlegend=True,
+                height=400
+            )
+            print("   ✅ Scatter QAC créé")
+        else:
+            fig_qac_optimal = go.Figure()
+            print("   ⚠️ Scatter QAC - colonnes manquantes")
+
+        # ========================================
+        # 📊 GRAPHIQUE 6 : PIE CHART BESOIN D'ACHAT
+        # ========================================
+        print("📊 Création pie chart...")
+
+        if "Ajusted_total_need" in df.columns:
+            need_distribution = df["Ajusted_total_need"].value_counts().reset_index()
+            need_distribution.columns = ["Besoin", "Nombre"]
+
+            print(f"   📊 Distribution besoins : {len(need_distribution)} catégories")
+
+            fig_pie_need = px.pie(
+                need_distribution,
+                values="Nombre",
+                names="Besoin",
+                color="Besoin",
+                color_discrete_map={
+                    "ORDER NOW": "#ef4444",
+                    "ORDER NOT URGENT": "#f59e0b",
+                    "NO NEED": "#10b981"
+                }
+            )
+
+            fig_pie_need.update_layout(
+                plot_bgcolor="#0b1220",
+                paper_bgcolor="#0b1220",
+                font=dict(color="#e5e7eb", size=12),
+                height=400
+            )
+            print("   ✅ Pie chart créé")
+        else:
+            fig_pie_need = go.Figure()
+            print("   ⚠️ Pie chart - colonne manquante")
+
+        print(f"{'=' * 60}")
+        print(f"✅ ANALYTICS MIS À JOUR")
+        print(f"{'=' * 60}\n")
+
+        return (
+            fig_scatter,
+            fig_hist_stock,
+            fig_box_category,
+            fig_purchase_supplier,
+            fig_qac_optimal,
+            fig_pie_need,
+            indicator
         )
-    )
 
-    # ========================================
-    # 📊 GRAPHIQUE 2 : HISTOGRAMME STOCK
-    # ========================================
-    fig_hist_stock = px.histogram(
-        df,
-        x="total_stock",
-        nbins=30,
-        labels={"total_stock": "Stock Total"},
-        color_discrete_sequence=["#22d3ee"]
-    )
+    except Exception as e:
+        print(f"\n❌ ERREUR dans update_analytics_charts : {e}")
+        import traceback
+        traceback.print_exc()
 
-    fig_hist_stock.update_layout(
-        plot_bgcolor="#0b1220",
-        paper_bgcolor="#0b1220",
-        font=dict(color="#e5e7eb"),
-        showlegend=False
-    )
+        # Retourner graphiques vides en cas d'erreur
+        empty_fig = go.Figure()
+        empty_fig.add_annotation(
+            text=f"Erreur : {str(e)[:50]}",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14, color="#ef4444")
+        )
+        empty_fig.update_layout(
+            plot_bgcolor="#0b1220",
+            paper_bgcolor="#0b1220"
+        )
 
-    # ========================================
-    # 📊 GRAPHIQUE 3 : BOXPLOT PAR CATÉGORIE
-    # ========================================
-    fig_box_category = px.box(
-        df,
-        x="Product Category",
-        y="Average Daily Sales",
-        color="Product Category",
-        labels={"Average Daily Sales": "Ventes Moyennes (ADS)"}
-    )
+        error_indicator = html.Div([
+            html.Span(f"❌ Erreur : {str(e)[:100]}", style={
+                "fontWeight": "700",
+                "color": "#ef4444"
+            })
+        ])
 
-    fig_box_category.update_layout(
-        plot_bgcolor="#0b1220",
-        paper_bgcolor="#0b1220",
-        font=dict(color="#e5e7eb"),
-        showlegend=False
-    )
-
-    # ========================================
-    # 📊 GRAPHIQUE 4 : TOP 10 FOURNISSEURS
-    # ========================================
-    purchase_by_supplier = (
-        df.groupby("Supplier")["purchase_need"]
-        .sum()
-        .reset_index()
-        .sort_values("purchase_need", ascending=False)
-        .head(10)
-    )
-
-    fig_purchase_supplier = px.bar(
-        purchase_by_supplier,
-        x="Supplier",
-        y="purchase_need",
-        labels={"purchase_need": "Besoin d'Achat Total"},
-        color="purchase_need",
-        color_continuous_scale="Reds"
-    )
-
-    fig_purchase_supplier.update_layout(
-        plot_bgcolor="#0b1220",
-        paper_bgcolor="#0b1220",
-        font=dict(color="#e5e7eb"),
-        xaxis=dict(tickangle=-45),
-        showlegend=False
-    )
-
-    # ========================================
-    # 📊 GRAPHIQUE 5 : QAC VS OPTIMAL
-    # ========================================
-    fig_qac_optimal = px.scatter(
-        df,
-        x="QAC",
-        y="optimal stock",
-        color="Ajusted_total_need",
-        hover_data=["product_name", "Supplier"],
-        labels={"QAC": "Quantité Ajustée Commandée"},
-        color_discrete_map={
-            "ORDER NOW": "#ef4444",
-            "ORDER NOT URGENT": "#f59e0b",
-            "NO NEED": "#10b981"
-        }
-    )
-
-    fig_qac_optimal.update_layout(
-        plot_bgcolor="#0b1220",
-        paper_bgcolor="#0b1220",
-        font=dict(color="#e5e7eb"),
-        showlegend=True
-    )
-
-    # ========================================
-    # 📊 GRAPHIQUE 6 : PIE CHART BESOIN D'ACHAT
-    # ========================================
-    need_distribution = df["Ajusted_total_need"].value_counts().reset_index()
-    need_distribution.columns = ["Besoin", "Nombre"]
-
-    fig_pie_need = px.pie(
-        need_distribution,
-        values="Nombre",
-        names="Besoin",
-        color="Besoin",
-        color_discrete_map={
-            "ORDER NOW": "#ef4444",
-            "ORDER NOT URGENT": "#f59e0b",
-            "NO NEED": "#10b981"
-        }
-    )
-
-    fig_pie_need.update_layout(
-        plot_bgcolor="#0b1220",
-        paper_bgcolor="#0b1220",
-        font=dict(color="#e5e7eb")
-    )
-
-    elapsed = time.time() - start
-    print(f"   ✅ Analytics mis à jour en {elapsed:.2f}s\n")
-
-    return (
-        fig_scatter,
-        fig_hist_stock,
-        fig_box_category,
-        fig_purchase_supplier,
-        fig_qac_optimal,
-        fig_pie_need,
-        indicator
-    )
-
+        return (empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, error_indicator)
 
 def page_predictive(master_df: pd.DataFrame = None):
     """Page Prédictions avec filtres dynamiques"""
@@ -7172,7 +7326,7 @@ def update_predictive_table(supplier_value, category_value):
         df = df[df["Product Category"] == category_value]
 
     return df.to_dict("records")
-'''
+
 
 def page_about():
     return html.Div(className="content", children=[

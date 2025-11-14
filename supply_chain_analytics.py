@@ -3056,6 +3056,126 @@ def train_optimal_order_quantity_model(df: pd.DataFrame) -> tuple:
 app.index_string = """
 <!DOCTYPE html>
 <html>
+    <script>
+    // ========================================
+    // 🎨 COLORIER LES LIGNES SELON BESOIN D'ACHAT
+    // ========================================
+    function colorizeTableRows() {
+        const table = document.querySelector('.dash-table-container table');
+        if (!table) return;
+        
+        const rows = table.querySelectorAll('tbody tr');
+        
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            
+            // Trouver la cellule Ajusted_total_need
+            cells.forEach((cell, index) => {
+                const text = cell.textContent.trim();
+                
+                if (text === 'ORDER NOW') {
+                    // 🔴 Ligne rouge
+                    row.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+                    cells.forEach(c => {
+                        c.style.color = '#fecaca';
+                        c.style.fontWeight = '600';
+                    });
+                    
+                    // Badge rouge pour la cellule
+                    cell.style.backgroundColor = 'rgba(239, 68, 68, 0.4)';
+                    cell.style.color = '#ffffff';
+                    cell.style.fontWeight = '800';
+                    cell.style.border = '2px solid #ef4444';
+                    cell.style.borderRadius = '6px';
+                    cell.style.textTransform = 'uppercase';
+                    
+                    // Bordure gauche sur product_name
+                    if (cells[1]) {
+                        cells[1].style.borderLeft = '4px solid #ef4444';
+                        cells[1].style.backgroundColor = 'rgba(239, 68, 68, 0.25)';
+                        cells[1].style.color = '#fee2e2';
+                        cells[1].style.fontWeight = '700';
+                    }
+                    
+                    // Highlight QAC
+                    cells.forEach((c, i) => {
+                        const header = table.querySelectorAll('thead th')[i];
+                        if (header && header.textContent.includes('QAC')) {
+                            c.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+                            c.style.color = '#ffffff';
+                            c.style.fontWeight = '800';
+                            c.style.fontSize = '15px';
+                        }
+                    });
+                }
+                
+                else if (text === 'ORDER NOT URGENT') {
+                    // 🟠 Ligne orange
+                    row.style.backgroundColor = 'rgba(245, 158, 11, 0.12)';
+                    cells.forEach(c => {
+                        c.style.color = '#fde68a';
+                        c.style.fontWeight = '500';
+                    });
+                    
+                    // Badge orange
+                    cell.style.backgroundColor = 'rgba(245, 158, 11, 0.35)';
+                    cell.style.color = '#ffffff';
+                    cell.style.fontWeight = '700';
+                    cell.style.border = '2px solid #f59e0b';
+                    cell.style.borderRadius = '6px';
+                    cell.style.textTransform = 'uppercase';
+                    
+                    // Bordure gauche
+                    if (cells[1]) {
+                        cells[1].style.borderLeft = '4px solid #f59e0b';
+                        cells[1].style.backgroundColor = 'rgba(245, 158, 11, 0.2)';
+                        cells[1].style.color = '#fef3c7';
+                        cells[1].style.fontWeight = '600';
+                    }
+                }
+                
+                else if (text === 'NO NEED') {
+                    // 🟢 Ligne verte
+                    row.style.backgroundColor = 'rgba(16, 185, 129, 0.08)';
+                    cells.forEach(c => {
+                        c.style.color = '#d1fae5';
+                    });
+                    
+                    // Badge vert
+                    cell.style.backgroundColor = 'rgba(16, 185, 129, 0.3)';
+                    cell.style.color = '#ffffff';
+                    cell.style.fontWeight = '700';
+                    cell.style.border = '2px solid #10b981';
+                    cell.style.borderRadius = '6px';
+                    cell.style.textTransform = 'uppercase';
+                    
+                    // Bordure gauche
+                    if (cells[1]) {
+                        cells[1].style.borderLeft = '4px solid #10b981';
+                    }
+                }
+            });
+        });
+    }
+    
+    // Exécuter au chargement et après chaque mise à jour
+    window.addEventListener('load', () => {
+        colorizeTableRows();
+        
+        // Observer les changements du DOM
+        const observer = new MutationObserver(() => {
+            setTimeout(colorizeTableRows, 100);
+        });
+        
+        const tableContainer = document.querySelector('.dash-table-container');
+        if (tableContainer) {
+            observer.observe(tableContainer, {
+                childList: true,
+                subtree: true
+            });
+        }
+    });
+    </script>
     <head>
         {%metas%}
         <title>{%title%}</title>

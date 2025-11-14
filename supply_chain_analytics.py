@@ -73,7 +73,9 @@ except Exception as _e:
 
 # from openai import OpenAI
 import requests
-
+# ✅ AJOUTER POUR WINDOWS
+import threading
+import time
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
 # Cache setup
@@ -97,6 +99,55 @@ if RENDER_ENV:
     print("="*60 + "\n")
 
 
+# ==========================================
+# ✅ TIMEOUT COMPATIBLE WINDOWS
+# ==========================================
+class TimeoutError(Exception):
+    """Exception levée en cas de timeout"""
+    pass
+
+
+def run_with_timeout(func, args=(), kwargs=None, timeout_seconds=30):
+    """
+    Exécute une fonction avec timeout (compatible Windows)
+
+    Args:
+        func: Fonction à exécuter
+        args: Arguments positionnels
+        kwargs: Arguments nommés
+        timeout_seconds: Timeout en secondes
+
+    Returns:
+        Résultat de la fonction
+
+    Raises:
+        TimeoutError: Si timeout dépassé
+    """
+    if kwargs is None:
+        kwargs = {}
+
+    result = [None]
+    exception = [None]
+
+    def target():
+        try:
+            result[0] = func(*args, **kwargs)
+        except Exception as e:
+            exception[0] = e
+
+    thread = threading.Thread(target=target)
+    thread.daemon = True
+    thread.start()
+    thread.join(timeout_seconds)
+
+    if thread.is_alive():
+        # Thread encore actif = timeout
+        raise TimeoutError(f"Opération timeout après {timeout_seconds} secondes")
+
+    if exception[0]:
+        raise exception[0]
+
+    return result[0]
 # ------------- OpenAI client (clé hardcodée à ta demande) ----------------
 # OPENAI_API_KEY_HARDCODED = "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"
 # Ligne ~45 dans votre code
@@ -2364,10 +2415,111 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                     else:
                         print(f"   ✗ {col} MANQUANTE")
 
+        # ✅ AJOUTER JUSTE AVANT LE RETURN FINAL
+        print(f"\n{'=' * 70}")
+        print(f"🎉 LOAD_SUPPLY_DATA TERMINÉ")
+        print(f"{'=' * 70}")
+        print(f"   Période : {period_days}")
+        print(f"   Produits : {len(final_stock_sales_df)}")
+        print(f"   Colonnes : {len(final_stock_sales_df.columns)}")
+
+        if 'Average Daily Sales' in final_stock_sales_df.columns:
+            print(f"   ADS min : {final_stock_sales_df['Average Daily Sales'].min():.2f}")
+            print(f"   ADS max : {final_stock_sales_df['Average Daily Sales'].max():.2f}")
+            print(f"   ADS moy : {final_stock_sales_df['Average Daily Sales'].mean():.2f}")
+
+        print(f"{'=' * 70}\n")
+
         return final_stock_sales_df
 
 
+# ==========================================
+# ⚡ PRÉ-CHARGEMENT DES 3 PÉRIODES
+# ==========================================
+print("\n" + "=" * 80)
+print("🚀 DÉMARRAGE - PRÉ-CHARGEMENT DES DONNÉES (peut prendre 2-3 minutes)")
+print("=" * 80)
+print("⏳ Patience, ce chargement n'aura lieu qu'UNE SEULE FOIS...")
+print()
+
+import time
+
+start_total = time.time()
+
+# ✅ Chargement 7 jours (défaut)
+print("📥 [1/3] Chargement période 7 jours...")
+start = time.time()
+try:
+    DATA_7D = load_supply_data(period_days="7d")
+    elapsed = time.time() - start
+    print(f"    ✅ 7j : {len(DATA_7D)} produits en {elapsed:.1f}s")
+    print(
+        f"       ADS min/max/moy : {DATA_7D['Average Daily Sales'].min():.2f} / {DATA_7D['Average Daily Sales'].max():.2f} / {DATA_7D['Average Daily Sales'].mean():.2f}")
+except Exception as e:
+    print(f"    ❌ Erreur 7j : {e}")
+    DATA_7D = pd.DataFrame()
+
+print()
+
+# ✅ Chargement 3 jours
+print("📥 [2/3] Chargement période 3 jours...")
+start = time.time()
+try:
+    DATA_3D = load_supply_data(period_days="3d")
+    elapsed = time.time() - start
+    print(f"    ✅ 3j : {len(DATA_3D)} produits en {elapsed:.1f}s")
+    print(
+        f"       ADS min/max/moy : {DATA_3D['Average Daily Sales'].min():.2f} / {DATA_3D['Average Daily Sales'].max():.2f} / {DATA_3D['Average Daily Sales'].mean():.2f}")
+except Exception as e:
+    print(f"    ❌ Erreur 3j : {e}")
+    DATA_3D = pd.DataFrame()
+
+print()
+
+# ✅ Chargement 30 jours
+print("📥 [3/3] Chargement période 30 jours...")
+start = time.time()
+try:
+    DATA_30D = load_supply_data(period_days="30d")
+    elapsed = time.time() - start
+    print(f"    ✅ 30j : {len(DATA_30D)} produits en {elapsed:.1f}s")
+    print(
+        f"       ADS min/max/moy : {DATA_30D['Average Daily Sales'].min():.2f} / {DATA_30D['Average Daily Sales'].max():.2f} / {DATA_30D['Average Daily Sales'].mean():.2f}")
+except Exception as e:
+    print(f"    ❌ Erreur 30j : {e}")
+    DATA_30D = pd.DataFrame()
+
+elapsed_total = time.time() - start_total
+print()
+print("=" * 80)
+print(f"🎉 PRÉ-CHARGEMENT TERMINÉ en {elapsed_total:.1f}s")
+print("=" * 80)
+print("✨ Le changement de période sera maintenant INSTANTANÉ (< 1 seconde) !")
+print("=" * 80)
+print()
+
+
+# ==========================================
+# ⚡ FONCTION D'ACCÈS ULTRA-RAPIDE
+# ==========================================
+def get_preloaded_data(period_days="7d"):
+    """
+    Retourne données pré-chargées (INSTANTANÉ - < 0.1s)
+
+    Args:
+        period_days: "3d", "7d" ou "30d"
+
+    Returns:
+        DataFrame avec toutes les colonnes déjà calculées
+    """
+    if period_days == "3d":
+        return DATA_3D.copy()
+    elif period_days == "30d":
+        return DATA_30D.copy()
+    else:
+        return DATA_7D.copy()
 # ==================== CALLBACK ROTATION ADS ====================
+'''
 @app.callback(
     [Output("master-data", "data", allow_duplicate=True),
      Output("filtered-data", "data", allow_duplicate=True),
@@ -2483,9 +2635,9 @@ def update_rotation_period(period_value):
 
         # ✅ Créer indicateur visuel
         period_labels = {
-            "3d": " 3 jours ",
-            "7d": " 7 jours ",
-            "30d": " 30 jours "
+            "3d": "⚡ 3 jours - Ultra court terme",
+            "7d": "📅 7 jours - Court terme (défaut)",
+            "30d": "📊 30 jours - Moyen terme"
         }
 
         stats_text = (
@@ -2586,7 +2738,7 @@ def update_rotation_period(period_value):
 
         # ✅ RETOUR EN CAS D'ERREUR (4 valeurs)
         return no_update, no_update, no_update, error_indicator
-
+'''
 # Utility: add Actions columns
 def add_action_cols(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
@@ -3061,7 +3213,7 @@ def make_sidebar():
             html.Div("Supply Chain Command Center", className="muted")
         ]),
         html.Hr(),
-        html.Div(className="banner-risk", id="risk-banner", children="Chargement..."),
+        #html.Div(className="banner-risk", id="risk-banner", children="Chargement..."),
         html.Div(className="section-title", children="Recherche"),
         dbc.InputGroup(className="search-input", children=[
             dbc.Input(id="search-input", placeholder="Rechercher un produit...", type="text", debounce=True)
@@ -3711,52 +3863,28 @@ def page_overview(master_df: pd.DataFrame = None):
 
     # Dans page_overview(), AVANT le tableau
 
-    # ✅ Dropdown rotation
+    # ✅ DROPDOWN SIMPLIFIÉ (sans indicateur)
     rotation_dropdown = html.Div([
-        html.Div([
-            html.Label("rotation ADS :",
-                       style={
-                           "fontWeight": "700",
-                           "marginRight": "12px",
-                           "color": "#f0f4f8",
-                           "fontSize": "14px"
-                       }),
-            dcc.Dropdown(
-                id="rotation-period",
-                options=[
-                    {"label": "3 jours ", "value": "3d"},
-                    {"label": " 7 jours ", "value": "7d"},
-                    {"label": " 30 jours ", "value": "30d"},
-                ],
-                value="7d",
-                clearable=False,
-                searchable=False,
-                style={"width": "400px"},
-                className="dark-dropdown"
-            ),
-
-            html.Div(id="rotation-indicator", style={
-                "marginLeft": "15px",
-                "padding": "6px 12px",
-                "background": "rgba(59, 130, 246, 0.15)",
-                "border": "1px solid #3b82f6",
-                "borderRadius": "8px",
-                "fontSize": "12px",
-                "color": "#93c5fd",
-                "fontWeight": "600"
-            })
-        ], style={"display": "flex", "alignItems": "center", "gap": "10px"}),
-
-        #html.Small([
-         #   "💡 ADS calculée depuis l'historique ",
-          #  html.Code("sales_pikine", style={"background": "#1a2332", "padding": "2px 6px", "borderRadius": "4px"}),
-         #   ". Les périodes courtes détectent les tendances récentes."
-        #], style={
-         #   "display": "block",
-         #   "marginTop": "10px",
-          #  "color": "#94a3b8",
-          #  "fontSize": "12px"
-       # })
+        html.Label(" Période de rotation ADS :", style={
+            "fontWeight": "700",
+            "marginRight": "12px",
+            "color": "#f0f4f8",
+            "fontSize": "14px"
+        }),
+        dcc.Dropdown(
+            id="rotation-period",
+            options=[
+                {"label": " 3 jours ", "value": "3d"},
+                {"label": " 7 jours ", "value": "7d"},
+                {"label": " 30 jours ", "value": "30d"},
+            ],
+            value="7d",
+            clearable=False,
+            searchable=False,
+            style={"width": "400px"},
+            className="dark-dropdown"
+        ),
+        # ❌ SUPPRIMER rotation-indicator
     ], style={
         "padding": "16px 18px",
         "background": "linear-gradient(135deg, #1a2332 0%, #141b2d 100%)",
@@ -3765,7 +3893,6 @@ def page_overview(master_df: pd.DataFrame = None):
         "marginBottom": "20px",
         "boxShadow": "0 4px 12px rgba(0,0,0,0.2)"
     })
-
 
     # Ajouter la nouvelle colonne 'QAC edited' dans available_cols
     available_cols = available_cols #+ ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
@@ -4021,7 +4148,7 @@ def page_overview(master_df: pd.DataFrame = None):
             ])),
             html.Br(),
             rotation_dropdown,
-            html.Br(),
+            #html.Br(),
             table
             #edit_modal,
         ]),
@@ -4032,11 +4159,9 @@ def page_overview(master_df: pd.DataFrame = None):
     ])
 
 
-# Callback 2 : Filtrage (avec allow_duplicate)
 @app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
-     Output("risk-banner", "children", allow_duplicate=True),
      Output("main-table", "selected_rows", allow_duplicate=True)],
     [Input("search-input", "value"),
      Input("filter-supplier", "value"),
@@ -4044,15 +4169,190 @@ def page_overview(master_df: pd.DataFrame = None):
      Input("filter-need", "value"),
      Input("toggle-options", "value"),
      Input("master-data", "data")],
-    State("master-data", "data"),
+    prevent_initial_call=False  # ✅ CHANGÉ : False pour s'exécuter au démarrage
+)
+def apply_filters(search, sup, cat, need, options, master_json):
+    """
+    ⚡ CALLBACK UNIFIÉ - Initialisation + Filtrage
+    S'exécute au démarrage ET quand les filtres changent
+    """
+    start_time = time.time()
+
+    print(f"\n{'=' * 60}")
+    print(f"⚡ UPDATE TABLE")
+    print(f"{'=' * 60}")
+
+    # ✅ Charger données
+    if not master_json:
+        print("📥 Chargement depuis cache...")
+        base = get_df_cached()
+    else:
+        print("📥 Chargement depuis master-data...")
+        base = pd.DataFrame(json.loads(master_json))
+
+    print(f"📊 Base : {len(base)} produits")
+
+    # ✅ Validation
+    base = validate_core_columns(base)
+
+    # ✅ Supprimer colonnes bannies
+    promo_cols = [
+        'promo_status', 'uplift_pct', 'roi_pct',
+        'Average Daily Sales (7d)', 'Average Daily Sales (30d)',
+        'Average Daily Sales (3d)', 'Daily OOS Rate (7d)',
+        'Daily OOS Rate (30d)', 'Stockout Probability',
+        'Credit Adequacy Score'
+    ]
+    base = base.drop(columns=[c for c in promo_cols if c in base.columns], errors='ignore')
+
+    # ✅ APPLIQUER FILTRES (seulement si des filtres sont actifs)
+    fdf = base.copy()
+
+    if search and search.strip():
+        search_lower = search.strip().lower()
+        mask = pd.Series([False] * len(fdf), index=fdf.index)
+        for col in ['product_name', 'Supplier', 'Product Category']:
+            if col in fdf.columns:
+                mask |= fdf[col].astype(str).str.lower().str.contains(search_lower, na=False, regex=False)
+        fdf = fdf[mask].reset_index(drop=True)
+        print(f"   🔎 Recherche : {len(fdf)} produits")
+
+    if sup and len(sup) > 0 and 'Supplier' in fdf.columns:
+        fdf = fdf[fdf['Supplier'].isin(sup)]
+        print(f"   🏭 Fournisseurs : {len(fdf)} produits")
+
+    if cat and len(cat) > 0 and 'Product Category' in fdf.columns:
+        fdf = fdf[fdf['Product Category'].isin(cat)]
+        print(f"   🏷️ Catégories : {len(fdf)} produits")
+
+    if need and len(need) > 0 and 'Ajusted_total_need' in fdf.columns:
+        fdf = fdf[fdf['Ajusted_total_need'].isin(need)]
+        print(f"   📦 Besoins : {len(fdf)} produits")
+
+    if options and len(options) > 0 and 'Stock Status' in fdf.columns:
+        for opt in options:
+            if opt == 'show_out_of_stock':
+                fdf = fdf[fdf['Stock Status'] == 'Out of Stock']
+            elif opt == 'show_predicted_stockout':
+                fdf = fdf[fdf['Stock Status'] == 'Predicted Stockout Soon']
+            elif opt == 'show_order_soon':
+                fdf = fdf[fdf['Stock Status'] == 'Order Soon']
+
+    # ✅ FORMATAGE
+    for col in ['total_stock', 'QAC', 'target_quantity']:
+        if col in fdf.columns:
+            fdf[col] = pd.to_numeric(fdf[col], errors='coerce').fillna(0).astype(int)
+
+    if 'Max Coverage Day' in fdf.columns:
+        fdf['Max Coverage Day'] = pd.to_numeric(fdf['Max Coverage Day'], errors='coerce').fillna(0).round(1)
+
+    if 'Average Daily Sales' in fdf.columns:
+        fdf['Average Daily Sales'] = pd.to_numeric(fdf['Average Daily Sales'], errors='coerce').fillna(0.1).round(2)
+
+    # ✅ Actions
+    fdf = add_action_cols(fdf)
+
+    elapsed_total = time.time() - start_time
+
+    print(f"⚡ UPDATE TERMINÉ en {elapsed_total:.3f}s - {len(fdf)} produits")
+    print(f"{'=' * 60}\n")
+
+    return (
+        fdf.to_json(orient="records"),
+        fdf.to_dict("records"),
+        []
+    )
+
+@app.callback(
+    Output("master-data", "data", allow_duplicate=True),
+    Input("rotation-period", "value"),
+    prevent_initial_call=True
+)
+def update_rotation_simple(period_value):
+    """
+    ⚡ CALLBACK ROTATION INSTANTANÉ
+    Met à jour master-data uniquement
+    → apply_filters se déclenchera automatiquement
+    """
+    start_time = time.time()
+
+    print(f"\n{'=' * 70}")
+    print(f"⚡ ROTATION : {period_value or '7d'}")
+    print(f"{'=' * 70}")
+
+    if not period_value:
+        period_value = "7d"
+
+    try:
+        # ⚡ RÉCUPÉRATION INSTANTANÉE (< 0.1s)
+        df = get_preloaded_data(period_value)
+
+        elapsed_fetch = time.time() - start_time
+        print(f"⚡ {len(df)} produits en {elapsed_fetch:.3f}s")
+
+        # ✅ Validation rapide
+        if "Supplier" not in df.columns:
+            df["Supplier"] = "unknown"
+        else:
+            df["Supplier"] = df["Supplier"].fillna("unknown")
+
+        if "Average Daily Sales" not in df.columns:
+            df["Average Daily Sales"] = 0.1
+        else:
+            df["Average Daily Sales"] = df["Average Daily Sales"].fillna(0.1).clip(lower=0.1)
+
+        if "product_id" in df.columns:
+            df["product_id"] = df["product_id"].fillna(0).astype(int)
+
+        # ✅ Sérialisation
+        master_json = df.to_json(orient="records", date_format='iso')
+
+        elapsed_total = time.time() - start_time
+
+        print(f"📊 ADS {period_value} :")
+        print(
+            f"   Min/Max/Moy : {df['Average Daily Sales'].min():.2f} / {df['Average Daily Sales'].max():.2f} / {df['Average Daily Sales'].mean():.2f}")
+        print(f"⚡ CALLBACK TERMINÉ en {elapsed_total:.3f}s")
+        print(f"{'=' * 70}\n")
+
+        return master_json
+
+    except Exception as e:
+        print(f"❌ ERREUR : {e}\n")
+        import traceback
+        traceback.print_exc()
+        return no_update
+
+'''
+# Callback 2 : Filtrage (avec allow_duplicate)
+@app.callback(
+    [Output("filtered-data", "data", allow_duplicate=True),
+     Output("main-table", "data", allow_duplicate=True),
+     #Output("risk-banner", "children", allow_duplicate=True),
+     Output("main-table", "selected_rows", allow_duplicate=True)],
+    [Input("search-input", "value"),
+     Input("filter-supplier", "value"),
+     Input("filter-category", "value"),
+     Input("filter-need", "value"),
+     Input("toggle-options", "value"),
+     Input("master-data", "data")],  # ✅ 6ème Input
+    # ❌ SUPPRIMER CE State (doublon avec Input ci-dessus)
+    # State("master-data", "data"),
     prevent_initial_call=True
 )
 def apply_filters(search, sup, cat, need, options, master_json):
-    """Applique tous les filtres de manière cumulative SANS corrompre master-data"""
+    """
+    Applique tous les filtres
+    ✅ CORRIGÉ : 6 Inputs = 6 arguments
+    """
 
-    # ✅ FIX 1: TOUJOURS recharger depuis la source fraîche
-    # Ne JAMAIS faire confiance à master_json qui peut être corrompu
-    base = get_df_cached()  # ← Recharge depuis cache Redis (données complètes)
+    # ✅ Utiliser master_json directement (c'est déjà un Input)
+    if not master_json:
+        print("⚠️ master_json vide, rechargement...")
+        base = get_df_cached()
+    else:
+        print("📥 Utilisation master_json...")
+        base = pd.DataFrame(json.loads(master_json))
 
     # Validation colonnes critiques
     base = validate_core_columns(base)
@@ -4062,7 +4362,11 @@ def apply_filters(search, sup, cat, need, options, master_json):
         'promo_status', 'days_remaining', 'uplift_pct', 'roi_pct',
         'promo_recommendation', 'promo_priority', 'net_profit_per_day',
         'discount_pct', 'sales_with_promo', 'sales_without_promo',
-        'additional_sales_per_day', 'revenue_loss_per_day', 'additional_profit_per_day'
+        'additional_sales_per_day', 'revenue_loss_per_day',
+        'additional_profit_per_day',
+        'Average Daily Sales (7d)', 'Average Daily Sales (30d)',
+        'Average Daily Sales (3d)', 'Daily OOS Rate (7d)',
+        'Daily OOS Rate (30d)', 'Stockout Probability'
     ]
     base = base.drop(columns=[c for c in promo_cols_to_remove if c in base.columns], errors='ignore')
 
@@ -4071,10 +4375,10 @@ def apply_filters(search, sup, cat, need, options, master_json):
     print(f"{'=' * 60}")
     print(f"📊 Base de départ: {len(base)} produits")
 
-    # Travailler sur une copie
+    # Copie de travail
     fdf = base.copy()
 
-    # ========== FILTRE 1: RECHERCHE TEXTUELLE ==========
+    # ========== FILTRE 1: RECHERCHE ==========
     if search and search.strip():
         search_lower = search.strip().lower()
         print(f"🔎 Recherche: '{search_lower}'")
@@ -4087,25 +4391,25 @@ def apply_filters(search, sup, cat, need, options, master_json):
                 mask |= fdf[col].astype(str).str.lower().str.contains(search_lower, na=False, regex=False)
 
         fdf = fdf[mask].reset_index(drop=True)
-        print(f"   → Résultat: {len(fdf)} produits")
+        print(f"   → {len(fdf)} produits")
 
     # ========== FILTRE 2: FOURNISSEUR ==========
     if sup and len(sup) > 0 and 'Supplier' in fdf.columns:
-        print(f"🏭 Fournisseurs: {sup}")
+        print(f"🏭 Fournisseurs: {len(sup)} sélectionnés")
         fdf = fdf[fdf['Supplier'].isin(sup)]
-        print(f"   → Résultat: {len(fdf)} produits")
+        print(f"   → {len(fdf)} produits")
 
     # ========== FILTRE 3: CATÉGORIE ==========
     if cat and len(cat) > 0 and 'Product Category' in fdf.columns:
-        print(f"🏷️ Catégories: {cat}")
+        print(f"🏷️ Catégories: {len(cat)} sélectionnées")
         fdf = fdf[fdf['Product Category'].isin(cat)]
-        print(f"   → Résultat: {len(fdf)} produits")
+        print(f"   → {len(fdf)} produits")
 
     # ========== FILTRE 4: BESOIN ==========
     if need and len(need) > 0 and 'Ajusted_total_need' in fdf.columns:
         print(f"📦 Besoins: {need}")
         fdf = fdf[fdf['Ajusted_total_need'].isin(need)]
-        print(f"   → Résultat: {len(fdf)} produits")
+        print(f"   → {len(fdf)} produits")
 
     # ========== FILTRE 5: OPTIONS ==========
     if options and len(options) > 0:
@@ -4113,26 +4417,37 @@ def apply_filters(search, sup, cat, need, options, master_json):
 
         if 'show_out_of_stock' in options and 'Stock Status' in fdf.columns:
             fdf = fdf[fdf['Stock Status'] == 'Out of Stock']
-            print(f"   → Filtre OOS: {len(fdf)} produits")
+            print(f"   → OOS: {len(fdf)} produits")
 
         if 'show_predicted_stockout' in options and 'Stock Status' in fdf.columns:
             fdf = fdf[fdf['Stock Status'] == 'Predicted Stockout Soon']
-            print(f"   → Filtre Predicted: {len(fdf)} produits")
+            print(f"   → Predicted: {len(fdf)} produits")
 
         if 'show_order_soon' in options and 'Stock Status' in fdf.columns:
             fdf = fdf[fdf['Stock Status'] == 'Order Soon']
-            print(f"   → Filtre Order Soon: {len(fdf)} produits")
+            print(f"   → Order Soon: {len(fdf)} produits")
 
-    # ========== NETTOYAGE FINAL ==========
-    # Supprimer colonnes actions si présentes (pour éviter doublons)
+    # ========== FORMATAGE VALEURS ==========
+    for col in ['total_stock', 'QAC', 'target_quantity']:
+        if col in fdf.columns:
+            fdf[col] = pd.to_numeric(fdf[col], errors='coerce').fillna(0).round(0).astype(int)
+
+    if 'Max Coverage Day' in fdf.columns:
+        fdf['Max Coverage Day'] = pd.to_numeric(fdf['Max Coverage Day'], errors='coerce').fillna(0).round(1)
+
+    if 'Average Daily Sales' in fdf.columns:
+        fdf['Average Daily Sales'] = pd.to_numeric(fdf['Average Daily Sales'], errors='coerce').fillna(0.1).round(2)
+
+    # ========== NETTOYAGE ==========
+    # Supprimer colonnes actions si présentes
     for action_col in ["QAC edited", "Delete"]:
         if action_col in fdf.columns:
             fdf = fdf.drop(columns=[action_col])
 
-    # Ajouter colonnes actions proprement
+    # Ajouter colonnes actions
     fdf_actions = add_action_cols(fdf)
 
-    # Sécurité: vérifier qu'aucune colonne promo ne subsiste
+    # Sécurité finale
     final_cols = [c for c in fdf_actions.columns if c not in promo_cols_to_remove]
     fdf_actions = fdf_actions[final_cols]
 
@@ -4148,16 +4463,59 @@ def apply_filters(search, sup, cat, need, options, master_json):
 
     # ========== RÉSULTAT ==========
     print(f"{'=' * 60}")
-    print(f"✅ FILTRAGE TERMINÉ: {len(fdf_actions)} produits affichés")
+    print(f"✅ FILTRAGE TERMINÉ: {len(fdf_actions)} produits")
     print(f"{'=' * 60}\n")
 
     return (
         fdf_actions.to_json(orient="records"),  # filtered-data
         fdf_actions.to_dict("records"),  # main-table data
-        banner,  # risk-banner
-        []  # Reset selected_rows
+       # banner,  # risk-banner
+        []  # selected_rows reset
     )
 
+
+# ==========================================
+# ✅ CALLBACK ROTATION SIMPLE (ajouter celui-ci)
+# ==========================================
+@app.callback(
+    Output("master-data", "data", allow_duplicate=True),
+    Input("rotation-period", "value"),
+    prevent_initial_call=True
+)
+def update_rotation(period_value):
+    """
+    Met à jour master-data quand période change
+    → Déclenche automatiquement apply_filters()
+    """
+    print(f"\n🔄 ROTATION : {period_value}")
+
+    if not period_value:
+        period_value = "7d"
+
+    try:
+        # Invalider cache
+        get_df_cached.cache_clear()
+
+        # Recharger avec nouvelle période
+        df = run_with_timeout(
+            func=load_supply_data,
+            kwargs={'period_days': period_value},
+            timeout_seconds=60
+        )
+
+        print(f"✅ {len(df)} produits chargés")
+        print(f"   ADS moy: {df['Average Daily Sales'].mean():.2f}\n")
+
+        return df.to_json(orient="records")
+
+    except TimeoutError:
+        print("❌ Timeout\n")
+        return no_update
+
+    except Exception as e:
+        print(f"❌ Erreur : {e}\n")
+        return no_update
+'''
 @app.callback(
     Output("master-data", "data", allow_duplicate=True),
     Input("btn-refresh", "n_clicks"),
@@ -5935,7 +6293,7 @@ app.validation_layout = html.Div([
     dcc.Store(id="qac-edits-store"),
 
     # ==================== SIDEBAR COMPONENTS ====================
-    html.Div(id="risk-banner"),
+    #html.Div(id="risk-banner"),
     html.Div(id="action-feedback"),  # ✅ AJOUTER
     html.Div(id="selection-counter"),  # ✅ AJOUTER
     dcc.Input(id="search-input"),
@@ -6212,29 +6570,106 @@ def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 # ==================== CALLBACK 1 : INITIALISATION (PRIORITÉ 1) ====================
 @app.callback(
-    [Output("filtered-data", "data",allow_duplicate=True),
-     Output("main-table", "data",allow_duplicate=True),
-     Output("main-table", "selected_rows", allow_duplicate=True),
-     Output("risk-banner", "children",allow_duplicate=True)],
+    [Output("filtered-data", "data", allow_duplicate=True),
+     Output("main-table", "data", allow_duplicate=True),
+     Output("main-table", "selected_rows", allow_duplicate=True)],
     Input("master-data", "data"),
     prevent_initial_call=False  # ✅ S'exécute AU DÉMARRAGE
 )
 def initialize_table(master_json):
-    """Initialise le tableau au chargement - CALLBACK PRINCIPAL"""
-    df = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
-    df = validate_core_columns(df)
+    """
+    ⚡ Initialise le tableau - SE DÉCLENCHE aussi après rotation
+    Temps d'exécution : < 0.5 seconde
+    """
+    start_time = time.time()
 
-    promo_cols_to_remove = [
-        'promo_status', 'days_remaining', 'uplift_pct', 'roi_pct',
-        'promo_recommendation', 'promo_priority', 'net_profit_per_day',
-        'discount_pct', 'sales_with_promo', 'sales_without_promo'
-    ]
-    df = df.drop(columns=[c for c in promo_cols_to_remove if c in df.columns], errors='ignore')
+    print(f"\n{'=' * 60}")
+    print(f"⚡ INITIALISATION TABLE")
+    print(f"{'=' * 60}")
 
-    print(f"✅ [initialize_table] {len(df)} lignes chargées")
-    banner = " "
-    return df.to_json(orient="records"), df.to_dict("records"), [], banner
+    try:
+        # ✅ Charger données
+        if master_json:
+            print(f"📥 Chargement depuis master-data...")
+            df = pd.DataFrame(json.loads(master_json))
+        else:
+            print(f"📥 Chargement depuis cache...")
+            df = get_df_cached()
 
+        elapsed_load = time.time() - start_time
+        print(f"   ✅ {len(df)} produits en {elapsed_load:.3f}s")
+
+        # ✅ Validation
+        print(f"⚡ Validation...")
+        df = validate_core_columns(df)
+
+        # ✅ Supprimer colonnes promo + ADS temporaires
+        promo_cols_to_remove = [
+            'promo_status', 'days_remaining', 'uplift_pct', 'roi_pct',
+            'promo_recommendation', 'promo_priority', 'net_profit_per_day',
+            'discount_pct', 'sales_with_promo', 'sales_without_promo',
+            'additional_sales_per_day', 'revenue_loss_per_day',
+            'additional_profit_per_day',
+            'Average Daily Sales (7d)', 'Average Daily Sales (30d)',
+            'Average Daily Sales (3d)', 'Daily OOS Rate (7d)',
+            'Daily OOS Rate (30d)', 'Stockout Probability',
+            'Credit Adequacy Score'
+        ]
+        df = df.drop(
+            columns=[c for c in promo_cols_to_remove if c in df.columns],
+            errors='ignore'
+        )
+
+        elapsed_clean = time.time() - start_time - elapsed_load
+        print(f"   ✅ Nettoyage en {elapsed_clean:.3f}s")
+
+        # ✅ Formatage valeurs pour affichage
+        print(f"⚡ Formatage...")
+
+        for col in ['total_stock', 'QAC', 'target_quantity']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+
+        if 'Max Coverage Day' in df.columns:
+            df['Max Coverage Day'] = pd.to_numeric(df['Max Coverage Day'], errors='coerce').fillna(0).round(1)
+
+        if 'Average Daily Sales' in df.columns:
+            df['Average Daily Sales'] = pd.to_numeric(df['Average Daily Sales'], errors='coerce').fillna(0.1).round(2)
+
+        elapsed_format = time.time() - start_time - elapsed_load - elapsed_clean
+        print(f"   ✅ Formatage en {elapsed_format:.3f}s")
+
+        # ✅ Ajouter colonnes actions
+        print(f"⚡ Ajout colonnes actions...")
+        df = add_action_cols(df)
+
+        # ✅ Statistiques
+        if 'Average Daily Sales' in df.columns:
+            print(f"\n📊 STATS ADS :")
+            print(f"   Min     : {df['Average Daily Sales'].min():.2f}")
+            print(f"   Médiane : {df['Average Daily Sales'].median():.2f}")
+            print(f"   Max     : {df['Average Daily Sales'].max():.2f}")
+            print(f"   Moyenne : {df['Average Daily Sales'].mean():.2f}")
+
+        elapsed_total = time.time() - start_time
+
+        print(f"\n⚡ INITIALISATION TERMINÉE en {elapsed_total:.3f}s")
+        print(f"{'=' * 60}\n")
+
+        return (
+            df.to_json(orient="records"),
+            df.to_dict("records"),
+            []
+        )
+
+    except Exception as e:
+        print(f"\n❌ ERREUR INITIALISATION : {e}")
+        import traceback
+        traceback.print_exc()
+        print(f"{'=' * 60}\n")
+
+        # Retourner données vides en cas d'erreur
+        return "[]", [], []
 
 '''@app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
@@ -7163,8 +7598,8 @@ import json
     [Output("master-data", "data", allow_duplicate=True),
      Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
-     Output("main-table", "selected_rows", allow_duplicate=True),
-     Output("risk-banner", "children", allow_duplicate=True)],  # ✅ Décommenté
+     Output("main-table", "selected_rows", allow_duplicate=True)],
+    # Output("risk-banner", "children", allow_duplicate=True)],  # ✅ Décommenté
     Input("main-table", "data"),
     Input("edit-modal-save", "n_clicks"),
     State("edit-product-name", "value"),  # Utilisé

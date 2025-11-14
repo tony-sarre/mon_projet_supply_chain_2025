@@ -3269,7 +3269,7 @@ def make_sidebar():
         html.Br(),
         html.Div([
             html.Span(" "),
-            dbc.Button("📄 Bon de commande WORD", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True), # Le bouton est désactivé par défaut
+            dbc.Button("📄 Bon de commande", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True), # Le bouton est désactivé par défaut
             # ✅ AJOUTER : Modal de chargement
             dbc.Modal(
                 [
@@ -5709,6 +5709,9 @@ app.layout = html.Div([
     dcc.Store(id="qac-edits-store", storage_type='local', data={}),  # ✅ Un seul Store pour QAC
     dcc.Store(id="edit-mode"),
     dcc.Store(id="edit-original-product"),
+# ========== STORES (données partagées entre callbacks) ==========
+    dcc.Store(id='agent-ia-recommendations', data=None),
+    dcc.Store(id='bc-data-store', data=None),
 
     # ========== COMPOSANTS CACHÉS (pour callbacks) ==========
     html.Div(id='edit-product-output', style={"display": "none"}),
@@ -6319,32 +6322,19 @@ app.validation_layout = html.Div([
     html.Div(id="debug-info"),
     #html.Div(id="action-feedback"),
     #html.Div(id="selection-counter"),
-    dbc.Button("✅ Tout sélectionner (vue filtrée)", id="btn-select-all", size="sm", color="secondary", className="me-2"),
-    dbc.Button("🧹 Vider la sélection", id="btn-clear-selection", size="sm", color="secondary", className="me-2"),
-    #dbc.Button("🧾 Générer le bon de commande", id="btn-po-pdf", size="sm", color="primary", disabled=True),
-# Dans votre layout, ajoutez AVANT le bouton "Générer BC" :
-
-html.Div([
-    dbc.Button(
-        "🤖 Lancer Agent IA",
-        id="btn-run-agent-ia",
-        color="success",
-        className="me-2"
-    ),
-    dbc.Button(
-        "📋 Remplir QAC = Target",
-        id="btn-fill-qac-target",
-        color="info",
-        className="me-2"
-    ),
-    dbc.Button(
-        "📄 Générer Bon de Commande",
-        id="btn-po-pdf",
-        color="primary",
-        disabled=True
-    )
-], className="mb-3"),
-
+    #dbc.Button("✅ Tout sélectionner (vue filtrée)", id="btn-select-all", size="sm", color="secondary", className="me-2"),
+    ## Remplacez votre section boutons par celle-ci :
+    html.Div([
+        dbc.Button("🤖 Lancer Agent IA", id="btn-run-agent-ia", color="success", size="sm", className="me-2"),
+        dbc.Button("📋 Remplir QAC = Target", id="btn-fill-qac-target", color="info", size="sm", className="me-2"),
+        dbc.Button("☑️ Tout sélectionner", id="btn-select-all", color="secondary", size="sm", className="me-2"),
+        dbc.Button("✖️ Désélectionner", id="btn-clear-selection", color="secondary", size="sm", className="me-2"),
+        dbc.Button("📄 Bon de commande", id="btn-po-pdf", color="primary", size="sm", disabled=True),
+        html.Div(id="selection-counter", className="d-inline-block ms-3")
+    ], className="mb-3"),
+    # Alertes (pour messages IA)
+    dbc.Alert(id="alert-ia-analysis", is_open=False, dismissable=True),
+    dbc.Alert(id="alert-bc-error", is_open=False, dismissable=True),
 
     # ==================== NAVIGATION ====================
     dbc.NavLink(id="nav-overview"),
@@ -7143,28 +7133,29 @@ def _agent_local(produits):
 
 
 # ===== CALLBACK : AGENT IA =====
+# ===== CALLBACK : AGENT IA (MODIFIÉ) =====
 @app.callback(
     [Output("main-table", "data", allow_duplicate=True),
-     Output("main-table", "selected_rows", allow_duplicate=True)],
+     Output("main-table", "selected_rows", allow_duplicate=True),
+     Output("btn-po-pdf", "disabled", allow_duplicate=True)],  # ✅ Ajout Output
     Input("btn-run-agent-ia", "n_clicks"),
     State("main-table", "data"),
     prevent_initial_call=True
 )
 def run_agent_ia_calcul(n_clicks, table_data):
     """
-    Lance l'Agent IA (Gemini ou local en fallback)
+    Lance l'Agent IA et active le bouton si succès
     """
     if not n_clicks or not table_data:
-        return no_update, no_update
+        return no_update, no_update, no_update
 
-    # Tentative Gemini, fallback automatique sur local si échec
-    USE_GEMINI = True  # Mettez False pour forcer l'algorithme local
-
+    # Calcul QAC
+    USE_GEMINI = True
     qac_par_index = agent_ia_calculer_qac(table_data, use_gemini=USE_GEMINI)
 
     if not qac_par_index:
-        print("⚠️ Aucun produit à commander identifié")
-        return no_update, no_update
+        print("⚠️ Aucun produit à commander")
+        return no_update, no_update, True  # Désactiver bouton
 
     # Mise à jour tableau
     updated_data = table_data.copy()
@@ -7175,12 +7166,19 @@ def run_agent_ia_calcul(n_clicks, table_data):
             updated_data[idx]['QAC edited'] = qac_value
             indices_selection.append(idx)
 
-    print(f"\n✅ RÉSULTAT FINAL :")
-    print(f"   📝 {len(qac_par_index)} QAC calculées")
-    print(f"   ☑️  {len(indices_selection)} lignes présélectionnées\n")
+    print(f"✅ {len(qac_par_index)} QAC calculées, {len(indices_selection)} lignes sélectionnées")
 
-    return updated_data, sorted(indices_selection)
+    # Vérifier si on peut activer le bouton
+    can_enable = all(
+        updated_data[idx].get("product_name") and
+        updated_data[idx].get("Supplier") and
+        safe_float(updated_data[idx].get("QAC edited", 0), 0) > 0
+        for idx in indices_selection
+    )
 
+    button_disabled = not can_enable
+
+    return updated_data, sorted(indices_selection), button_disabled
 # ============================================
 # FONCTION 2 : VALIDATION QAC
 # ============================================
@@ -7525,6 +7523,36 @@ def export_po_excel_validated(n_clicks, selected_rows, table_data):
 
 
 # ===== CALLBACK : AGENT IA - CALCULER QAC =====
+# ===== CALLBACK 1 : TOGGLE BOUTON (VERSION CORRIGÉE) =====
+@app.callback(
+    Output("btn-po-pdf", "disabled"),
+    [Input("main-table", "selected_rows"),
+     Input("main-table", "data")],
+    prevent_initial_call=False  # ✅ IMPORTANT
+)
+def toggle_po_button(selected_rows, data):
+    if not data or not selected_rows or len(selected_rows) == 0:
+        return True
+
+    for idx in selected_rows:
+        if idx < 0 or idx >= len(data):
+            continue
+
+        row = data[idx]
+        if not row:
+            return True
+
+        if not row.get("product_name") or not row.get("Supplier"):
+            return True
+
+        qac = safe_float(row.get("QAC edited", 0), 0)
+        if qac <= 0:
+            return True
+
+    return False
+
+
+# ===== CALLBACK 2 : AGENT IA =====
 @app.callback(
     [Output("main-table", "data", allow_duplicate=True),
      Output("main-table", "selected_rows", allow_duplicate=True)],
@@ -7533,19 +7561,14 @@ def export_po_excel_validated(n_clicks, selected_rows, table_data):
     prevent_initial_call=True
 )
 def run_agent_ia_calcul(n_clicks, table_data):
-    """
-    Lance l'Agent IA pour calculer les QAC et présélectionner
-    """
     if not n_clicks or not table_data:
         return no_update, no_update
 
-    # Appel Agent IA
-    qac_par_index = agent_ia_calculer_qac(table_data)
+    qac_par_index = agent_ia_calculer_qac(table_data, use_gemini=True)
 
     if not qac_par_index:
         return no_update, no_update
 
-    # Mise à jour du tableau
     updated_data = table_data.copy()
     indices_selection = []
 
@@ -7554,12 +7577,12 @@ def run_agent_ia_calcul(n_clicks, table_data):
             updated_data[idx]['QAC edited'] = qac_value
             indices_selection.append(idx)
 
-    print(f"✅ {len(qac_par_index)} QAC calculées et {len(indices_selection)} lignes sélectionnées")
+    print(f"✅ {len(qac_par_index)} QAC calculées")
 
     return updated_data, sorted(indices_selection)
 
 
-# ===== CALLBACK : REMPLIR QAC DEPUIS TARGET =====
+# ===== CALLBACK 3 : REMPLIR QAC =====
 @app.callback(
     Output("main-table", "data", allow_duplicate=True),
     Input("btn-fill-qac-target", "n_clicks"),
@@ -7568,54 +7591,18 @@ def run_agent_ia_calcul(n_clicks, table_data):
     prevent_initial_call=True
 )
 def fill_qac_from_target(n_clicks, selected_rows, table_data):
-    """
-    Copie target_quantity → QAC edited pour les lignes sélectionnées
-    """
     if not n_clicks or not selected_rows or not table_data:
         return no_update
 
     updated_data = table_data.copy()
-    count = 0
 
     for idx in selected_rows:
         if 0 <= idx < len(updated_data):
             target = safe_float(updated_data[idx].get("target_quantity", 0), 0)
             if target > 0:
                 updated_data[idx]["QAC edited"] = target
-                count += 1
 
-    print(f"✅ {count} QAC remplies depuis target_quantity")
     return updated_data
-
-
-# ===== CALLBACK : ACTIVER BOUTON BC =====
-@app.callback(
-    Output("btn-po-pdf", "disabled"),
-    [Input("main-table", "selected_rows"),
-     Input("main-table", "data")],  # Ajoutez data comme Input pour réagir aux changements
-    prevent_initial_call=True
-)
-def toggle_po_button(selected_rows, data):
-    """
-    Active bouton SEULEMENT si toutes les QAC edited > 0
-    """
-    if not data or not selected_rows:
-        return True
-
-    for idx in selected_rows:
-        if 0 <= idx < len(data):
-            row = data[idx] or {}
-
-            # Vérif product_name + Supplier
-            if not row.get("product_name") or not row.get("Supplier"):
-                return True
-
-            # NOUVEAU : Vérif QAC edited > 0
-            qac = safe_float(row.get("QAC edited", 0), 0)
-            if qac <= 0:
-                return True  # Désactiver si QAC manquant
-
-    return False  # Tout OK
 # ====== EXPORT BON DE COMMANDE WORD ======
 '''
 # ===== Génération BON DE COMMANDE (DOCX) avec conversion QAC edited -> unités majeures =====

@@ -4740,82 +4740,397 @@ def page_overview(master_df: pd.DataFrame = None):
         for c in available_cols
     ]
 
-    # DataTable avec la nouvelle colonne 'QAC edited' éditable
+    # DataTable avec couleurs améliorées par besoin d'achat
     table = dash_table.DataTable(
         id="main-table",
-        columns=columns,  # Utilisation des colonnes générées dynamiquement
-        data=df_overview[available_cols].to_dict("records"),  # Les données de la table
+        columns=columns,
+        data=df_overview[available_cols].to_dict("records"),
         page_size=15,
         filter_action="native",
         sort_action="native",
         sort_mode="multi",
         column_selectable="single",
-        editable=True,  # La table entière est éditable, mais 'QAC edited' est précisément rendue éditable
+        editable=True,
         active_cell=None,
-        # ✅ ✅ ✅ PROPRIÉTÉS D'ÉDITION ✅ ✅ ✅
         dropdown_conditional=[],
         row_selectable="multi",
         selected_rows=[],
-        style_table={"overflowX": "auto", "maxWidth": "100%"},
+
+        # ========================================
+        # TABLE STYLES
+        # ========================================
+        style_table={
+            "overflowX": "auto",
+            "maxWidth": "100%"
+        },
+
         style_header={
             "backgroundColor": "#0f1625",
-            "border": "1px solid #1f2937",
+            "border": "1px solid #2d3748",
             "fontWeight": "700",
-            "textAlign": "center"
+            "textAlign": "center",
+            "color": "#f0f4f8",
+            "fontSize": "12px",
+            "textTransform": "uppercase",
+            "letterSpacing": "0.5px",
+            "padding": "12px 8px"
         },
+
         style_cell={
             "backgroundColor": "#0b1220",
             "color": "#e5e7eb",
             "border": "1px solid #1f2937",
-            "fontSize": 11,
+            "fontSize": 12,
             "textAlign": "center",
-            "padding": "6px"
+            "padding": "8px",
+            "minWidth": "80px",
+            "maxWidth": "300px",
+            "overflow": "hidden",
+            "textOverflow": "ellipsis"
         },
+
+        # ========================================
+        # STYLES PAR COLONNE
+        # ========================================
         style_cell_conditional=[
+            # QAC edited - éditable
             {
-                "if": {"column_id": "QAC edited"},  # Spécifie le style de la colonne 'QAC edited'
-                "width": "150px",
-                "minWidth": "150px",
-                "maxWidth": "150px",
+                "if": {"column_id": "QAC edited"},
+                "width": "120px",
+                "minWidth": "120px",
+                "maxWidth": "120px",
                 "textAlign": "center",
-                "cursor": "pointer",
-                "fontWeight": "bold",
-                "fontSize": "16px",
-                "backgroundColor": "#0f1625"
+                "cursor": "text",
+                "fontWeight": "700",
+                "fontSize": "14px",
+                "backgroundColor": "#1a2332",
+                "border": "2px dashed #4a5568",
+                "color": "#22d3ee"
             },
-            # ✅ ✅ ✅ STYLE POUR CELLULES ÉDITABLES ✅ ✅ ✅
+
+            # QAC - valeur calculée
             {
                 "if": {"column_id": "QAC"},
-                "backgroundColor": "#1a2332",  # ✅ Fond légèrement différent pour indiquer éditable
-                "cursor": "text",  # ✅ Curseur texte
+                "backgroundColor": "#1a2332",
+                "cursor": "default",
+                "fontWeight": "700",
+                "fontSize": "13px",
+                "color": "#22d3ee"
+            },
+
+            # product_name - aligné à gauche
+            {
+                "if": {"column_id": "product_name"},
+                "textAlign": "left",
+                "fontWeight": "600",
+                "minWidth": "250px",
+                "maxWidth": "350px",
+                "paddingLeft": "12px"
+            },
+
+            # Supplier
+            {
+                "if": {"column_id": "Supplier"},
+                "textAlign": "left",
+                "color": "#94a3b8",
+                "fontSize": "11px",
+                "fontStyle": "italic"
+            },
+
+            # Colonnes numériques importantes
+            {
+                "if": {"column_id": ["total_stock", "target_quantity"]},
+                "fontWeight": "700",
+                "fontSize": "13px"
+            },
+
+            # Average Daily Sales
+            {
+                "if": {"column_id": "Average Daily Sales"},
+                "fontWeight": "700",
+                "color": "#a78bfa",
+                "fontSize": "13px"
+            },
+
+            # Max Daily Sales
+            {
+                "if": {"column_id": "Max Daily Sales (Pikine)"},
+                "fontWeight": "600",
+                "color": "#fbbf24"
+            },
+
+            # Product Category - badge style
+            {
+                "if": {"column_id": "Product Category"},
+                "fontWeight": "700",
+                "fontSize": "11px",
+                "textTransform": "uppercase",
+                "letterSpacing": "0.5px"
             }
         ],
-        style_data_conditional=[
-            {"if": {"filter_query": "{Ajusted_total_need} = 'ORDER NOW'"},
-             "backgroundColor": "rgba(239,68,68,.2)", "color": "#fee2e2"},
-            {"if": {"filter_query": "{Ajusted_total_need} = 'ORDER NOT URGENT'"},
-             "backgroundColor": "rgba(245,158,11,.2)", "color": "#fef3c7"},
-            {"if": {"filter_query": "{Ajusted_total_need} = 'NO NEED'"},
-             "backgroundColor": "rgba(16,185,129,.15)", "color": "#d1fae5"},
 
+        # ========================================
+        # 🎨 STYLES CONDITIONNELS - COULEURS PAR BESOIN
+        # ========================================
+        style_data_conditional=[
+            # ========================================
+            # 🔴 ORDER NOW - LIGNE ENTIÈRE ROUGE
+            # ========================================
             {
-                "if": {"state": "selected"},
-                "backgroundColor": "rgba(34,211,238,.25)",
-                "border": "2px solid #22d3ee",
+                "if": {"filter_query": "{Ajusted_total_need} = 'ORDER NOW'"},
+                "backgroundColor": "rgba(239, 68, 68, 0.15)",
+                "color": "#fecaca",
                 "fontWeight": "600"
             },
 
-            # ✅ ✅ ✅ STYLE POUR CELLULE EN COURS D'ÉDITION ✅ ✅ ✅
+            # Colonne Ajusted_total_need - ORDER NOW (badge fort)
             {
-                "if": {"state": "active"},
-                "backgroundColor": "#f8f8f8",
-                "border": "2px solid #22d3ee",
-                "outline": "none",  # ✅ Pas d'outline qui pourrait bloquer
+                "if": {
+                    "filter_query": "{Ajusted_total_need} = 'ORDER NOW'",
+                    "column_id": "Ajusted_total_need"
+                },
+                "backgroundColor": "rgba(239, 68, 68, 0.4)",
+                "color": "#ffffff",
+                "fontWeight": "800",
+                "fontSize": "12px",
+                "border": "2px solid #ef4444",
+                "borderRadius": "6px",
+                "textTransform": "uppercase"
             },
 
-            {"if": {"column_id": "QAC edited"}, "backgroundColor": "#1a2332"},
+            # product_name - ORDER NOW (bordure rouge)
+            {
+                "if": {
+                    "filter_query": "{Ajusted_total_need} = 'ORDER NOW'",
+                    "column_id": "product_name"
+                },
+                "backgroundColor": "rgba(239, 68, 68, 0.25)",
+                "color": "#fee2e2",
+                "fontWeight": "700",
+                "borderLeft": "4px solid #ef4444"
+            },
+
+            # Stock - ORDER NOW (highlight)
+            {
+                "if": {
+                    "filter_query": "{Ajusted_total_need} = 'ORDER NOW'",
+                    "column_id": "total_stock"
+                },
+                "backgroundColor": "rgba(239, 68, 68, 0.3)",
+                "color": "#fecaca",
+                "fontWeight": "700",
+                "fontSize": "14px"
+            },
+
+            # QAC - ORDER NOW (highlight)
+            {
+                "if": {
+                    "filter_query": "{Ajusted_total_need} = 'ORDER NOW'",
+                    "column_id": "QAC"
+                },
+                "backgroundColor": "rgba(239, 68, 68, 0.3)",
+                "color": "#ffffff",
+                "fontWeight": "800",
+                "fontSize": "15px",
+                "border": "2px solid #ef4444"
+            },
+
+            # ========================================
+            # 🟠 ORDER NOT URGENT - LIGNE ORANGE
+            # ========================================
+            {
+                "if": {"filter_query": "{Ajusted_total_need} = 'ORDER NOT URGENT'"},
+                "backgroundColor": "rgba(245, 158, 11, 0.12)",
+                "color": "#fde68a",
+                "fontWeight": "500"
+            },
+
+            # Colonne Ajusted_total_need - ORDER NOT URGENT
+            {
+                "if": {
+                    "filter_query": "{Ajusted_total_need} = 'ORDER NOT URGENT'",
+                    "column_id": "Ajusted_total_need"
+                },
+                "backgroundColor": "rgba(245, 158, 11, 0.35)",
+                "color": "#ffffff",
+                "fontWeight": "700",
+                "fontSize": "12px",
+                "border": "2px solid #f59e0b",
+                "borderRadius": "6px",
+                "textTransform": "uppercase"
+            },
+
+            # product_name - ORDER NOT URGENT
+            {
+                "if": {
+                    "filter_query": "{Ajusted_total_need} = 'ORDER NOT URGENT'",
+                    "column_id": "product_name"
+                },
+                "backgroundColor": "rgba(245, 158, 11, 0.2)",
+                "color": "#fef3c7",
+                "fontWeight": "600",
+                "borderLeft": "4px solid #f59e0b"
+            },
+
+            # QAC - ORDER NOT URGENT
+            {
+                "if": {
+                    "filter_query": "{Ajusted_total_need} = 'ORDER NOT URGENT'",
+                    "column_id": "QAC"
+                },
+                "backgroundColor": "rgba(245, 158, 11, 0.25)",
+                "color": "#ffffff",
+                "fontWeight": "700",
+                "fontSize": "14px"
+            },
+
+            # ========================================
+            # 🟢 NO NEED - LIGNE VERTE
+            # ========================================
+            {
+                "if": {"filter_query": "{Ajusted_total_need} = 'NO NEED'"},
+                "backgroundColor": "rgba(16, 185, 129, 0.08)",
+                "color": "#d1fae5"
+            },
+
+            # Colonne Ajusted_total_need - NO NEED
+            {
+                "if": {
+                    "filter_query": "{Ajusted_total_need} = 'NO NEED'",
+                    "column_id": "Ajusted_total_need"
+                },
+                "backgroundColor": "rgba(16, 185, 129, 0.3)",
+                "color": "#ffffff",
+                "fontWeight": "700",
+                "fontSize": "12px",
+                "border": "2px solid #10b981",
+                "borderRadius": "6px",
+                "textTransform": "uppercase"
+            },
+
+            # product_name - NO NEED (bordure verte subtile)
+            {
+                "if": {
+                    "filter_query": "{Ajusted_total_need} = 'NO NEED'",
+                    "column_id": "product_name"
+                },
+                "borderLeft": "4px solid #10b981"
+            },
+
+            # ========================================
+            # 📊 MAX COVERAGE DAY - DÉGRADÉ DE COULEURS
+            # ========================================
+
+            # Moins de 7 jours - CRITIQUE
+            {
+                "if": {
+                    "filter_query": "{Max Coverage Day} < 7",
+                    "column_id": "Max Coverage Day"
+                },
+                "backgroundColor": "rgba(239, 68, 68, 0.25)",
+                "color": "#ffffff",
+                "fontWeight": "800",
+                "fontSize": "13px",
+                "border": "1px solid #ef4444"
+            },
+
+            # 7-14 jours - ATTENTION
+            {
+                "if": {
+                    "filter_query": "{Max Coverage Day} >= 7 && {Max Coverage Day} < 14",
+                    "column_id": "Max Coverage Day"
+                },
+                "backgroundColor": "rgba(245, 158, 11, 0.2)",
+                "color": "#fde68a",
+                "fontWeight": "700",
+                "fontSize": "13px"
+            },
+
+            # 14-30 jours - BON
+            {
+                "if": {
+                    "filter_query": "{Max Coverage Day} >= 14 && {Max Coverage Day} < 30",
+                    "column_id": "Max Coverage Day"
+                },
+                "backgroundColor": "rgba(34, 197, 94, 0.15)",
+                "color": "#bbf7d0",
+                "fontWeight": "600"
+            },
+
+            # Plus de 30 jours - EXCELLENT
+            {
+                "if": {
+                    "filter_query": "{Max Coverage Day} >= 30",
+                    "column_id": "Max Coverage Day"
+                },
+                "backgroundColor": "rgba(16, 185, 129, 0.2)",
+                "color": "#a7f3d0",
+                "fontWeight": "600"
+            },
+
+            # ========================================
+            # 🏷️ PRODUCT CATEGORY - COULEURS PAR TYPE
+            # ========================================
+            {
+                "if": {
+                    "filter_query": "{Product Category} contains 'a'",
+                    "column_id": "Product Category"
+                },
+                "backgroundColor": "rgba(239, 68, 68, 0.2)",
+                "color": "#fecaca"
+            },
+            {
+                "if": {
+                    "filter_query": "{Product Category} contains 'b'",
+                    "column_id": "Product Category"
+                },
+                "backgroundColor": "rgba(245, 158, 11, 0.2)",
+                "color": "#fde68a"
+            },
+            {
+                "if": {
+                    "filter_query": "{Product Category} contains 'c'",
+                    "column_id": "Product Category"
+                },
+                "backgroundColor": "rgba(16, 185, 129, 0.15)",
+                "color": "#a7f3d0"
+            },
+
+            # ========================================
+            # 🎯 ÉTATS INTERACTIFS
+            # ========================================
+
+            # Lignes sélectionnées
+            {
+                "if": {"state": "selected"},
+                "backgroundColor": "rgba(34, 211, 238, 0.3)",
+                "border": "2px solid #22d3ee",
+                "fontWeight": "700",
+                "color": "#ffffff"
+            },
+
+            # Cellule active (en cours d'édition)
+            {
+                "if": {"state": "active"},
+                "backgroundColor": "#1e293b",
+                "border": "2px solid #22d3ee",
+                "outline": "none",
+                "color": "#ffffff",
+                "fontWeight": "700"
+            },
+
+            # QAC edited - toujours visible
+            {
+                "if": {"column_id": "QAC edited"},
+                "backgroundColor": "#1a2332"
+            }
         ],
-        style_data={"whiteSpace": "normal", "height": "auto"},
+
+        style_data={
+            "whiteSpace": "normal",
+            "height": "auto"
+        },
+
         export_format="csv",
         export_headers="display",
         persistence=False,

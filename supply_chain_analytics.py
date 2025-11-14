@@ -6549,6 +6549,7 @@ app.layout = html.Div([
     # ========== COMPOSANTS CACHÉS (pour callbacks) ==========
     html.Div(id='edit-product-output', style={"display": "none"}),
 
+
     # ========== EDIT MODAL (VISIBLE AU NIVEAU RACINE) ==========
     dbc.Modal(
         id="edit-modal",
@@ -6644,6 +6645,17 @@ app.layout = html.Div([
 
     # ========== CONTENU PRINCIPAL ==========
     html.Div(id="page-container", children=page_overview(initial_df)),
+
+    # Dans la page concernée, ajoutez :
+    html.Div([
+        dbc.Button(
+            "🤖 Lancer Agent IA",
+            id="btn-run-agent-ia",
+            color="primary",
+            className="mb-3"
+        ),
+        html.Div(id="agent-ia-output")  # Output du callback
+    ]),
 
     # ========== FEEDBACKS & COMPTEURS ==========
    # html.Div(id="action-feedback", style={"position": "fixed", "top": "80px", "right": "20px", "zIndex": 10000}),

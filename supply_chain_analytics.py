@@ -3448,7 +3448,357 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ------------------------------ Pages --------------------------------------------
+def make_kpis(df: pd.DataFrame):
+    """
+    Calcule les KPIs + utilise VRAIMENT le modèle ML
+    """
 
+    # ---------- helpers ----------
+    def fmt(n):
+        if pd.isna(n):
+            return "-"
+        if isinstance(n, (int, float)):
+            try:
+                return f"{n:,.0f}".replace(",", " ")
+            except Exception:
+                return str(n)
+        return str(n)
+
+    def as_float(s, default=0.0):
+        return pd.to_numeric(s, errors="coerce").fillna(default)
+
+    # ---------- nettoyage : exclure les delisted ----------
+    if 'delisting_status' in df.columns:
+        delist = df['delisting_status'].astype(str).str.lower()
+        mask_valid = delist != 'delisted'
+        df_valid = df.loc[mask_valid].copy()
+    else:
+        df_valid = df.copy()
+
+    # ---------- KPI 1 : SKUs ----------
+    total_skus = df_valid['product_name'].nunique() if 'product_name' in df_valid.columns else len(df_valid)
+
+    # ---------- KPI 2 : Ruptures réelles ----------
+    if 'Stock Status' in df_valid.columns:
+        out_of_stock = int((df_valid['Stock Status'] == 'Out of Stock').sum())
+    elif 'total_stock' in df_valid.columns:
+        out_of_stock = int((as_float(df_valid['total_stock']) <= 0).sum())
+    else:
+        out_of_stock = 0
+
+    # ---------- KPI 3 : Fournisseurs ----------
+    if 'Supplier' in df_valid.columns:
+        suppliers = df_valid['Supplier'].nunique()
+    else:
+        suppliers = 0
+
+    # ========================================
+    # ✅ NOUVELLE LOGIQUE : UTILISER LE ML
+    # ========================================
+    print("\n" + "=" * 60)
+    print("🤖 DÉTECTION RISQUES AVEC ML")
+    print("=" * 60)
+
+    risk_products = []
+
+    # ✅ PRIORITÉ 1 : Utiliser Stockout Probability (le vrai ML)
+    if 'Stockout Probability' in df_valid.columns:
+        print("✅ Utilisation du modèle ML (Stockout Probability)")
+
+        # Seuils ML
+        ml_probs = as_float(df_valid['Stockout Probability'])
+
+        # Risque élevé : proba > 0.7
+        high_risk_mask = ml_probs > 0.7
+        # Risque moyen : proba entre 0.3 et 0.7
+        medium_risk_mask = (ml_probs > 0.3) & (ml_probs <= 0.7)
+
+        high_risk_count = high_risk_mask.sum()
+        medium_risk_count = medium_risk_mask.sum()
+        total_risk_count = (ml_probs > 0.3).sum()
+
+        print(f"   📊 Risque élevé (>0.7) : {high_risk_count} produits")
+        print(f"   📊 Risque moyen (0.3-0.7) : {medium_risk_count} produits")
+        print(f"   📊 Total à risque : {total_risk_count} produits")
+
+        # Combiner risques élevés et moyens
+        risk_mask = ml_probs > 0.3
+        risk_df = df_valid.loc[risk_mask].copy()
+
+        # Trier par probabilité décroissante
+        risk_df = risk_df.sort_values('Stockout Probability', ascending=False)
+
+        print(f"   ✅ {len(risk_df)} produits à afficher")
+
+        for _, row in risk_df.head(50).iterrows():
+            prob = float(row.get('Stockout Probability', 0))
+
+            risk_products.append({
+                'product_name': str(row.get('product_name', 'N/A'))[:60],
+                'supplier': str(row.get('Supplier', 'N/A')),
+                'coverage_days': float(row.get('Max Coverage Day', 0) or 0),
+                'stock': float(row.get('total_stock', 0) or 0),
+                'ads': float(row.get('Average Daily Sales', 0) or 0),
+                'category': str(row.get('Product Category', 'N/A')),
+                'ml_probability': prob,  # ✅ Utiliser la vraie proba ML
+                'risk_level': 'HIGH' if prob > 0.7 else 'MEDIUM'
+            })
+
+    # ✅ FALLBACK 1 : Predicted Stockout (règle booléenne)
+    elif 'Predicted Stockout' in df_valid.columns:
+        print("⚠️ Fallback : Predicted Stockout (pas de ML)")
+
+        risk_mask = (df_valid['Predicted Stockout'] == True)
+
+        if 'Credit Adequacy Score' in df_valid.columns:
+            risk_mask &= (as_float(df_valid['Credit Adequacy Score']) < 0.5)
+
+        risk_df = df_valid.loc[risk_mask].copy()
+
+        if 'Max Coverage Day' in risk_df.columns:
+            risk_df = risk_df.sort_values('Max Coverage Day', ascending=True)
+
+        for _, row in risk_df.head(50).iterrows():
+            risk_products.append({
+                'product_name': str(row.get('product_name', 'N/A'))[:60],
+                'supplier': str(row.get('Supplier', 'N/A')),
+                'coverage_days': float(row.get('Max Coverage Day', 0) or 0),
+                'stock': float(row.get('total_stock', 0) or 0),
+                'ads': float(row.get('Average Daily Sales', 0) or 0),
+                'category': str(row.get('Product Category', 'N/A')),
+                'ml_probability': 0.5,  # Valeur par défaut
+                'risk_level': 'MEDIUM'
+            })
+
+    # ✅ FALLBACK 2 : Calcul couverture
+    elif {'Max Coverage Day', 'ADJUSTED_LEADTIME', 'credit_days'}.issubset(df_valid.columns):
+        print("⚠️ Fallback : Calcul couverture (pas de ML)")
+
+        tmp = df_valid.assign(
+            replenishment_days=as_float(df_valid['ADJUSTED_LEADTIME'], 7) + as_float(df_valid['credit_days'], 14),
+            mcd=as_float(df_valid['Max Coverage Day'])
+        )
+        risk_mask = (tmp['mcd'] > 0) & (tmp['mcd'] < tmp['replenishment_days'])
+        risk_df = tmp.loc[risk_mask].sort_values('mcd', ascending=True)
+
+        for _, row in risk_df.head(50).iterrows():
+            risk_products.append({
+                'product_name': str(row.get('product_name', 'N/A'))[:60],
+                'supplier': str(row.get('Supplier', 'N/A')),
+                'coverage_days': float(row.get('mcd', 0) or 0),
+                'stock': float(row.get('total_stock', 0) or 0),
+                'ads': float(row.get('Average Daily Sales', 0) or 0),
+                'category': str(row.get('Product Category', 'N/A')),
+                'ml_probability': 0.3,
+                'risk_level': 'MEDIUM'
+            })
+
+    # ✅ FALLBACK 3 : Ajusted_total_need
+    else:
+        print("⚠️ Fallback : Ajusted_total_need (pas de ML)")
+
+        if 'Ajusted_total_need' in df_valid.columns:
+            tmp = df_valid.copy()
+            tmp['priority'] = tmp['Ajusted_total_need'].map({'ORDER NOW': 1, 'ORDER NOT URGENT': 2}).fillna(9)
+            risk_df = tmp.loc[tmp['Ajusted_total_need'].isin(['ORDER NOW', 'ORDER NOT URGENT'])] \
+                .sort_values('priority', ascending=True)
+
+            for _, row in risk_df.head(50).iterrows():
+                risk_products.append({
+                    'product_name': str(row.get('product_name', 'N/A'))[:60],
+                    'supplier': str(row.get('Supplier', 'N/A')),
+                    'coverage_days': float(row.get('Max Coverage Day', 0) or 0),
+                    'stock': float(row.get('total_stock', 0) or 0),
+                    'ads': float(row.get('Average Daily Sales', 0) or 0),
+                    'category': str(row.get('Product Category', 'N/A')),
+                    'ml_probability': 0.3,
+                    'risk_level': 'MEDIUM'
+                })
+
+    risk_count = len(risk_products)
+    print(f"✅ Total produits à risque : {risk_count}")
+    print("=" * 60 + "\n")
+
+    # ---------- Cartes KPI ----------
+    cards = dbc.Row([
+        dbc.Col(html.Div(className="kpi", children=[
+            html.Small("SKUs"),
+            html.H3(fmt(total_skus))
+        ]), md=4),
+        dbc.Col(html.Div(className="kpi", children=[
+            html.Small("Produits en rupture"),
+            html.H3(fmt(out_of_stock), style={"color": "#ef4444" if out_of_stock > 0 else "#10b981"})
+        ]), md=4),
+        dbc.Col(html.Div(className="kpi", children=[
+            html.Small("Fournisseurs actifs"),
+            html.H3(fmt(suppliers))
+        ]), md=4),
+    ], className="gy-3")
+
+    # ---------- Dropdown avec vraie proba ML ----------
+    dropdown_children = []
+
+    if risk_products:
+        for prod in risk_products:
+            # ✅ Couleur basée sur ML probability
+            ml_prob = prod.get('ml_probability', 0)
+
+            if ml_prob > 0.7:
+                color_border = '#ef4444'  # Rouge
+                badge_text = f"URGENT ({ml_prob:.0%})"
+                badge_color = "danger"
+            elif ml_prob > 0.3:
+                color_border = '#f59e0b'  # Orange
+                badge_text = f"À surveiller ({ml_prob:.0%})"
+                badge_color = "warning"
+            else:
+                color_border = '#3b82f6'  # Bleu
+                badge_text = f"Risque faible ({ml_prob:.0%})"
+                badge_color = "info"
+
+            dropdown_children.append(
+                html.Div(
+                    style={
+                        "padding": "10px",
+                        "marginBottom": "8px",
+                        "background": "#0f1625",
+                        "border": "1px solid #1f2937",
+                        "borderLeft": f"4px solid {color_border}",
+                        "borderRadius": "8px",
+                    },
+                    children=[
+                        html.Div([
+                            html.Strong(prod['product_name'], style={
+                                "color": "#22d3ee",
+                                "fontSize": "13px",
+                                "marginRight": "8px"
+                            }),
+                            dbc.Badge(badge_text, color=badge_color, pill=True, style={"fontSize": "9px"})
+                        ], style={"marginBottom": "6px"}),
+
+                        html.Div([
+                            html.Small(f"🏭 {prod['supplier']}", style={"color": "#9ca3af", "fontSize": "11px"}),
+                            html.Span(" • ", style={"color": "#4b5563"}),
+                            html.Small(f"📦 Stock: {prod['stock']:.0f}", style={"color": "#9ca3af", "fontSize": "11px"}),
+                        ], style={"marginBottom": "4px"}),
+
+                        html.Div([
+                            html.Small(
+                                f"⏰ Couverture: {prod['coverage_days']:.1f} jours",
+                                style={
+                                    "color": "#ef4444" if prod['coverage_days'] < 7 else "#f59e0b",
+                                    "fontSize": "11px",
+                                    "fontWeight": "700",
+                                    "marginRight": "12px"
+                                }
+                            ),
+                            html.Small(f"📊 ADS: {prod['ads']:.1f}/j", style={"color": "#6b7280", "fontSize": "11px"}),
+                        ], style={"marginBottom": "6px"}),
+
+                        html.Div([
+                            dbc.Badge(prod['category'], color="secondary", pill=True, className="me-1",
+                                      style={"fontSize": "9px"}),
+                            dbc.Badge(
+                                f"🤖 ML: {ml_prob:.0%}",
+                                color="danger" if ml_prob > 0.7 else "warning" if ml_prob > 0.3 else "info",
+                                pill=True,
+                                style={"fontSize": "9px"}
+                            ),
+                        ])
+                    ]
+                )
+            )
+    else:
+        dropdown_children = [
+            html.Div(
+                children=[
+                    html.Span("✅", style={"fontSize": "24px", "marginBottom": "8px"}),
+                    html.Div("Aucun produit à risque détecté", style={
+                        "color": "#10b981",
+                        "fontSize": "13px",
+                        "fontWeight": "600"
+                    }),
+                    html.Small("Tous les produits ont une couverture adéquate", style={
+                        "color": "#6b7280",
+                        "fontSize": "11px",
+                        "marginTop": "4px"
+                    })
+                ],
+                style={
+                    "textAlign": "center",
+                    "padding": "30px 20px",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "alignItems": "center"
+                }
+            )
+        ]
+
+    # ---------- Badge avec ML ----------
+    bell = html.Div(
+        className="pill",
+        style={"marginTop": "10px"},
+        children=[
+            dbc.Button([
+                html.Span("🤖", style={"fontSize": "16px", "marginRight": "8px"}),
+                html.B("À risque ML : "),
+                dbc.Badge(
+                    f"{risk_count}",
+                    color="danger" if any(p.get('ml_probability', 0) > 0.7 for p in
+                                          risk_products) else "warning" if risk_count > 0 else "success",
+                    pill=True,
+                    className="ms-2"
+                )
+            ],
+                id="risk-alert-toggle",
+                color="link",
+                className="p-2 text-start w-100",
+                style={
+                    "textDecoration": "none",
+                    "color": "#e5e7eb",
+                    "border": "1px solid #374151",
+                    "borderRadius": "10px",
+                    "background": "rgba(239, 68, 68, 0.1)" if any(p.get('ml_probability', 0) > 0.7 for p in
+                                                                  risk_products) else "rgba(245, 158, 11, 0.1)" if risk_count > 0 else "rgba(16, 185, 129, 0.1)",
+                    "cursor": "pointer" if risk_count > 0 else "not-allowed"
+                },
+                disabled=(risk_count == 0)
+            ),
+
+            dbc.Collapse(
+                id="risk-alert-collapse",
+                is_open=False,
+                children=html.Div(
+                    dropdown_children + [
+                        html.Hr(style={"borderColor": "#374151", "margin": "12px 0"}),
+                        html.Div([
+                            html.Small(
+                                f"📊 Affichant {min(len(risk_products), 50)} produit(s)",
+                                style={"color": "#6b7280", "fontSize": "10px", "marginRight": "10px"}
+                            ),
+                            html.Small(
+                                "• 🤖 Calculé avec ML RandomForest",
+                                style={"color": "#4b5563", "fontSize": "10px"}
+                            )
+                        ], style={"display": "flex", "alignItems": "center", "justifyContent": "center"})
+                    ],
+                    style={
+                        "maxHeight": "450px",
+                        "overflowY": "auto",
+                        "marginTop": "10px",
+                        "padding": "12px",
+                        "background": "#0a1320",
+                        "border": "1px solid #1f2937",
+                        "borderRadius": "10px",
+                        "boxShadow": "0 4px 12px rgba(0,0,0,0.3)"
+                    }
+                )
+            )
+        ]
+    )
+
+    return cards, bell
+'''
 def make_kpis(df: pd.DataFrame):
     """Calcule les KPIs (SKUs, ruptures, fournisseurs) + alerte dropdown produits à risque (ML)."""
 
@@ -3680,6 +4030,7 @@ def make_kpis(df: pd.DataFrame):
     )
 
     return cards, bell
+'''
 @app.callback(
     Output("risk-alert-collapse", "is_open"),
     Input("risk-alert-toggle", "n_clicks"),
@@ -7555,56 +7906,122 @@ def toggle_po_button(selected_rows, data):
 
 
 # ===== CALLBACK 2 : AGENT IA =====
+# ===== CALLBACK : AGENT IA (VERSION CORRIGÉE POUR VOTRE ARCHITECTURE) =====
 @app.callback(
-    [Output("main-table", "data", allow_duplicate=True),
-     Output("main-table", "selected_rows", allow_duplicate=True)],
+    Output("master-data", "data", allow_duplicate=True),
     Input("btn-run-agent-ia", "n_clicks"),
-    State("main-table", "data"),
+    State("master-data", "data"),
     prevent_initial_call=True
 )
-def run_agent_ia_calcul(n_clicks, table_data):
-    if not n_clicks or not table_data:
-        return no_update, no_update
+def run_agent_ia_calcul(n_clicks, master_json):
+    """
+    Lance l'Agent IA et met à jour master-data
+    → apply_filters se déclenchera automatiquement après
+    """
+    if not n_clicks or not master_json:
+        return no_update
 
+    print("\n" + "=" * 60)
+    print("🤖 AGENT IA - CALCUL DES QAC")
+    print("=" * 60)
+
+    # Charger les données depuis master-data
+    master_df = pd.DataFrame(json.loads(master_json))
+
+    # Convertir en format attendu par l'agent
+    table_data = master_df.to_dict('records')
+
+    # Appel Agent IA
     qac_par_index = agent_ia_calculer_qac(table_data, use_gemini=True)
 
     if not qac_par_index:
-        return no_update, no_update
-
-    updated_data = table_data.copy()
-    indices_selection = []
-
-    for idx, qac_value in qac_par_index.items():
-        if 0 <= idx < len(updated_data):
-            updated_data[idx]['QAC edited'] = qac_value
-            indices_selection.append(idx)
-
-    print(f"✅ {len(qac_par_index)} QAC calculées")
-
-    return updated_data, sorted(indices_selection)
-
-
-# ===== CALLBACK 3 : REMPLIR QAC =====
-@app.callback(
-    Output("main-table", "data", allow_duplicate=True),
-    Input("btn-fill-qac-target", "n_clicks"),
-    [State("main-table", "selected_rows"),
-     State("main-table", "data")],
-    prevent_initial_call=True
-)
-def fill_qac_from_target(n_clicks, selected_rows, table_data):
-    if not n_clicks or not selected_rows or not table_data:
+        print("⚠️ Aucun produit à commander")
+        print("=" * 60 + "\n")
         return no_update
 
-    updated_data = table_data.copy()
+    # Mise à jour du DataFrame
+    for idx, qac_value in qac_par_index.items():
+        if 0 <= idx < len(master_df):
+            master_df.at[idx, 'QAC edited'] = qac_value
+
+    print(f"✅ {len(qac_par_index)} QAC calculées et injectées dans master-data")
+    print("=" * 60 + "\n")
+
+    # Retourner master-data mis à jour
+    # → apply_filters se déclenchera automatiquement et propagera à main-table
+    return master_df.to_json(orient="records")
+
+
+# ===== CALLBACK : PRÉSÉLECTION APRÈS AGENT IA =====
+@app.callback(
+    Output("main-table", "selected_rows", allow_duplicate=True),
+    [Input("main-table", "data"),
+     Input("btn-run-agent-ia", "n_clicks")],
+    State("btn-run-agent-ia", "n_clicks"),
+    prevent_initial_call=True
+)
+def preselect_qac_rows(table_data, ia_clicks, ia_clicks_state):
+    """
+    Présélectionne automatiquement les lignes avec QAC edited > 0
+    après que l'Agent IA ait calculé
+    """
+    # Vérifier que c'est l'Agent IA qui a déclenché
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return no_update
+
+    trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
+    # Ne présélectionner QUE si c'est après l'Agent IA
+    if trigger_id != "btn-run-agent-ia":
+        return no_update
+
+    if not table_data:
+        return no_update
+
+    # Trouver les lignes avec QAC edited > 0
+    indices_selection = []
+    for idx, row in enumerate(table_data):
+        qac = safe_float(row.get("QAC edited", 0), 0)
+        if qac > 0:
+            indices_selection.append(idx)
+
+    if indices_selection:
+        print(f"✅ Présélection automatique de {len(indices_selection)} lignes")
+        return sorted(indices_selection)
+
+    return no_update
+
+# ===== CALLBACK 3 : REMPLIR QAC =====
+# ===== CALLBACK : REMPLIR QAC DEPUIS TARGET (CORRIGÉ) =====
+@app.callback(
+    Output("master-data", "data", allow_duplicate=True),
+    Input("btn-fill-qac-target", "n_clicks"),
+    [State("main-table", "selected_rows"),
+     State("master-data", "data")],
+    prevent_initial_call=True
+)
+def fill_qac_from_target(n_clicks, selected_rows, master_json):
+    """
+    Copie target_quantity → QAC edited
+    """
+    if not n_clicks or not selected_rows or not master_json:
+        return no_update
+
+    master_df = pd.DataFrame(json.loads(master_json))
+    count = 0
 
     for idx in selected_rows:
-        if 0 <= idx < len(updated_data):
-            target = safe_float(updated_data[idx].get("target_quantity", 0), 0)
+        if 0 <= idx < len(master_df):
+            target = safe_float(master_df.at[idx, "target_quantity"], 0)
             if target > 0:
-                updated_data[idx]["QAC edited"] = target
+                master_df.at[idx, "QAC edited"] = target
+                count += 1
 
-    return updated_data
+    print(f"✅ {count} QAC remplies depuis target_quantity")
+
+    return master_df.to_json(orient="records")
+
 # ====== EXPORT BON DE COMMANDE WORD ======
 '''
 # ===== Génération BON DE COMMANDE (DOCX) avec conversion QAC edited -> unités majeures =====

@@ -6038,6 +6038,777 @@ def add_new_product(n_clicks, current_data):
 
 
 def page_analytics(master_df: pd.DataFrame = None):
+    """Page Analytics avec filtres dynamiques"""
+    df = master_df if master_df is not None else get_df_cached()
+
+    # Colonnes nécessaires
+    cols_to_keep = [
+        "product_name", "Supplier", "Product Category",
+        "total_stock", "Average Daily Sales",
+        "Max Coverage Day", "ADJUSTED_LEADTIME",
+        "Ajusted_total_need", "purchase_need",
+        "QAC", "optimal stock", "credit_days"
+    ]
+    cols_to_keep = [c for c in cols_to_keep if c in df.columns]
+    analytics_df = df[cols_to_keep].dropna()
+
+    # KPI cards
+    kpi_cards, _ = make_kpis(df)
+
+    # ========================================
+    # 🎛️ FILTRES DYNAMIQUES
+    # ========================================
+
+    # Options pour les dropdowns
+    suppliers_list = ["Tous"] + sorted(analytics_df["Supplier"].unique().tolist())
+    categories_list = ["Toutes"] + sorted(analytics_df["Product Category"].unique().tolist())
+    needs_list = ["Tous"] + sorted(analytics_df["Ajusted_total_need"].unique().tolist())
+
+    filters_section = html.Div([
+        dbc.Row([
+            dbc.Col([
+                html.Label("🏭 Fournisseur", style={
+                    "fontWeight": "700",
+                    "color": "#f0f4f8",
+                    "marginBottom": "8px",
+                    "fontSize": "14px"
+                }),
+                dcc.Dropdown(
+                    id="analytics-filter-supplier",
+                    options=[{"label": s, "value": s} for s in suppliers_list],
+                    value="Tous",
+                    clearable=False,
+                    className="dark-dropdown"
+                )
+            ], md=4),
+
+            dbc.Col([
+                html.Label("🏷️ Catégorie", style={
+                    "fontWeight": "700",
+                    "color": "#f0f4f8",
+                    "marginBottom": "8px",
+                    "fontSize": "14px"
+                }),
+                dcc.Dropdown(
+                    id="analytics-filter-category",
+                    options=[{"label": c, "value": c} for c in categories_list],
+                    value="Toutes",
+                    clearable=False,
+                    className="dark-dropdown"
+                )
+            ], md=4),
+
+            dbc.Col([
+                html.Label("📦 Besoin d'achat", style={
+                    "fontWeight": "700",
+                    "color": "#f0f4f8",
+                    "marginBottom": "8px",
+                    "fontSize": "14px"
+                }),
+                dcc.Dropdown(
+                    id="analytics-filter-need",
+                    options=[{"label": n, "value": n} for n in needs_list],
+                    value="Tous",
+                    clearable=False,
+                    className="dark-dropdown"
+                )
+            ], md=4)
+        ], className="mb-3"),
+
+        # Indicateur de filtrage
+        html.Div(id="analytics-filter-indicator", style={
+            "marginTop": "12px",
+            "padding": "10px 14px",
+            "background": "rgba(34, 211, 238, 0.1)",
+            "border": "1px solid rgba(34, 211, 238, 0.3)",
+            "borderRadius": "8px",
+            "fontSize": "12px",
+            "color": "#22d3ee",
+            "fontWeight": "600"
+        })
+    ], style={
+        "padding": "20px",
+        "background": "linear-gradient(135deg, #1a2332 0%, #141b2d 100%)",
+        "borderRadius": "16px",
+        "border": "1px solid #2d3748",
+        "marginBottom": "24px",
+        "boxShadow": "0 4px 12px rgba(0, 0, 0, 0.3)"
+    })
+
+    return html.Div(className="content", children=[
+        dbc.Row([
+            dbc.Col(html.H2("📊 Analyses Avancées", style={"color": "#22d3ee"}), md=12)
+        ]),
+        html.Div(kpi_cards),
+        html.Br(),
+
+        # Filtres
+        filters_section,
+
+        # Graphiques dynamiques
+        dbc.Row([
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("🎯 Lead Time vs Couverture Stock", className="section-title"),
+                    dcc.Graph(id="analytics-scatter")
+                ])
+            ], md=6),
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("📊 Distribution du Stock", className="section-title"),
+                    dcc.Graph(id="analytics-hist-stock")
+                ])
+            ], md=6)
+        ]),
+        html.Br(),
+
+        dbc.Row([
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("📦 Ventes Moyennes par Catégorie", className="section-title"),
+                    dcc.Graph(id="analytics-box-category")
+                ])
+            ], md=6),
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("🏭 Top 10 Besoins par Fournisseur", className="section-title"),
+                    dcc.Graph(id="analytics-purchase-supplier")
+                ])
+            ], md=6)
+        ]),
+        html.Br(),
+
+        dbc.Row([
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("🎯 QAC vs Stock Optimal", className="section-title"),
+                    dcc.Graph(id="analytics-qac-optimal")
+                ])
+            ], md=6),
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("📈 Répartition par Besoin d'Achat", className="section-title"),
+                    dcc.Graph(id="analytics-pie-need")
+                ])
+            ], md=6)
+        ])
+    ])
+
+
+# ==========================================
+# 📊 CALLBACKS ANALYTICS DYNAMIQUES
+# ==========================================
+
+@app.callback(
+    [Output("analytics-scatter", "figure"),
+     Output("analytics-hist-stock", "figure"),
+     Output("analytics-box-category", "figure"),
+     Output("analytics-purchase-supplier", "figure"),
+     Output("analytics-qac-optimal", "figure"),
+     Output("analytics-pie-need", "figure"),
+     Output("analytics-filter-indicator", "children")],
+    [Input("analytics-filter-supplier", "value"),
+     Input("analytics-filter-category", "value"),
+     Input("analytics-filter-need", "value"),
+     Input("master-data", "data")],
+    prevent_initial_call=False
+)
+def update_analytics_charts(supplier_value, category_value, need_value, master_json):
+    """
+    Met à jour tous les graphiques analytics selon les filtres
+    """
+    import time
+    start = time.time()
+
+    print(f"\n🔄 Update Analytics - Filtres: {supplier_value}, {category_value}, {need_value}")
+
+    # Charger données
+    if master_json:
+        df = pd.DataFrame(json.loads(master_json))
+    else:
+        df = get_df_cached()
+
+    # Colonnes nécessaires
+    cols = [
+        "product_name", "Supplier", "Product Category",
+        "total_stock", "Average Daily Sales",
+        "Max Coverage Day", "ADJUSTED_LEADTIME",
+        "Ajusted_total_need", "purchase_need",
+        "QAC", "optimal stock"
+    ]
+    df = df[[c for c in cols if c in df.columns]].dropna()
+
+    initial_count = len(df)
+
+    # ✅ APPLIQUER FILTRES
+    if supplier_value and supplier_value != "Tous":
+        df = df[df["Supplier"] == supplier_value]
+
+    if category_value and category_value != "Toutes":
+        df = df[df["Product Category"] == category_value]
+
+    if need_value and need_value != "Tous":
+        df = df[df["Ajusted_total_need"] == need_value]
+
+    filtered_count = len(df)
+
+    print(f"   📊 {initial_count} → {filtered_count} produits après filtres")
+
+    # ✅ INDICATEUR DE FILTRE
+    filter_text = []
+    if supplier_value != "Tous":
+        filter_text.append(f"🏭 {supplier_value}")
+    if category_value != "Toutes":
+        filter_text.append(f"🏷️ {category_value}")
+    if need_value != "Tous":
+        filter_text.append(f"📦 {need_value}")
+
+    if filter_text:
+        indicator = html.Div([
+            html.Span("🔍 Filtres actifs : ", style={"fontWeight": "700"}),
+            html.Span(" • ".join(filter_text)),
+            html.Span(f" ({filtered_count} produits)", style={"marginLeft": "10px", "opacity": "0.8"})
+        ])
+    else:
+        indicator = html.Div([
+            html.Span("✨ Tous les produits affichés", style={"fontWeight": "700"}),
+            html.Span(f" ({filtered_count} produits)", style={"marginLeft": "10px", "opacity": "0.8"})
+        ])
+
+    # ========================================
+    # 📊 GRAPHIQUE 1 : SCATTER LEAD TIME VS COVERAGE
+    # ========================================
+    fig_scatter = px.scatter(
+        df,
+        x="ADJUSTED_LEADTIME",
+        y="Max Coverage Day",
+        color="Ajusted_total_need",
+        hover_data=["product_name", "Supplier", "purchase_need", "QAC"],
+        labels={
+            "ADJUSTED_LEADTIME": "Lead Time Ajusté (jours)",
+            "Max Coverage Day": "Couverture Stock (jours)"
+        },
+        color_discrete_map={
+            "ORDER NOW": "#ef4444",
+            "ORDER NOT URGENT": "#f59e0b",
+            "NO NEED": "#10b981"
+        }
+    )
+
+    fig_scatter.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb"),
+        showlegend=True,
+        legend=dict(
+            bgcolor="rgba(15, 22, 37, 0.8)",
+            bordercolor="#2d3748",
+            borderwidth=1
+        )
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 2 : HISTOGRAMME STOCK
+    # ========================================
+    fig_hist_stock = px.histogram(
+        df,
+        x="total_stock",
+        nbins=30,
+        labels={"total_stock": "Stock Total"},
+        color_discrete_sequence=["#22d3ee"]
+    )
+
+    fig_hist_stock.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb"),
+        showlegend=False
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 3 : BOXPLOT PAR CATÉGORIE
+    # ========================================
+    fig_box_category = px.box(
+        df,
+        x="Product Category",
+        y="Average Daily Sales",
+        color="Product Category",
+        labels={"Average Daily Sales": "Ventes Moyennes (ADS)"}
+    )
+
+    fig_box_category.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb"),
+        showlegend=False
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 4 : TOP 10 FOURNISSEURS
+    # ========================================
+    purchase_by_supplier = (
+        df.groupby("Supplier")["purchase_need"]
+        .sum()
+        .reset_index()
+        .sort_values("purchase_need", ascending=False)
+        .head(10)
+    )
+
+    fig_purchase_supplier = px.bar(
+        purchase_by_supplier,
+        x="Supplier",
+        y="purchase_need",
+        labels={"purchase_need": "Besoin d'Achat Total"},
+        color="purchase_need",
+        color_continuous_scale="Reds"
+    )
+
+    fig_purchase_supplier.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb"),
+        xaxis=dict(tickangle=-45),
+        showlegend=False
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 5 : QAC VS OPTIMAL
+    # ========================================
+    fig_qac_optimal = px.scatter(
+        df,
+        x="QAC",
+        y="optimal stock",
+        color="Ajusted_total_need",
+        hover_data=["product_name", "Supplier"],
+        labels={"QAC": "Quantité Ajustée Commandée"},
+        color_discrete_map={
+            "ORDER NOW": "#ef4444",
+            "ORDER NOT URGENT": "#f59e0b",
+            "NO NEED": "#10b981"
+        }
+    )
+
+    fig_qac_optimal.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb"),
+        showlegend=True
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 6 : PIE CHART BESOIN D'ACHAT
+    # ========================================
+    need_distribution = df["Ajusted_total_need"].value_counts().reset_index()
+    need_distribution.columns = ["Besoin", "Nombre"]
+
+    fig_pie_need = px.pie(
+        need_distribution,
+        values="Nombre",
+        names="Besoin",
+        color="Besoin",
+        color_discrete_map={
+            "ORDER NOW": "#ef4444",
+            "ORDER NOT URGENT": "#f59e0b",
+            "NO NEED": "#10b981"
+        }
+    )
+
+    fig_pie_need.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb")
+    )
+
+    elapsed = time.time() - start
+    print(f"   ✅ Analytics mis à jour en {elapsed:.2f}s\n")
+
+    return (
+        fig_scatter,
+        fig_hist_stock,
+        fig_box_category,
+        fig_purchase_supplier,
+        fig_qac_optimal,
+        fig_pie_need,
+        indicator
+    )
+
+
+def page_predictive(master_df: pd.DataFrame = None):
+    """Page Prédictions avec filtres dynamiques"""
+    df = master_df if master_df is not None else get_df_cached()
+
+    # Colonnes nécessaires
+    cols_to_keep = [
+        "product_id", "product_name", "Supplier",
+        "total_stock", "Average Daily Sales",
+        "Max Daily Sales (Pikine)", "target_quantity",
+        "Product Category", "Ajusted_total_need",
+        "total_sold_30d", "avg_daily_sold",
+        "std_sold", "max_daily_sold",
+        "days_with_sales", "trend_factor",
+        "projected_demand", "safety_stock",
+        "target_supervised"
+    ]
+    cols_to_keep = [c for c in cols_to_keep if c in df.columns]
+    pred_df = df[cols_to_keep].copy()
+
+    # Calcul stockout rate
+    if 'avg_daily_sold' in pred_df.columns and 'total_stock' in pred_df.columns:
+        pred_df_ml = pred_df[pred_df['avg_daily_sold'].notna()].copy()
+
+        if len(pred_df_ml) > 0:
+            pred_df_ml['coverage_days'] = np.where(
+                pred_df_ml['avg_daily_sold'] > 0,
+                pred_df_ml['total_stock'] / pred_df_ml['avg_daily_sold'],
+                999
+            )
+            replenishment = 21  # Valeur par défaut
+            at_risk = (pred_df_ml['coverage_days'] < replenishment).sum()
+            stockout_rate = (at_risk / len(pred_df_ml)) * 100
+        else:
+            stockout_rate = 0.0
+    else:
+        stockout_rate = 0.0
+
+    # Options pour dropdowns
+    suppliers_list = ["Tous"] + sorted(pred_df["Supplier"].unique().tolist())
+    categories_list = ["Toutes"] + sorted(pred_df["Product Category"].unique().tolist())
+    needs_list = ["Tous"] + sorted(pred_df["Ajusted_total_need"].unique().tolist())
+
+    # ========================================
+    # 🎛️ FILTRES
+    # ========================================
+    filters_section = html.Div([
+        dbc.Row([
+            dbc.Col([
+                html.Label("🏭 Fournisseur", style={
+                    "fontWeight": "700",
+                    "color": "#f0f4f8",
+                    "marginBottom": "8px"
+                }),
+                dcc.Dropdown(
+                    id="predictive-filter-supplier",
+                    options=[{"label": s, "value": s} for s in suppliers_list],
+                    value="Tous",
+                    clearable=False,
+                    className="dark-dropdown"
+                )
+            ], md=4),
+
+            dbc.Col([
+                html.Label("🏷️ Catégorie", style={
+                    "fontWeight": "700",
+                    "color": "#f0f4f8",
+                    "marginBottom": "8px"
+                }),
+                dcc.Dropdown(
+                    id="predictive-filter-category",
+                    options=[{"label": c, "value": c} for c in categories_list],
+                    value="Toutes",
+                    clearable=False,
+                    className="dark-dropdown"
+                )
+            ], md=4),
+
+            dbc.Col([
+                html.Label("📦 Besoin d'achat", style={
+                    "fontWeight": "700",
+                    "color": "#f0f4f8",
+                    "marginBottom": "8px"
+                }),
+                dcc.Dropdown(
+                    id="predictive-filter-need",
+                    options=[{"label": n, "value": n} for n in needs_list],
+                    value="Tous",
+                    clearable=False,
+                    className="dark-dropdown"
+                )
+            ], md=4)
+        ], className="mb-3"),
+
+        html.Div(id="predictive-filter-indicator", style={
+            "marginTop": "12px",
+            "padding": "10px 14px",
+            "background": "rgba(34, 211, 238, 0.1)",
+            "border": "1px solid rgba(34, 211, 238, 0.3)",
+            "borderRadius": "8px",
+            "fontSize": "12px",
+            "color": "#22d3ee",
+            "fontWeight": "600"
+        })
+    ], style={
+        "padding": "20px",
+        "background": "linear-gradient(135deg, #1a2332 0%, #141b2d 100%)",
+        "borderRadius": "16px",
+        "border": "1px solid #2d3748",
+        "marginBottom": "24px"
+    })
+
+    return html.Div(className="content", children=[
+        dbc.Row([
+            dbc.Col(html.H3("🔮 Prédictions ML", style={"color": "#22d3ee"}), md=8),
+            dbc.Col(
+                dbc.Badge(
+                    f"Stockout prédit : {stockout_rate:.1f}%",
+                    color="danger" if stockout_rate > 15 else "warning" if stockout_rate > 5 else "success",
+                    style={"fontSize": "14px", "padding": "8px 15px"}
+                ),
+                md=4,
+                style={"display": "flex", "justifyContent": "flex-end", "alignItems": "center"}
+            )
+        ], className="mb-4"),
+
+        # Filtres
+        filters_section,
+
+        # Graphiques
+        dbc.Row([
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("📊 Top 20 Produits - Target Quantity", className="section-title"),
+                    dcc.Graph(id="predictive-bar")
+                ])
+            ], md=12)
+        ]),
+        html.Br(),
+
+        dbc.Row([
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("🎯 Demande Projetée vs Stock Actuel", className="section-title"),
+                    dcc.Graph(id="predictive-scatter")
+                ])
+            ], md=6),
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("📈 Safety Stock par Catégorie", className="section-title"),
+                    dcc.Graph(id="predictive-safety-stock")
+                ])
+            ], md=6)
+        ]),
+        html.Br(),
+
+        # Tableau
+        html.Div(className="soft-card", children=[
+            html.H5("📋 Données Prédictives Détaillées", className="section-title"),
+            dash_table.DataTable(
+                id="predictive-table",
+                columns=[{"name": c, "id": c} for c in pred_df.columns],
+                data=pred_df.to_dict("records"),
+                page_size=15,
+                filter_action="native",
+                sort_action="native",
+                sort_mode="multi",
+                style_table={"overflowX": "auto"},
+                style_header={
+                    "backgroundColor": "#0f1625",
+                    "border": "1px solid #2d3748",
+                    "fontWeight": "700",
+                    "textAlign": "center",
+                    "color": "#f0f4f8"
+                },
+                style_cell={
+                    "backgroundColor": "#0b1220",
+                    "color": "#e5e7eb",
+                    "border": "1px solid #1f2937",
+                    "fontSize": 12,
+                    "textAlign": "center"
+                },
+                style_data_conditional=[
+                    {
+                        "if": {"column_id": "target_quantity"},
+                        "fontWeight": "700",
+                        "color": "#22d3ee",
+                        "fontSize": "14px"
+                    }
+                ]
+            )
+        ])
+    ])
+
+
+# ==========================================
+# 🔮 CALLBACKS PRÉDICTIONS DYNAMIQUES
+# ==========================================
+
+@app.callback(
+    [Output("predictive-bar", "figure"),
+     Output("predictive-scatter", "figure"),
+     Output("predictive-safety-stock", "figure"),
+     Output("predictive-table", "data"),
+     Output("predictive-filter-indicator", "children")],
+    [Input("predictive-filter-supplier", "value"),
+     Input("predictive-filter-category", "value"),
+     Input("predictive-filter-need", "value"),
+     Input("master-data", "data")],
+    prevent_initial_call=False
+)
+def update_predictive_charts(supplier_value, category_value, need_value, master_json):
+    """
+    Met à jour tous les graphiques prédictifs selon les filtres
+    """
+    print(f"\n🔮 Update Prédictions - Filtres: {supplier_value}, {category_value}, {need_value}")
+
+    # Charger données
+    if master_json:
+        df = pd.DataFrame(json.loads(master_json))
+    else:
+        df = get_df_cached()
+
+    # Colonnes nécessaires
+    cols = [
+        "product_name", "Supplier", "Product Category",
+        "total_stock", "Average Daily Sales",
+        "target_quantity", "Ajusted_total_need",
+        "avg_daily_sold", "projected_demand",
+        "safety_stock", "total_sold_30d"
+    ]
+    df = df[[c for c in cols if c in df.columns]].copy()
+
+    initial_count = len(df)
+
+    # Appliquer filtres
+    if supplier_value and supplier_value != "Tous":
+        df = df[df["Supplier"] == supplier_value]
+
+    if category_value and category_value != "Toutes":
+        df = df[df["Product Category"] == category_value]
+
+    if need_value and need_value != "Tous":
+        df = df[df["Ajusted_total_need"] == need_value]
+
+    filtered_count = len(df)
+
+    print(f"   📊 {initial_count} → {filtered_count} produits après filtres")
+
+    # Indicateur
+    filter_text = []
+    if supplier_value != "Tous":
+        filter_text.append(f"🏭 {supplier_value}")
+    if category_value != "Toutes":
+        filter_text.append(f"🏷️ {category_value}")
+    if need_value != "Tous":
+        filter_text.append(f"📦 {need_value}")
+
+    if filter_text:
+        indicator = html.Div([
+            html.Span("🔍 Filtres actifs : ", style={"fontWeight": "700"}),
+            html.Span(" • ".join(filter_text)),
+            html.Span(f" ({filtered_count} produits)", style={"marginLeft": "10px"})
+        ])
+    else:
+        indicator = html.Div([
+            html.Span("✨ Tous les produits affichés", style={"fontWeight": "700"}),
+            html.Span(f" ({filtered_count} produits)", style={"marginLeft": "10px"})
+        ])
+
+    # ========================================
+    # 📊 GRAPHIQUE 1 : BAR CHART TOP 20
+    # ========================================
+    df_chart = df[df['target_quantity'] > 0].copy() if 'target_quantity' in df.columns else df.copy()
+
+    fig_bar = px.bar(
+        df_chart.sort_values("target_quantity", ascending=False).head(20),
+        x="product_name",
+        y="target_quantity",
+        color="Ajusted_total_need",
+        hover_data=["Supplier", "total_stock", "avg_daily_sold"],
+        labels={"target_quantity": "Quantité à Commander"},
+        color_discrete_map={
+            "ORDER NOW": "#ef4444",
+            "ORDER NOT URGENT": "#f59e0b",
+            "NO NEED": "#10b981"
+        }
+    )
+
+    fig_bar.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb"),
+        xaxis=dict(tickangle=-45)
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 2 : SCATTER DEMANDE VS STOCK
+    # ========================================
+    if 'projected_demand' in df.columns:
+        fig_scatter = px.scatter(
+            df,
+            x="total_stock",
+            y="projected_demand",
+            color="Ajusted_total_need",
+            size="Average Daily Sales",
+            hover_data=["product_name", "Supplier"],
+            labels={
+                "total_stock": "Stock Actuel",
+                "projected_demand": "Demande Projetée"
+            },
+            color_discrete_map={
+                "ORDER NOW": "#ef4444",
+                "ORDER NOT URGENT": "#f59e0b",
+                "NO NEED": "#10b981"
+            }
+        )
+    else:
+        fig_scatter = px.scatter(
+            df,
+            x="total_stock",
+            y="Average Daily Sales",
+            color="Ajusted_total_need",
+            hover_data=["product_name", "Supplier"]
+        )
+
+    fig_scatter.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb")
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 3 : SAFETY STOCK PAR CATÉGORIE
+    # ========================================
+    if 'safety_stock' in df.columns:
+        safety_by_cat = (
+            df.groupby("Product Category")["safety_stock"]
+            .sum()
+            .reset_index()
+            .sort_values("safety_stock", ascending=False)
+        )
+
+        fig_safety = px.bar(
+            safety_by_cat,
+            x="Product Category",
+            y="safety_stock",
+            labels={"safety_stock": "Safety Stock Total"},
+            color="safety_stock",
+            color_continuous_scale="Blues"
+        )
+    else:
+        fig_safety = px.bar(
+            df.groupby("Product Category").size().reset_index(name="count"),
+            x="Product Category",
+            y="count"
+        )
+
+    fig_safety.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb"),
+        showlegend=False
+    )
+
+    print(f"   ✅ Prédictions mises à jour\n")
+
+    return (
+        fig_bar,
+        fig_scatter,
+        fig_safety,
+        df.to_dict("records"),
+        indicator
+    )
+
+'''
+def page_analytics(master_df: pd.DataFrame = None):
     df = master_df if master_df is not None else get_df_cached()
 
     # Colonnes nécessaires
@@ -6401,7 +7172,7 @@ def update_predictive_table(supplier_value, category_value):
         df = df[df["Product Category"] == category_value]
 
     return df.to_dict("records")
-
+'''
 
 def page_about():
     return html.Div(className="content", children=[

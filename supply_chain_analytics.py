@@ -69,7 +69,11 @@ try:
 except Exception as _e:
     DOCX_AVAILABLE = False
     DOCX_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
-
+# Imports existants + ces nouveaux
+#import anthropic
+import json
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 # from openai import OpenAI
 import requests
@@ -6317,7 +6321,30 @@ app.validation_layout = html.Div([
     #html.Div(id="selection-counter"),
     dbc.Button("✅ Tout sélectionner (vue filtrée)", id="btn-select-all", size="sm", color="secondary", className="me-2"),
     dbc.Button("🧹 Vider la sélection", id="btn-clear-selection", size="sm", color="secondary", className="me-2"),
-    dbc.Button("🧾 Générer le bon de commande", id="btn-po-pdf", size="sm", color="primary", disabled=True),
+    #dbc.Button("🧾 Générer le bon de commande", id="btn-po-pdf", size="sm", color="primary", disabled=True),
+# Dans votre layout, ajoutez AVANT le bouton "Générer BC" :
+
+html.Div([
+    dbc.Button(
+        "🤖 Lancer Agent IA",
+        id="btn-run-agent-ia",
+        color="success",
+        className="me-2"
+    ),
+    dbc.Button(
+        "📋 Remplir QAC = Target",
+        id="btn-fill-qac-target",
+        color="info",
+        className="me-2"
+    ),
+    dbc.Button(
+        "📄 Générer Bon de Commande",
+        id="btn-po-pdf",
+        color="primary",
+        disabled=True
+    )
+], className="mb-3"),
+
 
     # ==================== NAVIGATION ====================
     dbc.NavLink(id="nav-overview"),
@@ -6910,7 +6937,687 @@ def safe_float(v, default=0.0):
         return default
 
 
+# ============================================
+# AGENT IA - CALCUL QAC AVEC GEMINI
+# ============================================
+def agent_ia_calculer_qac(table_data, use_gemini=True):
+    """
+    Calcul intelligent des QAC avec Gemini ou algorithme local
+
+    Args:
+        table_data: Données du tableau
+        use_gemini: True pour utiliser Gemini, False pour algorithme local
+
+    Returns:
+        dict: {index: qac_calcule, ...}
+    """
+    if not table_data:
+        return {}
+
+    # Préparation des données
+    produits = []
+    for idx, prod in enumerate(table_data):
+        prod_name = str(prod.get("product_name", "")).strip()
+        if not prod_name:
+            continue
+
+        current_stock = safe_float(prod.get("current_stock", 0), 0)
+        target_qty = safe_float(prod.get("target_quantity", 0), 0)
+        supplier = str(prod.get("Supplier", "N/A")).strip()
+
+        if target_qty <= 0:
+            continue
+
+        stock_pct = (current_stock / target_qty * 100) if target_qty > 0 else 100
+
+        produits.append({
+            'index': idx,
+            'nom': prod_name[:50],
+            'stock_actuel': current_stock,
+            'quantite_cible': target_qty,
+            'stock_pct': round(stock_pct, 1),
+            'fournisseur': supplier
+        })
+
+    if not produits:
+        return {}
+
+    # Si Gemini désactivé ou échec, utiliser algorithme local
+    if not use_gemini:
+        return _agent_local(produits)
+
+    # Tentative avec Gemini
+    try:
+        return _agent_gemini(produits)
+    except Exception as e:
+        print(f"❌ Erreur Gemini : {e}")
+        print("⚠️ Basculement sur algorithme local")
+        return _agent_local(produits)
+
+
+def _agent_gemini(produits):
+    """Analyse avec Gemini API"""
+    print(f"\n🤖 Agent IA (Gemini 2.5 Flash) - Analyse de {len(produits)} produits...")
+
+    # Prompt optimisé
+    prompt = f"""Tu es un expert en gestion de stock. Analyse ces produits et détermine lesquels commander.
+
+DONNÉES ({len(produits)} produits) :
+{json.dumps(produits, indent=2, ensure_ascii=False)}
+
+RÈGLES DE DÉCISION :
+1. Stock < 15% de la cible → URGENT (commander pour atteindre 100% de la cible)
+2. Stock entre 15-30% → IMPORTANT (commander pour atteindre 100%)
+3. Stock entre 30-50% → NORMAL (commander pour atteindre 100%)
+4. Stock > 50% → PAS DE COMMANDE
+
+CALCUL QAC :
+- QAC = quantite_cible - stock_actuel
+- Arrondir à l'entier supérieur
+- Minimum = 1 si commande nécessaire
+
+FORMAT DE RÉPONSE :
+Réponds UNIQUEMENT avec ce JSON exact (sans texte, sans markdown) :
+{{
+  "produits": [
+    {{"index": 0, "qac": 150, "commander": true, "priorite": "URGENT"}},
+    {{"index": 1, "qac": 0, "commander": false, "priorite": "OK"}}
+  ],
+  "statistiques": {{
+    "urgents": 2,
+    "importants": 3,
+    "normaux": 1,
+    "total_commander": 6
+  }}
+}}"""
+
+    try:
+        # Utilisation du modèle Flash (le plus rapide et gratuit)
+        model = genai.GenerativeModel(GEMINI_FLASH)
+
+        # Configuration optimisée pour JSON
+        generation_config = genai.types.GenerationConfig(
+            temperature=0.1,  # Très bas pour cohérence
+            top_p=0.8,
+            top_k=20,
+            max_output_tokens=4096,
+            response_mime_type="application/json"  # Force JSON
+        )
+
+        # Appel API
+        response = model.generate_content(
+            prompt,
+            generation_config=generation_config,
+            safety_settings={
+                'HARASSMENT': 'block_none',
+                'HATE_SPEECH': 'block_none',
+                'SEXUALLY_EXPLICIT': 'block_none',
+                'DANGEROUS_CONTENT': 'block_none'
+            }
+        )
+
+        # Extraction réponse
+        texte = response.text.strip()
+
+        # Nettoyage
+        texte = texte.replace('```json', '').replace('```', '').strip()
+
+        # Chercher le JSON s'il y a du texte avant/après
+        start = texte.find('{')
+        end = texte.rfind('}') + 1
+        if start != -1 and end > start:
+            texte = texte[start:end]
+
+        # Parse
+        data = json.loads(texte)
+
+        # Extraction résultats
+        resultats = {}
+        for prod in data.get('produits', []):
+            if prod.get('commander', False):
+                idx = prod['index']
+                qac = prod.get('qac', 0)
+                if qac > 0:
+                    resultats[idx] = qac
+
+        # Stats
+        stats = data.get('statistiques', {})
+        print(f"✅ Gemini : {len(resultats)} produits à commander")
+        print(
+            f"   🔴 {stats.get('urgents', 0)} urgents | 🟠 {stats.get('importants', 0)} importants | 🟢 {stats.get('normaux', 0)} normaux")
+
+        return resultats
+
+    except json.JSONDecodeError as e:
+        print(f"❌ JSON invalide : {e}")
+        print(f"   Réponse : {texte[:300]}...")
+        raise
+    except Exception as e:
+        print(f"❌ Erreur API Gemini : {e}")
+        raise
+
+
+def _agent_local(produits):
+    """Algorithme local de secours (sans API)"""
+    print(f"\n🤖 Agent IA (Local) - Analyse de {len(produits)} produits...")
+
+    resultats = {}
+    stats = {'urgents': 0, 'importants': 0, 'normaux': 0}
+
+    for p in produits:
+        idx = p['index']
+        stock_pct = p['stock_pct']
+        current = p['stock_actuel']
+        target = p['quantite_cible']
+
+        qac = 0
+        priorite = None
+
+        if current <= 0:
+            qac = target
+            priorite = "URGENT"
+            stats['urgents'] += 1
+        elif stock_pct < 15:
+            qac = target - current
+            priorite = "URGENT"
+            stats['urgents'] += 1
+        elif stock_pct < 30:
+            qac = target - current
+            priorite = "IMPORTANT"
+            stats['importants'] += 1
+        elif stock_pct < 50:
+            qac = target - current
+            priorite = "NORMAL"
+            stats['normaux'] += 1
+
+        if qac > 0:
+            resultats[idx] = int(math.ceil(qac))
+            # Log détaillé
+            print(
+                f"   [{idx:3d}] {p['nom'][:35]:35} | {current:6.0f}/{target:6.0f} ({stock_pct:5.1f}%) → QAC: {resultats[idx]:5d} | {priorite}")
+
+    print(f"\n✅ Local : {len(resultats)} produits à commander")
+    print(f"   🔴 {stats['urgents']} urgents | 🟠 {stats['importants']} importants | 🟢 {stats['normaux']} normaux")
+
+    return resultats
+
+
+# ===== CALLBACK : AGENT IA =====
+@app.callback(
+    [Output("main-table", "data", allow_duplicate=True),
+     Output("main-table", "selected_rows", allow_duplicate=True)],
+    Input("btn-run-agent-ia", "n_clicks"),
+    State("main-table", "data"),
+    prevent_initial_call=True
+)
+def run_agent_ia_calcul(n_clicks, table_data):
+    """
+    Lance l'Agent IA (Gemini ou local en fallback)
+    """
+    if not n_clicks or not table_data:
+        return no_update, no_update
+
+    # Tentative Gemini, fallback automatique sur local si échec
+    USE_GEMINI = True  # Mettez False pour forcer l'algorithme local
+
+    qac_par_index = agent_ia_calculer_qac(table_data, use_gemini=USE_GEMINI)
+
+    if not qac_par_index:
+        print("⚠️ Aucun produit à commander identifié")
+        return no_update, no_update
+
+    # Mise à jour tableau
+    updated_data = table_data.copy()
+    indices_selection = []
+
+    for idx, qac_value in qac_par_index.items():
+        if 0 <= idx < len(updated_data):
+            updated_data[idx]['QAC edited'] = qac_value
+            indices_selection.append(idx)
+
+    print(f"\n✅ RÉSULTAT FINAL :")
+    print(f"   📝 {len(qac_par_index)} QAC calculées")
+    print(f"   ☑️  {len(indices_selection)} lignes présélectionnées\n")
+
+    return updated_data, sorted(indices_selection)
+
+# ============================================
+# FONCTION 2 : VALIDATION QAC
+# ============================================
+def valider_qac_selection(selected_rows, table_data):
+    """
+    Valide que toutes les lignes ont QAC edited > 0
+    Retourne : (is_valid, error_message, missing_indices)
+    """
+    missing = []
+    produits_manquants = []
+
+    for idx in selected_rows:
+        if 0 <= idx < len(table_data):
+            qac = safe_float(table_data[idx].get("QAC edited", 0), 0)
+            if qac <= 0:
+                missing.append(idx)
+                nom = str(table_data[idx].get("product_name", ""))[:40]
+                produits_manquants.append(nom)
+
+    if missing:
+        msg = f"❌ {len(missing)} produit(s) sans QAC edited :\n"
+        for i, nom in enumerate(produits_manquants[:5], 1):
+            msg += f"  {i}. {nom}\n"
+        if len(produits_manquants) > 5:
+            msg += f"\n... et {len(produits_manquants) - 5} autre(s)\n"
+        msg += "\n⚠️ Utilisez '🤖 Agent IA' ou remplissez manuellement"
+        return False, msg, missing
+
+    return True, "", []
+
+
+# ============================================
+# FONCTION 3 : GÉNÉRATION EXCEL AVEC FORMULES
+# ============================================
+def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
+    """
+    Génère un Excel avec colonnes Remise/Escompte éditables
+    et formules automatiques
+    """
+    if not selected_products:
+        raise ValueError("Aucun produit")
+
+    # Regroupement par fournisseur
+    suppliers = {}
+    for prod in selected_products:
+        sup = str(prod.get("Supplier", "")).strip()
+        if not sup or sup.lower() == "nan":
+            sup = "Fournisseur non spécifié"
+        suppliers.setdefault(sup, []).append(prod)
+
+    # Création workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Bon de Commande"
+
+    # Styles
+    header_fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True, size=11)
+    remise_fill = PatternFill(start_color="FFF9C4", end_color="FFF9C4", fill_type="solid")
+    escompte_fill = PatternFill(start_color="FFE0B2", end_color="FFE0B2", fill_type="solid")
+    total_fill = PatternFill(start_color="C8E6C9", end_color="C8E6C9", fill_type="solid")
+    border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    # En-tête
+    po_number = get_next_po_number()
+    ws['A1'] = f'BON DE COMMANDE N° {po_number}'
+    ws['A1'].font = Font(size=18, bold=True, color="003366")
+    ws.merge_cells('A1:J1')
+    ws['A1'].alignment = Alignment(horizontal='center')
+
+    ws['A2'] = COMPANY_NAME
+    ws['A2'].font = Font(bold=True, size=12)
+    ws['A3'] = COMPANY_ADDRESS
+    ws['A4'] = f"Tél : {COMPANY_PHONE}"
+    ws['A5'] = f"Email : {COMPANY_EMAIL}"
+    ws['A6'] = f"Date : {datetime.now().strftime('%d/%m/%Y')}"
+    ws['A6'].font = Font(bold=True)
+
+    current_row = 8
+    TVA_RATE = 0.18
+
+    # Tableaux par fournisseur
+    for supplier, products in suppliers.items():
+        # Titre fournisseur
+        ws[f'A{current_row}'] = f'📦 Fournisseur : {supplier}'
+        ws[f'A{current_row}'].font = Font(size=14, bold=True, color="228B22")
+        ws.merge_cells(f'A{current_row}:J{current_row}')
+        current_row += 1
+
+        # En-têtes
+        headers = ['Réf.', 'Désignation', 'Qté', 'Unité', 'PU HT', 'Remise %', 'Escompte %', 'Total HT', 'TVA 18%',
+                   'Total TTC']
+        for col_idx, header in enumerate(headers, start=1):
+            cell = ws.cell(row=current_row, column=col_idx, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = border
+
+        ws.cell(row=current_row, column=6).fill = remise_fill
+        ws.cell(row=current_row, column=7).fill = escompte_fill
+
+        current_row += 1
+        first_data_row = current_row
+
+        # Lignes produits
+        for prod in products:
+            prod_name = str(prod.get("product_name", "")).strip()
+            prod_key = prod_name.lower()
+
+            # QAC edited OBLIGATOIRE
+            qac_edited = safe_float(prod.get("QAC edited"), 0.0)
+            if qac_edited <= 0:
+                continue
+
+            packaging_text = packaging_map.get(prod_key, "")
+            qty_major = consolidate_to_major(qac_edited, packaging_text, prod_name)
+
+            unit_price = safe_float(price_map.get(prod_key, 1000.0), 1000.0)
+            if unit_price <= 0:
+                unit_price = 1000.0
+
+            ref_code = ref_from_name(prod_name)
+
+            # Remplissage cellules
+            ws.cell(row=current_row, column=1, value=ref_code).border = border
+            ws.cell(row=current_row, column=2, value=prod_name[:50]).border = border
+
+            cell = ws.cell(row=current_row, column=3, value=qty_major)
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = border
+
+            cell = ws.cell(row=current_row, column=4, value="unité")
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = border
+
+            cell = ws.cell(row=current_row, column=5, value=unit_price)
+            cell.number_format = '#,##0'
+            cell.alignment = Alignment(horizontal='right')
+            cell.border = border
+
+            # Remise % (éditable)
+            cell = ws.cell(row=current_row, column=6, value=0)
+            cell.number_format = '0.00'
+            cell.alignment = Alignment(horizontal='center')
+            cell.fill = remise_fill
+            cell.border = border
+
+            # Escompte % (éditable)
+            cell = ws.cell(row=current_row, column=7, value=0)
+            cell.number_format = '0.00'
+            cell.alignment = Alignment(horizontal='center')
+            cell.fill = escompte_fill
+            cell.border = border
+
+            # FORMULES AUTOMATIQUES
+            # Total HT = (PU × Qté) × (1-Remise/100) × (1-Escompte/100)
+            formula_ht = f"=(E{current_row}*C{current_row})*(1-F{current_row}/100)*(1-G{current_row}/100)"
+            cell = ws.cell(row=current_row, column=8, value=formula_ht)
+            cell.number_format = '#,##0'
+            cell.alignment = Alignment(horizontal='right')
+            cell.border = border
+
+            # TVA
+            formula_tva = f"=H{current_row}*0.18"
+            cell = ws.cell(row=current_row, column=9, value=formula_tva)
+            cell.number_format = '#,##0'
+            cell.alignment = Alignment(horizontal='right')
+            cell.border = border
+
+            # Total TTC
+            formula_ttc = f"=H{current_row}+I{current_row}"
+            cell = ws.cell(row=current_row, column=10, value=formula_ttc)
+            cell.number_format = '#,##0'
+            cell.alignment = Alignment(horizontal='right')
+            cell.fill = total_fill
+            cell.border = border
+            cell.font = Font(bold=True)
+
+            current_row += 1
+
+        last_data_row = current_row - 1
+
+        # Sous-total
+        if last_data_row >= first_data_row:
+            ws.merge_cells(f'A{current_row}:E{current_row}')
+            cell = ws.cell(row=current_row, column=1, value=f"SOUS-TOTAL {supplier.upper()}")
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='right')
+            cell.border = border
+
+            cell = ws.cell(row=current_row, column=8, value=f"=SUM(H{first_data_row}:H{last_data_row})")
+            cell.number_format = '#,##0'
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='right')
+            cell.border = border
+
+            cell = ws.cell(row=current_row, column=9, value=f"=SUM(I{first_data_row}:I{last_data_row})")
+            cell.number_format = '#,##0'
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='right')
+            cell.border = border
+
+            cell = ws.cell(row=current_row, column=10, value=f"=SUM(J{first_data_row}:J{last_data_row})")
+            cell.number_format = '#,##0'
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='right')
+            cell.fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
+            cell.border = border
+
+            current_row += 1
+
+        current_row += 2
+
+    # Totaux globaux
+    current_row += 1
+    ws[f'G{current_row}'] = "TOTAL HT :"
+    ws[f'G{current_row}'].font = Font(bold=True, size=12)
+    ws[f'G{current_row}'].alignment = Alignment(horizontal='right')
+    ws[f'H{current_row}'] = '=SUMIF(A:A,"SOUS-TOTAL*",H:H)'
+    ws[f'H{current_row}'].number_format = '#,##0 "FCFA"'
+    ws[f'H{current_row}'].font = Font(bold=True, size=12)
+
+    current_row += 1
+    ws[f'G{current_row}'] = "TVA (18%) :"
+    ws[f'G{current_row}'].font = Font(bold=True, size=12)
+    ws[f'G{current_row}'].alignment = Alignment(horizontal='right')
+    ws[f'H{current_row}'] = '=SUMIF(A:A,"SOUS-TOTAL*",I:I)'
+    ws[f'H{current_row}'].number_format = '#,##0 "FCFA"'
+    ws[f'H{current_row}'].font = Font(bold=True, size=12)
+
+    current_row += 1
+    ws[f'G{current_row}'] = "TOTAL TTC :"
+    ws[f'G{current_row}'].font = Font(bold=True, size=14, color="006400")
+    ws[f'G{current_row}'].alignment = Alignment(horizontal='right')
+    ws[f'H{current_row}'] = '=SUMIF(A:A,"SOUS-TOTAL*",J:J)'
+    ws[f'H{current_row}'].number_format = '#,##0 "FCFA"'
+    ws[f'H{current_row}'].font = Font(bold=True, size=14, color="FFFFFF")
+    ws[f'H{current_row}'].fill = PatternFill(start_color="27AE60", end_color="27AE60", fill_type="solid")
+
+    # Instructions
+    current_row += 3
+    ws[f'A{current_row}'] = "📌 INSTRUCTIONS :"
+    ws[f'A{current_row}'].font = Font(bold=True, size=12, color="FF0000")
+    current_row += 1
+
+    instructions = [
+        "1. Colonnes 'Remise %' et 'Escompte %' ÉDITABLES (jaune/orange)",
+        "2. Saisissez un % (ex: 5 pour 5%)",
+        "3. Les montants se RECALCULENT AUTOMATIQUEMENT",
+        "4. Formule : TTC = (PU × Qté) × (1-Remise/100) × (1-Escompte/100) × 1.18",
+        "5. Remise s'applique d'abord, puis escompte"
+    ]
+    for instruction in instructions:
+        ws[f'A{current_row}'] = instruction
+        ws[f'A{current_row}'].font = Font(size=10)
+        current_row += 1
+
+    # Largeurs colonnes
+    ws.column_dimensions['A'].width = 12
+    ws.column_dimensions['B'].width = 40
+    ws.column_dimensions['C'].width = 8
+    ws.column_dimensions['D'].width = 10
+    ws.column_dimensions['E'].width = 12
+    ws.column_dimensions['F'].width = 12
+    ws.column_dimensions['G'].width = 12
+    ws.column_dimensions['H'].width = 15
+    ws.column_dimensions['I'].width = 15
+    ws.column_dimensions['J'].width = 15
+
+    # Export
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    return buf, po_number
+
+
+# ===== CALLBACK : GÉNÉRATION BON DE COMMANDE EXCEL AVEC VALIDATION =====
+@app.callback(
+    [Output("download-po", "data"),
+     Output("po-loading-overlay", "is_open")],
+    Input("btn-po-pdf", "n_clicks"),
+    [State("main-table", "selected_rows"),
+     State("main-table", "data")],
+    prevent_initial_call=True
+)
+def export_po_excel_validated(n_clicks, selected_rows, table_data):
+    """
+    Génère un BC Excel SEULEMENT si toutes les QAC edited sont remplies
+    """
+    if not n_clicks or not table_data or not selected_rows:
+        return no_update, False
+
+    print("\n" + "=" * 60)
+    print("📄 GÉNÉRATION BON DE COMMANDE EXCEL")
+    print("=" * 60)
+
+    # ========== VALIDATION STRICTE QAC ==========
+    is_valid, error_msg, missing = valider_qac_selection(selected_rows, table_data)
+
+    if not is_valid:
+        print("❌ VALIDATION ÉCHOUÉE")
+        print(error_msg)
+        print("=" * 60 + "\n")
+        # TODO : Afficher une alerte à l'utilisateur
+        return no_update, False
+
+    print("✅ VALIDATION OK - Toutes les QAC sont remplies")
+
+    # ========== GÉNÉRATION ==========
+    selected_products = [table_data[idx] for idx in selected_rows]
+    print(f"📦 Produits : {len(selected_products)}")
+
+    # Chargement données
+    price_map = get_catalog_prices()
+    packaging_map = get_packaging_map_cached()
+
+    try:
+        # Génération Excel avec formules
+        excel_buffer, po_number = generer_bc_excel_avec_formules(
+            selected_products, price_map, packaging_map
+        )
+
+        fname = f"BC_{po_number}_{len(selected_products)}p.xlsx"
+
+        print("=" * 60)
+        print(f"✅ Excel généré : {fname}")
+        print(f"   ⚡ Colonnes Remise/Escompte éditables avec calculs auto")
+        print("=" * 60 + "\n")
+
+        return dcc.send_bytes(excel_buffer.read(), filename=fname), False
+
+    except Exception as e:
+        print(f"❌ Erreur génération : {e}")
+        import traceback
+        traceback.print_exc()
+        return no_update, False
+
+
+# ===== CALLBACK : AGENT IA - CALCULER QAC =====
+@app.callback(
+    [Output("main-table", "data", allow_duplicate=True),
+     Output("main-table", "selected_rows", allow_duplicate=True)],
+    Input("btn-run-agent-ia", "n_clicks"),
+    State("main-table", "data"),
+    prevent_initial_call=True
+)
+def run_agent_ia_calcul(n_clicks, table_data):
+    """
+    Lance l'Agent IA pour calculer les QAC et présélectionner
+    """
+    if not n_clicks or not table_data:
+        return no_update, no_update
+
+    # Appel Agent IA
+    qac_par_index = agent_ia_calculer_qac(table_data)
+
+    if not qac_par_index:
+        return no_update, no_update
+
+    # Mise à jour du tableau
+    updated_data = table_data.copy()
+    indices_selection = []
+
+    for idx, qac_value in qac_par_index.items():
+        if 0 <= idx < len(updated_data):
+            updated_data[idx]['QAC edited'] = qac_value
+            indices_selection.append(idx)
+
+    print(f"✅ {len(qac_par_index)} QAC calculées et {len(indices_selection)} lignes sélectionnées")
+
+    return updated_data, sorted(indices_selection)
+
+
+# ===== CALLBACK : REMPLIR QAC DEPUIS TARGET =====
+@app.callback(
+    Output("main-table", "data", allow_duplicate=True),
+    Input("btn-fill-qac-target", "n_clicks"),
+    [State("main-table", "selected_rows"),
+     State("main-table", "data")],
+    prevent_initial_call=True
+)
+def fill_qac_from_target(n_clicks, selected_rows, table_data):
+    """
+    Copie target_quantity → QAC edited pour les lignes sélectionnées
+    """
+    if not n_clicks or not selected_rows or not table_data:
+        return no_update
+
+    updated_data = table_data.copy()
+    count = 0
+
+    for idx in selected_rows:
+        if 0 <= idx < len(updated_data):
+            target = safe_float(updated_data[idx].get("target_quantity", 0), 0)
+            if target > 0:
+                updated_data[idx]["QAC edited"] = target
+                count += 1
+
+    print(f"✅ {count} QAC remplies depuis target_quantity")
+    return updated_data
+
+
+# ===== CALLBACK : ACTIVER BOUTON BC =====
+@app.callback(
+    Output("btn-po-pdf", "disabled"),
+    [Input("main-table", "selected_rows"),
+     Input("main-table", "data")],  # Ajoutez data comme Input pour réagir aux changements
+    prevent_initial_call=True
+)
+def toggle_po_button(selected_rows, data):
+    """
+    Active bouton SEULEMENT si toutes les QAC edited > 0
+    """
+    if not data or not selected_rows:
+        return True
+
+    for idx in selected_rows:
+        if 0 <= idx < len(data):
+            row = data[idx] or {}
+
+            # Vérif product_name + Supplier
+            if not row.get("product_name") or not row.get("Supplier"):
+                return True
+
+            # NOUVEAU : Vérif QAC edited > 0
+            qac = safe_float(row.get("QAC edited", 0), 0)
+            if qac <= 0:
+                return True  # Désactiver si QAC manquant
+
+    return False  # Tout OK
 # ====== EXPORT BON DE COMMANDE WORD ======
+'''
 # ===== Génération BON DE COMMANDE (DOCX) avec conversion QAC edited -> unités majeures =====
 @app.callback(
     [Output("download-po", "data"),
@@ -7134,7 +7841,7 @@ def export_po_word_optimized(n_clicks, selected_rows, table_data):
     print("=" * 60 + "\n")
 
     return dcc.send_bytes(buf.read(), filename=fname), False  # ✅ Fermer overlay
-
+'''
 
 
 '''
@@ -7481,7 +8188,7 @@ def export_po_word(n_clicks, selected_rows, table_data):
     print(f"{'=' * 60}\n")
 
     return dcc.send_bytes(buf.read(), filename=fname)
-'''
+
 
 # Activer le bouton PO si au moins une ligne valide est sélectionnée
 @app.callback(
@@ -7508,7 +8215,7 @@ def toggle_po_button(selected_rows, data):
 
     # Sinon, désactiver
     return True
-
+'''
 # ==================== CALLBACK 4 : COMPTEUR DE SÉLECTION ====================
 @app.callback(
     Output("selection-counter", "children"),

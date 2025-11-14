@@ -3677,14 +3677,14 @@ def make_kpis(df: pd.DataFrame):
                         ], style={"marginBottom": "6px"}),
 
                         html.Div([
-                            html.Small(f"🏭 {prod['supplier']}", style={"color": "#9ca3af", "fontSize": "11px"}),
+                            html.Small(f" {prod['supplier']}", style={"color": "#9ca3af", "fontSize": "11px"}),
                             html.Span(" • ", style={"color": "#4b5563"}),
-                            html.Small(f"📦 Stock: {prod['stock']:.0f}", style={"color": "#9ca3af", "fontSize": "11px"}),
+                            html.Small(f" Stock: {prod['stock']:.0f}", style={"color": "#9ca3af", "fontSize": "11px"}),
                         ], style={"marginBottom": "4px"}),
 
                         html.Div([
                             html.Small(
-                                f"⏰ Couverture: {prod['coverage_days']:.1f} jours",
+                                f" Couverture: {prod['coverage_days']:.1f} jours",
                                 style={
                                     "color": "#ef4444" if prod['coverage_days'] < 7 else "#f59e0b",
                                     "fontSize": "11px",
@@ -3692,7 +3692,7 @@ def make_kpis(df: pd.DataFrame):
                                     "marginRight": "12px"
                                 }
                             ),
-                            html.Small(f"📊 ADS: {prod['ads']:.1f}/j", style={"color": "#6b7280", "fontSize": "11px"}),
+                            html.Small(f" ADS: {prod['ads']:.1f}/j", style={"color": "#6b7280", "fontSize": "11px"}),
                         ], style={"marginBottom": "6px"}),
 
                         html.Div([
@@ -3741,7 +3741,7 @@ def make_kpis(df: pd.DataFrame):
         children=[
             dbc.Button([
                 html.Span("🤖", style={"fontSize": "16px", "marginRight": "8px"}),
-                html.B("À risque ML : "),
+                html.B("À risque de rupture : "),
                 dbc.Badge(
                     f"{risk_count}",
                     color="danger" if any(p.get('ml_probability', 0) > 0.7 for p in
@@ -3773,7 +3773,7 @@ def make_kpis(df: pd.DataFrame):
                         html.Hr(style={"borderColor": "#374151", "margin": "12px 0"}),
                         html.Div([
                             html.Small(
-                                f"📊 Affichant {min(len(risk_products), 50)} produit(s)",
+                                f" Affichant {min(len(risk_products), 50)} produit(s)",
                                 style={"color": "#6b7280", "fontSize": "10px", "marginRight": "10px"}
                             ),
                             html.Small(

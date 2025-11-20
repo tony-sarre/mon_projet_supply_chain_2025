@@ -6,7 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="css">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/supply_chain_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/supply_chain_analytics.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/po_counter.json" beforeDir="false" afterPath="$PROJECT_DIR$/po_counter.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -77,14 +77,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00136" summary="reset: callback def reset_selection_on_filter">
-      <option name="closed" value="true" />
-      <created>1761662536677</created>
-      <option name="number" value="00136" />
-      <option name="presentableId" value="LOCAL-00136" />
-      <option name="project" value="LOCAL" />
-      <updated>1761662536677</updated>
     </task>
     <task id="LOCAL-00137" summary="local storage for QAC edit">
       <option name="closed" value="true" />
@@ -470,7 +462,15 @@
       <option name="project" value="LOCAL" />
       <updated>1763136954096</updated>
     </task>
-    <option name="localTasksCounter" value="185" />
+    <task id="LOCAL-00185" summary="css">
+      <option name="closed" value="true" />
+      <created>1763138516210</created>
+      <option name="number" value="00185" />
+      <option name="presentableId" value="LOCAL-00185" />
+      <option name="project" value="LOCAL" />
+      <updated>1763138516210</updated>
+    </task>
+    <option name="localTasksCounter" value="186" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">

@@ -1,7 +1,7 @@
 // ========================================
 // 🎨 COLORISATION TABLEAU DASH
 // ========================================
-console.log("🎨 Script colorize.js chargé");
+/*console.log("🎨 Script colorize.js chargé");
 
 function colorizeTableRows() {
     console.log("🔍 colorizeTableRows() appelée");
@@ -152,3 +152,5 @@ window.addEventListener('load', () => {
 window.colorizeTableRows = colorizeTableRows;
 
 console.log("✅ colorize.js prêt");
+
+*/

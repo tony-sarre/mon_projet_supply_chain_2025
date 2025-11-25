@@ -8,6 +8,8 @@ import csv
 import os, sys
 from functools import lru_cache
 
+from dash.exceptions import PreventUpdate
+
 #import MATCH
 
 print("CWD:", os.getcwd())
@@ -309,65 +311,238 @@ COMPANY_EMAIL = os.getenv("COMPANY_EMAIL", "")
 DEFAULT_TVA_RATE = float(os.getenv("COMPANY_TVA_RATE", "0.18"))  # 18% par défaut
 
 
-def send_notification_email(to_email: str, to_name: str, product_name: str, author: str, message: str):
-    """Envoie un email de notification à une personne mentionnée"""
+def send_notification_email(recipient_email, recipient_name, product_name, author, message):
+    """
+    Envoie un email de notification à un membre de l'équipe
+    """
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    from datetime import datetime
 
-    # Vérifier config email
-    if not SMTP_USER or not SMTP_PASSWORD:
-        print("⚠️ Email non configuré (SMTP_USER/SMTP_PASSWORD manquants dans .env)")
+    print(f"\n{'=' * 60}")
+    print(f"📧 ENVOI EMAIL À {recipient_name}")
+    print(f"{'=' * 60}")
+
+    # Configuration SMTP
+    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER", "")
+    smtp_password = os.getenv("SMTP_PASSWORD", "")
+
+    print(f"📨 SMTP: {smtp_server}:{smtp_port}")
+    print(f"📨 From: {smtp_user}")
+    print(f"📨 To: {recipient_email}")
+    print(f"📨 Password: {'✅ OK' if smtp_password else '❌ Manquant'}")
+
+    # Vérification
+    if not smtp_user or not smtp_password:
+        print("❌ SMTP_USER ou SMTP_PASSWORD non défini")
+        print("   Créez un fichier .env avec :")
+        print("   SMTP_USER=votre.email@gmail.com")
+        print("   SMTP_PASSWORD=votre_mot_de_passe_application")
         return False
 
     try:
         # Créer le message
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"[Maad SaSu] Nouvelle mention sur {product_name}"
-        msg["From"] = SMTP_USER
-        msg["To"] = to_email
+        msg["From"] = smtp_user
+        msg["To"] = recipient_email
+        msg["Subject"] = f"📝 {author} vous a mentionné sur {product_name}"
 
         # Corps HTML
-        html = f"""
+        html_body = f"""
         <html>
-        <body style="font-family: Arial, sans-serif; color: #333;">
-            <div style="background: #0b1220; padding: 20px; border-radius: 10px;">
-                <h2 style="color: #22d3ee;">📌 Nouvelle mention</h2>
-                <p style="color: #e5e7eb;">Bonjour {to_name},</p>
-                <p style="color: #e5e7eb;">
-                    <strong>{author}</strong> vous a mentionné dans une note sur le produit 
-                    <strong style="color: #22d3ee;">{product_name}</strong> :
-                </p>
-                <blockquote style="background: #1f2937; padding: 15px; border-left: 4px solid #22d3ee; margin: 20px 0;">
-                    <p style="color: #e5e7eb; font-style: italic;">{message}</p>
-                </blockquote>
-                <p style="color: #9ca3af; font-size: 12px;">
-                    Date : {datetime.now().strftime('%d/%m/%Y à %H:%M')}
-                </p>
-                <a href="https://your-dashboard-url.com" 
-                   style="display: inline-block; background: #22d3ee; color: #001018; 
-                          padding: 10px 20px; text-decoration: none; border-radius: 5px; 
-                          font-weight: bold; margin-top: 10px;">
-                    Voir le dashboard
-                </a>
+        <head>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    background: #f9f9f9;
+                    padding: 20px;
+                }}
+                .container {{
+                    max-width: 600px;
+                    margin: 0 auto;
+                    background: white;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                }}
+                .header {{
+                    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+                    color: white;
+                    padding: 24px;
+                    text-align: center;
+                }}
+                .header h2 {{
+                    margin: 0;
+                    font-size: 24px;
+                }}
+                .content {{
+                    padding: 24px;
+                }}
+                .mention-badge {{
+                    display: inline-block;
+                    background: #22d3ee;
+                    color: #001018;
+                    padding: 4px 12px;
+                    border-radius: 20px;
+                    font-weight: 700;
+                    font-size: 14px;
+                    margin: 8px 0;
+                }}
+                .product {{
+                    font-size: 18px;
+                    font-weight: 700;
+                    color: #1e40af;
+                    margin: 16px 0;
+                    padding: 12px;
+                    background: #f0f4f8;
+                    border-left: 4px solid #22d3ee;
+                    border-radius: 4px;
+                }}
+                .note {{
+                    background: #f9fafb;
+                    padding: 16px;
+                    border-radius: 8px;
+                    margin: 16px 0;
+                    border: 1px solid #e5e7eb;
+                }}
+                .note p {{
+                    margin: 0;
+                    color: #374151;
+                    line-height: 1.6;
+                }}
+                .author {{
+                    color: #6b7280;
+                    font-size: 14px;
+                    margin-top: 16px;
+                    padding-top: 16px;
+                    border-top: 1px solid #e5e7eb;
+                }}
+                .footer {{
+                    text-align: center;
+                    padding: 20px;
+                    background: #f3f4f6;
+                    color: #6b7280;
+                    font-size: 12px;
+                }}
+                .button {{
+                    display: inline-block;
+                    background: #22d3ee;
+                    color: #001018;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: 700;
+                    margin: 16px 0;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h2>💬 Nouvelle mention</h2>
+                </div>
+
+                <div class="content">
+                    <p>Bonjour <strong>{recipient_name}</strong>,</p>
+
+                    <p style="margin: 16px 0;">
+                        <strong>{author}</strong> vous a mentionné dans une note concernant :
+                    </p>
+
+                    <div class="product">
+                        🏷️ {product_name}
+                    </div>
+
+                    <div class="note">
+                        <p>{message.replace('@' + recipient_name.split()[0].lower(), f'<span class="mention-badge">@{recipient_name.split()[0]}</span>')}</p>
+                    </div>
+
+                    <div class="author">
+                        <strong>✍️ Auteur :</strong> {author}<br>
+                        <strong>📅 Date :</strong> {datetime.now().strftime('%d/%m/%Y à %H:%M')}
+                    </div>
+                </div>
+
+                <div class="footer">
+                    <p><strong>MAAD SAS</strong> - Supply Chain Command Center</p>
+                    <p>92 Neto Foire Azur • Tél: 221 77 875 20 20</p>
+                    <p style="margin-top: 12px; font-size: 11px;">
+                        Cet email a été envoyé automatiquement. Ne pas répondre.
+                    </p>
+                </div>
             </div>
         </body>
         </html>
         """
 
-        part = MIMEText(html, "html")
-        msg.attach(part)
+        # Version texte
+        text_body = f"""
+Bonjour {recipient_name},
 
-        # Envoyer via SMTP
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.send_message(msg)
+{author} vous a mentionné dans une note concernant :
 
-        print(f"✅ Email envoyé à {to_email}")
+📦 Produit : {product_name}
+
+Note :
+{message}
+
+---
+Auteur : {author}
+Date : {datetime.now().strftime('%d/%m/%Y à %H:%M')}
+
+---
+MAAD SAS - Supply Chain Command Center
+92 Neto Foire Azur
+Tél: 221 77 875 20 20
+
+Cet email a été envoyé automatiquement.
+        """
+
+        # Attacher les deux versions
+        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+        print("✅ Message créé")
+
+        # Connexion SMTP
+        print(f"🔌 Connexion à {smtp_server}...")
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+
+        print("🔐 Authentification...")
+        server.login(smtp_user, smtp_password)
+
+        print("📤 Envoi...")
+        server.sendmail(smtp_user, [recipient_email], msg.as_string())
+        server.quit()
+
+        print(f"✅ Email envoyé à {recipient_name} !")
+        print(f"{'=' * 60}\n")
+
         return True
 
-    except Exception as e:
-        print(f"❌ Erreur envoi email : {type(e).__name__}: {e}")
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"❌ ERREUR AUTHENTIFICATION : {e}")
+        print("   → Vérifiez SMTP_USER et SMTP_PASSWORD")
+        print("   → Créez un mot de passe d'application : https://myaccount.google.com/apppasswords")
         return False
 
+    except smtplib.SMTPException as e:
+        print(f"❌ ERREUR SMTP : {e}")
+        return False
+
+    except Exception as e:
+        print(f"❌ ERREUR : {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 # ==================== VÉRIFIER LA CONFIGURATION EMAIL ====================
 # Vers ligne 200-250, vérifie que ces variables existent :
@@ -5316,120 +5491,204 @@ def page_overview(master_df: pd.DataFrame = None):
         }
     )
 
-    # ✅ Modal avec sélecteur de produit
+    # ✅ Modal avec sélecteur de produit - THÈME CLAIR LISIBLE
     notes_modal = dbc.Modal([
         dbc.ModalHeader([
             html.Div([
                 html.Span("💬", style={"fontSize": "20px", "marginRight": "8px"}),
-                html.Span("Notes Produit", style={"fontWeight": "700"})
+                html.Span("Notes Produit", style={"fontWeight": "700", "color": "#1e293b"})
             ], style={"display": "flex", "alignItems": "center"})
-        ], style={"background": "#0f1625", "borderBottom": "1px solid #1f2937"}),
+        ], style={
+            "background": "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)",
+            "borderBottom": "2px solid #22d3ee",
+            "padding": "16px 20px"
+        }),
 
         dbc.ModalBody([
-            # ✅ NOUVEAU : Sélecteur de produit
+            # ========================================
+            # 🎯 SÉLECTEUR DE PRODUIT
+            # ========================================
             html.Div([
-                html.Label("Produit concerné", style={"color": "#e5e7eb", "fontWeight": "600", "marginBottom": "8px"}),
+                html.Label("Produit concerné", style={
+                    "color": "#1e293b",
+                    "fontWeight": "700",
+                    "marginBottom": "8px",
+                    "fontSize": "14px"
+                }),
                 dcc.Dropdown(
                     id="note-product-selector",
                     options=[],  # Sera rempli dynamiquement
                     placeholder="Sélectionner un produit...",
                     style={
-                        "background": "#0a1320",
-                        "color": "#e5e7eb",
-                        "border": "1px solid #1f2937",
-                        "borderRadius": "8px",
                         "marginBottom": "16px"
                     },
-                    className="dark-dropdown"
+                    className="light-dropdown"
                 )
-            ]),
+            ], style={
+                "padding": "16px",
+                "background": "#ffffff",
+                "borderRadius": "12px",
+                "border": "1px solid #e2e8f0",
+                "marginBottom": "16px",
+                "boxShadow": "0 1px 3px rgba(0,0,0,0.05)"
+            }),
 
-            html.Hr(style={"borderColor": "#1f2937", "margin": "16px 0"}),
+            html.Hr(style={"borderColor": "#cbd5e1", "margin": "16px 0"}),
 
-            # Liste des notes existantes
-            html.Div(
-                id="notes-display-list",
-                style={
-                    "maxHeight": "280px",
-                    "overflowY": "auto",
-                    "marginBottom": "16px",
-                    "padding": "10px",
-                    "background": "#0a1320",
-                    "borderRadius": "10px",
-                    "border": "1px solid #1f2937"
-                }
-            ),
-
-            html.Hr(style={"borderColor": "#1f2937", "margin": "16px 0"}),
-
-            # Formulaire nouvelle note
+            # ========================================
+            # 📋 LISTE DES NOTES EXISTANTES
+            # ========================================
             html.Div([
-                html.Label("Nouvelle note", style={"color": "#e5e7eb", "fontWeight": "600", "marginBottom": "8px"}),
+                html.Div("📋 Historique des notes", style={
+                    "fontWeight": "700",
+                    "color": "#1e293b",
+                    "marginBottom": "12px",
+                    "fontSize": "14px"
+                }),
+                html.Div(
+                    id="notes-display-list",
+                    style={
+                        "maxHeight": "300px",
+                        "overflowY": "auto",
+                        "padding": "12px",
+                        "background": "#f8fafc",
+                        "borderRadius": "10px",
+                        "border": "1px solid #e2e8f0"
+                    }
+                )
+            ], style={
+                "marginBottom": "16px"
+            }),
+
+            html.Hr(style={"borderColor": "#cbd5e1", "margin": "16px 0"}),
+
+            # ========================================
+            # ✍️ FORMULAIRE NOUVELLE NOTE
+            # ========================================
+            html.Div([
+                html.Label("✍️ Nouvelle note", style={
+                    "color": "#1e293b",
+                    "fontWeight": "700",
+                    "marginBottom": "8px",
+                    "fontSize": "14px"
+                }),
+
                 dbc.Textarea(
                     id="note-text-input",
-                    placeholder="Votre message... Utilisez @tony, @samuel, @maimouna, @seydouna",
-                    rows=3,
+                    placeholder="Écrivez votre message... Utilisez @tony, @samuel, etc. pour notifier",
+                    rows=4,
                     style={
-                        "background": "#0a1320",
-                        "color": "#e5e7eb",
-                        "border": "1px solid #1f2937",
-                        "borderRadius": "8px",
-                        "marginBottom": "10px"
+                        "background": "#ffffff",
+                        "color": "#1e293b",
+                        "border": "2px solid #cbd5e1",
+                        "borderRadius": "10px",
+                        "marginBottom": "12px",
+                        "fontSize": "14px",
+                        "padding": "12px",
+                        "fontFamily": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
                     }
                 ),
+
                 dbc.Input(
                     id="note-author-input",
                     placeholder="Votre nom",
                     type="text",
                     style={
-                        "background": "#0a1320",
-                        "color": "#e5e7eb",
-                        "border": "1px solid #1f2937",
-                        "borderRadius": "8px",
-                        "marginBottom": "10px"
+                        "background": "#ffffff",
+                        "color": "#1e293b",
+                        "border": "2px solid #cbd5e1",
+                        "borderRadius": "10px",
+                        "marginBottom": "12px",
+                        "fontSize": "14px",
+                        "padding": "12px",
+                        "fontWeight": "600"
                     }
                 ),
-                html.Small(
-                    "💡 @tony • @samuel • @maimouna • @seydouna  • @Arame • @Coumba • @Fallou • @Ravane • @Insa → email auto",
-                    style={"color": "#6b7280", "fontSize": "11px"}
-                ),
-                html.Div(id="note-feedback-new", style={"color": "#10b981", "fontSize": "12px", "marginTop": "8px"})
-            ])
-        ], style={"background": "#0b1220"}),
+
+                # Mentions disponibles (badges)
+                html.Div([
+                    html.Strong("💡 Mentions disponibles :", style={
+                        "color": "#475569",
+                        "fontSize": "12px",
+                        "display": "block",
+                        "marginBottom": "8px"
+                    }),
+                    html.Div([
+                        html.Span("@tony", className="mention-badge"),
+                        html.Span("@samuel", className="mention-badge"),
+                        html.Span("@maimouna", className="mention-badge"),
+                        html.Span("@seydouna", className="mention-badge"),
+                        html.Span("@Arame", className="mention-badge"),
+                        html.Span("@Coumba", className="mention-badge"),
+                        html.Span("@Fallou", className="mention-badge"),
+                        html.Span("@Ravane", className="mention-badge"),
+                        html.Span("@Insa", className="mention-badge"),
+                    ], style={"display": "flex", "flexWrap": "wrap", "gap": "6px"})
+                ], style={
+                    "padding": "12px",
+                    "background": "#f1f5f9",
+                    "borderRadius": "8px",
+                    "marginBottom": "10px"
+                }),
+
+                # Feedback
+                html.Div(id="note-feedback-new", style={
+                    "color": "#059669",
+                    "fontSize": "13px",
+                    "marginTop": "8px",
+                    "fontWeight": "600"
+                })
+            ], style={
+                "padding": "16px",
+                "background": "#ffffff",
+                "borderRadius": "12px",
+                "border": "1px solid #e2e8f0",
+                "boxShadow": "0 1px 3px rgba(0,0,0,0.05)"
+            })
+        ], style={
+            "background": "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
+            "padding": "20px"
+        }),
 
         dbc.ModalFooter([
-            dbc.Button("Fermer", id="note-modal-close", outline=True, size="sm", style={"marginRight": "8px"}),
-            dbc.Button("✉️ Envoyer", id="note-modal-send", color="primary", size="sm")
-        ], style={"background": "#0f1625", "borderTop": "1px solid #1f2937"})
+            dbc.Button(
+                "Fermer",
+                id="note-modal-close",
+                outline=True,
+                color="secondary",
+                size="sm",
+                style={
+                    "marginRight": "8px",
+                    "fontWeight": "600",
+                    "borderWidth": "2px",
+                    "color": "#475569",
+                    "borderColor": "#cbd5e1"
+                }
+            ),
+            dbc.Button(
+                "✉️ Envoyer",
+                id="note-modal-send",
+                color="primary",
+                size="sm",
+                style={
+                    "fontWeight": "700",
+                    "background": "linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)",
+                    "border": "none",
+                    "padding": "8px 20px"
+                }
+            )
+        ], style={
+            "background": "#f8fafc",
+            "borderTop": "2px solid #cbd5e1",
+            "padding": "16px 20px"
+        })
     ],
         id="notes-modal-new",
         size="lg",
         is_open=False,
-        style={"color": "#e5e7eb"}
+        backdrop="static",
+        scrollable=True
     )
-
-    # ✅ Return avec bouton flottant
-    return html.Div(className="content", children=[
-        header_row,
-        html.Div(kpi_cards),
-        html.Br(),
-        html.Div(className="soft-card", children=[
-            html.Div(dbc.Row([
-                dbc.Col(html.Div(f"Détails Produits - {len(available_cols)} colonnes", className="section-title"),
-                        md=8),
-                dbc.Col(html.Div(action_buttons, style={"textAlign": "right"}), md=4)
-            ])),
-            html.Br(),
-            rotation_dropdown,
-            #html.Br(),
-            table
-            #edit_modal,
-        ]),
-        notes_fab_button,  # ✅ Bouton flottant
-        notes_modal,  # ✅ Modal
-        #dcc.Store(id="selected-product-for-notes", data=None)
-        dcc.Store(id={'type': 'selected-product-for-notes', 'index': '1'}, data=None)
-    ])
 
 
 @app.callback(
@@ -5873,8 +6132,18 @@ def close_notes_modal_fab(n_clicks):
 def load_product_notes(product_name):
     """Charge les notes quand un produit est sélectionné"""
     if not product_name:
-        return [html.Div("Sélectionnez un produit pour voir ses notes",
-                         style={"color": "#6b7280", "textAlign": "center", "padding": "20px"})], None
+        return [
+            html.Div([
+                html.Div("👆", style={"fontSize": "32px", "marginBottom": "8px"}),
+                html.Div(
+                    "Sélectionnez un produit pour voir ses notes",
+                    style={"color": "#64748b", "fontSize": "14px", "fontWeight": "600"}
+                )
+            ], style={
+                "textAlign": "center",
+                "padding": "40px 20px"
+            })
+        ], None
 
     notes = get_notes_for_product(product_name)
 
@@ -5884,41 +6153,94 @@ def load_product_notes(product_name):
             timestamp = datetime.fromisoformat(note["timestamp"]).strftime("%d/%m/%Y %H:%M")
             message_html = note["message"]
 
+            # Colorier les mentions
             for mention in note.get("mentions", []):
                 message_html = message_html.replace(
                     f"@{mention}",
-                    f'<span style="color:#22d3ee;font-weight:600">@{mention}</span>'
+                    f'<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:4px;font-weight:700;font-size:12px">@{mention}</span>'
                 )
 
             notes_display.append(
                 html.Div([
+                    # En-tête
                     html.Div([
-                        html.Span("👤", style={"marginRight": "6px"}),
-                        html.Strong(note["author"], style={"color": "#22d3ee"}),
-                        html.Span(f" • {timestamp}",
-                                  style={"color": "#6b7280", "fontSize": "11px", "marginLeft": "6px"})
-                    ], style={"marginBottom": "6px"}),
+                        html.Div([
+                            html.Span("👤", style={"marginRight": "8px", "fontSize": "16px"}),
+                            html.Strong(note["author"], style={
+                                "color": "#1e40af",
+                                "fontSize": "14px",
+                                "fontWeight": "700"
+                            }),
+                        ], style={"display": "flex", "alignItems": "center"}),
+                        html.Span(
+                            timestamp,
+                            style={
+                                "color": "#64748b",
+                                "fontSize": "11px",
+                                "fontWeight": "600"
+                            }
+                        )
+                    ], style={
+                        "display": "flex",
+                        "justifyContent": "space-between",
+                        "alignItems": "center",
+                        "marginBottom": "10px",
+                        "paddingBottom": "8px",
+                        "borderBottom": "1px solid #e2e8f0"
+                    }),
 
+                    # Message
                     dcc.Markdown(
                         message_html,
                         dangerously_allow_html=True,
-                        style={"color": "#e5e7eb", "fontSize": "13px", "lineHeight": "1.5"}
-                    ),
-
-                    html.Hr(style={"borderColor": "#1f2937", "margin": "10px 0"})
-                ], style={"marginBottom": "12px"})
+                        style={
+                            "color": "#1e293b",
+                            "fontSize": "13px",
+                            "lineHeight": "1.6",
+                            "whiteSpace": "pre-wrap",
+                            "fontFamily": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                        }
+                    )
+                ], style={
+                    "marginBottom": "10px",
+                    "padding": "14px",
+                    "background": "#ffffff",
+                    "borderRadius": "10px",
+                    "border": "1px solid #e2e8f0",
+                    "boxShadow": "0 1px 3px rgba(0,0,0,0.08)",
+                    "transition": "all 0.2s ease"
+                })
             )
     else:
         notes_display = [
-            html.Div(
-                "Aucune note pour ce produit. Soyez le premier !",
-                style={"color": "#6b7280", "textAlign": "center", "padding": "20px", "fontStyle": "italic"}
-            )
+            html.Div([
+                html.Div("📝", style={"fontSize": "36px", "marginBottom": "10px"}),
+                html.Div(
+                    "Aucune note pour ce produit",
+                    style={
+                        "fontWeight": "700",
+                        "color": "#475569",
+                        "marginBottom": "6px",
+                        "fontSize": "15px"
+                    }
+                ),
+                html.Div(
+                    "Soyez le premier à ajouter une note !",
+                    style={"fontSize": "12px", "color": "#94a3b8"}
+                )
+            ], style={
+                "textAlign": "center",
+                "padding": "50px 20px",
+                "background": "#ffffff",
+                "borderRadius": "10px",
+                "border": "2px dashed #cbd5e1"
+            })
         ]
 
     return notes_display, product_name
 
 
+# Callback 4 : Envoyer note avec notifications
 # Callback 4 : Envoyer note avec notifications
 @app.callback(
     [Output("notes-display-list", "children", allow_duplicate=True),
@@ -5928,53 +6250,79 @@ def load_product_notes(product_name):
     Input("note-modal-send", "n_clicks"),
     [State("note-text-input", "value"),
      State("note-author-input", "value"),
-     State("selected-product-for-notes", "data")],
+     State("selected-product-for-notes", "data")],  # ✅ ID simple
     prevent_initial_call=True
 )
 def send_note_with_notifications(n_clicks, message, author, product_name):
     """Envoie note + emails aux mentions"""
     if not n_clicks:
-        return no_update, no_update, no_update, no_update
+        raise PreventUpdate
 
+    print(f"\n{'=' * 60}")
+    print(f"📝 NOUVELLE NOTE")
+    print(f"{'=' * 60}")
+    print(f"Produit: {product_name}")
+    print(f"Auteur: {author}")
+    print(f"Message: {message[:50]}...")
+
+    # Vérifications
     if not product_name:
+        print("❌ Aucun produit sélectionné")
         return no_update, no_update, no_update, "❌ Sélectionnez un produit d'abord"
 
     if not message or not message.strip():
+        print("❌ Message vide")
         return no_update, no_update, no_update, "❌ Message vide"
 
     if not author or not author.strip():
+        print("❌ Auteur manquant")
         return no_update, no_update, no_update, "❌ Nom d'auteur requis"
-
-    print(f"\n🔔 ENVOI NOTE : {author} → {product_name}")
 
     # Extraire mentions
     mentions = re.findall(r'@(\w+)', message)
-    emails_sent = []
+    print(f"Mentions détectées : {mentions}")
 
+    emails_sent = []
+    emails_failed = []
+
+    # Envoyer emails
     for username in mentions:
         username_lower = username.lower()
         if username_lower in TEAM_MEMBERS:
             user_info = TEAM_MEMBERS[username_lower]
+            print(f"\n📧 Envoi à {user_info['name']} ({user_info['email']})...")
+
             try:
                 success = send_notification_email(
-                    user_info["email"],
-                    user_info["name"],
-                    product_name,
-                    author,
-                    message
+                    recipient_email=user_info["email"],
+                    recipient_name=user_info["name"],
+                    product_name=product_name,
+                    author=author,
+                    message=message
                 )
+
                 if success:
                     emails_sent.append(user_info["name"])
-                    print(f"  ✅ Email → {user_info['name']}")
+                    print(f"  ✅ Envoyé à {user_info['name']}")
+                else:
+                    emails_failed.append(user_info["name"])
+                    print(f"  ❌ Échec pour {user_info['name']}")
+
             except Exception as e:
-                print(f"  ❌ Erreur {user_info['name']}: {e}")
+                emails_failed.append(user_info["name"])
+                print(f"  ❌ Erreur pour {user_info['name']}: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"  ⚠️ @{username} non trouvé dans TEAM_MEMBERS")
 
     # Sauvegarder note
     try:
         add_note(product_name, author, message, mentions)
-        print(f"  ✅ Note sauvegardée")
+        print(f"\n✅ Note sauvegardée dans {NOTES_DB_PATH}")
     except Exception as e:
-        return no_update, no_update, no_update, f"❌ Erreur : {str(e)}"
+        print(f"❌ Erreur sauvegarde : {e}")
+        return no_update, no_update, no_update, f"❌ Erreur sauvegarde : {str(e)}"
 
     # Recharger notes
     notes = get_notes_for_product(product_name)
@@ -5984,6 +6332,7 @@ def send_note_with_notifications(n_clicks, message, author, product_name):
         timestamp = datetime.fromisoformat(note["timestamp"]).strftime("%d/%m/%Y %H:%M")
         message_html = note["message"]
 
+        # Colorier mentions
         for mention in note.get("mentions", []):
             message_html = message_html.replace(
                 f"@{mention}",
@@ -5995,19 +6344,35 @@ def send_note_with_notifications(n_clicks, message, author, product_name):
                 html.Div([
                     html.Span("👤", style={"marginRight": "6px"}),
                     html.Strong(note["author"], style={"color": "#22d3ee"}),
-                    html.Span(f" • {timestamp}", style={"color": "#6b7280", "fontSize": "11px", "marginLeft": "6px"})
+                    html.Span(f" • {timestamp}",
+                              style={"color": "#6b7280", "fontSize": "11px", "marginLeft": "6px"})
                 ], style={"marginBottom": "6px"}),
 
-                dcc.Markdown(message_html, dangerously_allow_html=True,
-                             style={"color": "#e5e7eb", "fontSize": "13px", "lineHeight": "1.5"}),
+                dcc.Markdown(
+                    message_html,
+                    dangerously_allow_html=True,
+                    style={"color": "#e5e7eb", "fontSize": "13px", "lineHeight": "1.5"}
+                ),
 
                 html.Hr(style={"borderColor": "#1f2937", "margin": "10px 0"})
             ], style={"marginBottom": "12px"})
         )
 
-    feedback = f"✅ Note envoyée • {len(emails_sent)} email(s) : {', '.join(emails_sent)}" if emails_sent else "✅ Note enregistrée"
+    # Feedback
+    if emails_sent:
+        feedback = f"✅ Note envoyée • {len(emails_sent)} email(s) : {', '.join(emails_sent)}"
+        if emails_failed:
+            feedback += f" • ⚠️ Échec : {', '.join(emails_failed)}"
+    elif emails_failed:
+        feedback = f"⚠️ Note enregistrée mais emails non envoyés : {', '.join(emails_failed)}"
+    else:
+        feedback = "✅ Note enregistrée (aucune mention)"
+
+    print(f"\n{feedback}")
+    print(f"{'=' * 60}\n")
 
     return notes_display, "", author, feedback
+
 @app.callback(
     Output('main-table', 'data', allow_duplicate=True),  # Cela dépend de ce que tu veux actualiser
     Input('btn-refresh', 'n_clicks'),
@@ -6962,6 +7327,7 @@ def update_predictive_charts(supplier_value, category_value, need_value, master_
     )
 
 '''
+'''
 def page_analytics(master_df: pd.DataFrame = None):
     df = master_df if master_df is not None else get_df_cached()
 
@@ -7326,8 +7692,762 @@ def update_predictive_table(supplier_value, category_value):
         df = df[df["Product Category"] == category_value]
 
     return df.to_dict("records")
+'''
+# ==========================================
+# 🔧 HELPER : PLACEHOLDER POUR ÉVITER ERREURS
+# ==========================================
+
+def create_hidden_table_placeholder():
+    """
+    Crée un placeholder caché pour main-table
+    Nécessaire pour éviter les erreurs de callbacks sur les autres pages
+    """
+    return dash_table.DataTable(
+        id="main-table",
+        data=[],
+        columns=[],
+        style_table={"display": "none"}
+    )
+
+def page_analytics(master_df: pd.DataFrame = None):
+    """Page Analytics avec filtres sidebar et graphiques dynamiques"""
+    df = master_df if master_df is not None else get_df_cached()
+
+    # Colonnes nécessaires
+    cols_to_keep = [
+        "product_name", "Supplier", "Product Category",
+        "total_stock", "Average Daily Sales",
+        "Max Coverage Day", "ADJUSTED_LEADTIME",
+        "Ajusted_total_need", "purchase_need",
+        "QAC", "optimal stock", "credit_days"
+    ]
+    cols_to_keep = [c for c in cols_to_keep if c in df.columns]
+    analytics_df = df[cols_to_keep].dropna()
+
+    # KPI cards
+    kpi_cards, _ = make_kpis(df)
+
+    return html.Div(className="content", children=[
+        dbc.Row([
+            dbc.Col(html.H2("📊 Analyses Avancées", style={
+                "color": "#22d3ee",
+                "fontWeight": "800",
+                "marginBottom": "20px"
+            }), md=12)
+        ]),
+
+        # KPIs
+        html.Div(kpi_cards),
+        html.Br(),
+
+        # ========================================
+        # 📈 GRAPHIQUES LIGNE 1
+        # ========================================
+        dbc.Row([
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("🎯 Lead Time vs Couverture Stock", className="section-title"),
+                    dcc.Graph(id="analytics-scatter")
+                ])
+            ], md=6),
+
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("📊 Distribution du Stock", className="section-title"),
+                    dcc.Graph(id="analytics-hist-stock")
+                ])
+            ], md=6)
+        ]),
+        html.Br(),
+
+        # ========================================
+        # 📈 GRAPHIQUES LIGNE 2
+        # ========================================
+        dbc.Row([
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("📦 Ventes par Catégorie", className="section-title"),
+                    dcc.Graph(id="analytics-box-category")
+                ])
+            ], md=6),
+
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("🏭 Top 10 Fournisseurs", className="section-title"),
+                    dcc.Graph(id="analytics-purchase-supplier")
+                ])
+            ], md=6)
+        ]),
+        html.Br(),
+
+        # ========================================
+        # 📈 GRAPHIQUES LIGNE 3
+        # ========================================
+        dbc.Row([
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("🎯 QAC vs Stock Optimal", className="section-title"),
+                    dcc.Graph(id="analytics-qac-optimal")
+                ])
+            ], md=6),
+
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("📈 Répartition Besoins d'Achat", className="section-title"),
+                    dcc.Graph(id="analytics-pie-need")
+                ])
+            ], md=6)
+        ]),
+        html.Br(),
+
+        # ========================================
+        # 📈 GRAPHIQUES LIGNE 4 - NOUVEAUX
+        # ========================================
+        dbc.Row([
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("⚡ Taux de Rotation par Catégorie", className="section-title"),
+                    dcc.Graph(id="analytics-rotation-category")
+                ])
+            ], md=6),
+
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("💰 Valeur Stock par Fournisseur", className="section-title"),
+                    dcc.Graph(id="analytics-stock-value")
+                ])
+            ], md=6)
+        ]),
+
+        # ✅ Placeholder pour éviter erreurs
+        create_hidden_table_placeholder()
+    ])
 
 
+# ==========================================
+# 📊 CALLBACK ANALYTICS - UTILISE FILTRES SIDEBAR
+# ==========================================
+
+@app.callback(
+    [Output("analytics-scatter", "figure"),
+     Output("analytics-hist-stock", "figure"),
+     Output("analytics-box-category", "figure"),
+     Output("analytics-purchase-supplier", "figure"),
+     Output("analytics-qac-optimal", "figure"),
+     Output("analytics-pie-need", "figure"),
+     Output("analytics-rotation-category", "figure"),
+     Output("analytics-stock-value", "figure")],
+    [Input("filter-supplier", "value"),
+     Input("filter-category", "value"),
+     Input("filter-need", "value"),
+     Input("filtered-data", "data")],
+    prevent_initial_call=False
+)
+def update_analytics_all_charts(supplier_filter, category_filter, need_filter, filtered_json):
+    """
+    Met à jour tous les graphiques analytics selon les filtres sidebar
+    """
+    print(f"\n📊 Analytics - Filtres: {supplier_filter}, {category_filter}, {need_filter}")
+
+    # Charger données filtrées
+    if filtered_json:
+        df = pd.DataFrame(json.loads(filtered_json))
+    else:
+        df = get_df_cached()
+
+    # Colonnes nécessaires
+    cols = [
+        "product_name", "Supplier", "Product Category",
+        "total_stock", "Average Daily Sales",
+        "Max Coverage Day", "ADJUSTED_LEADTIME",
+        "Ajusted_total_need", "purchase_need",
+        "QAC", "optimal stock", "credit_days"
+    ]
+    df = df[[c for c in cols if c in df.columns]].dropna()
+
+    print(f"   📊 {len(df)} produits pour analytics")
+
+    # Couleurs par besoin
+    color_map = {
+        "ORDER NOW": "#ef4444",
+        "ORDER NOT URGENT": "#f59e0b",
+        "NO NEED": "#10b981"
+    }
+
+    # ========================================
+    # 📊 GRAPHIQUE 1 : SCATTER LEAD TIME VS COVERAGE
+    # ========================================
+    fig_scatter = px.scatter(
+        df,
+        x="ADJUSTED_LEADTIME",
+        y="Max Coverage Day",
+        color="Ajusted_total_need",
+        size="purchase_need",
+        hover_data=["product_name", "Supplier", "QAC"],
+        labels={
+            "ADJUSTED_LEADTIME": "Lead Time Ajusté (jours)",
+            "Max Coverage Day": "Couverture Stock (jours)"
+        },
+        color_discrete_map=color_map
+    )
+
+    fig_scatter.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb", size=11),
+        height=400
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 2 : HISTOGRAMME STOCK
+    # ========================================
+    fig_hist = px.histogram(
+        df,
+        x="total_stock",
+        nbins=30,
+        labels={"total_stock": "Stock Total"},
+        color_discrete_sequence=["#22d3ee"]
+    )
+
+    fig_hist.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb", size=11),
+        showlegend=False,
+        height=400
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 3 : BOXPLOT PAR CATÉGORIE
+    # ========================================
+    fig_box = px.box(
+        df,
+        x="Product Category",
+        y="Average Daily Sales",
+        color="Product Category",
+        labels={"Average Daily Sales": "Ventes Moyennes"}
+    )
+
+    fig_box.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb", size=11),
+        showlegend=False,
+        height=400
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 4 : TOP 10 FOURNISSEURS
+    # ========================================
+    purchase_by_supplier = (
+        df.groupby("Supplier")["purchase_need"]
+        .sum()
+        .reset_index()
+        .sort_values("purchase_need", ascending=False)
+        .head(10)
+    )
+
+    fig_supplier = px.bar(
+        purchase_by_supplier,
+        x="Supplier",
+        y="purchase_need",
+        labels={"purchase_need": "Besoin d'Achat Total"},
+        color="purchase_need",
+        color_continuous_scale="Reds"
+    )
+
+    fig_supplier.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb", size=11),
+        xaxis=dict(tickangle=-45),
+        showlegend=False,
+        height=400
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 5 : QAC VS OPTIMAL
+    # ========================================
+    fig_qac = px.scatter(
+        df,
+        x="QAC",
+        y="optimal stock",
+        color="Ajusted_total_need",
+        hover_data=["product_name", "Supplier"],
+        labels={"QAC": "Quantité Ajustée Commandée"},
+        color_discrete_map=color_map
+    )
+
+    fig_qac.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb", size=11),
+        height=400
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 6 : PIE BESOIN D'ACHAT
+    # ========================================
+    need_dist = df["Ajusted_total_need"].value_counts().reset_index()
+    need_dist.columns = ["Besoin", "Nombre"]
+
+    fig_pie = px.pie(
+        need_dist,
+        values="Nombre",
+        names="Besoin",
+        color="Besoin",
+        color_discrete_map=color_map,
+        hole=0.4  # Donut chart
+    )
+
+    fig_pie.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb", size=11),
+        height=400
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 7 : ROTATION PAR CATÉGORIE
+    # ========================================
+    rotation_by_cat = df.groupby("Product Category").agg({
+        "Max Coverage Day": "mean",
+        "product_name": "count"
+    }).reset_index()
+    rotation_by_cat.columns = ["Category", "Rotation Moyenne", "Nombre"]
+
+    fig_rotation = px.bar(
+        rotation_by_cat.sort_values("Rotation Moyenne"),
+        x="Category",
+        y="Rotation Moyenne",
+        labels={"Rotation Moyenne": "Jours de Couverture Moyenne"},
+        color="Rotation Moyenne",
+        color_continuous_scale="RdYlGn_r"
+    )
+
+    fig_rotation.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb", size=11),
+        xaxis=dict(tickangle=-45),
+        height=400
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 8 : VALEUR STOCK PAR FOURNISSEUR
+    # ========================================
+    stock_by_supplier = (
+        df.groupby("Supplier")["total_stock"]
+        .sum()
+        .reset_index()
+        .sort_values("total_stock", ascending=False)
+        .head(10)
+    )
+
+    fig_stock_value = px.bar(
+        stock_by_supplier,
+        x="Supplier",
+        y="total_stock",
+        labels={"total_stock": "Stock Total (unités)"},
+        color="total_stock",
+        color_continuous_scale="Blues"
+    )
+
+    fig_stock_value.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb", size=11),
+        xaxis=dict(tickangle=-45),
+        height=400
+    )
+
+    print(f"   ✅ Analytics graphiques générés\n")
+
+    return (
+        fig_scatter,
+        fig_hist,
+        fig_box,
+        fig_supplier,
+        fig_qac,
+        fig_pie,
+        fig_rotation,
+        fig_stock_value
+    )
+
+
+def page_predictive(master_df: pd.DataFrame = None):
+    """Page Prédictions avec filtres sidebar et graphiques ML"""
+    df = master_df if master_df is not None else get_df_cached()
+
+    # Colonnes ML
+    cols_to_keep = [
+        "product_id", "product_name", "Supplier",
+        "total_stock", "Average Daily Sales",
+        "Max Daily Sales (Pikine)", "target_quantity",
+        "Product Category", "Ajusted_total_need",
+        "total_sold_30d", "avg_daily_sold",
+        "std_sold", "max_daily_sold",
+        "days_with_sales", "trend_factor",
+        "projected_demand", "safety_stock",
+        "target_supervised"
+    ]
+    cols_to_keep = [c for c in cols_to_keep if c in df.columns]
+    pred_df = df[cols_to_keep].copy()
+
+    # Calcul stockout rate
+    stockout_rate = 0.0
+    if 'avg_daily_sold' in pred_df.columns and 'total_stock' in pred_df.columns:
+        pred_df_ml = pred_df[pred_df['avg_daily_sold'].notna()].copy()
+
+        if len(pred_df_ml) > 0:
+            pred_df_ml['coverage_days'] = np.where(
+                pred_df_ml['avg_daily_sold'] > 0,
+                pred_df_ml['total_stock'] / pred_df_ml['avg_daily_sold'],
+                999
+            )
+            at_risk = (pred_df_ml['coverage_days'] < 21).sum()
+            stockout_rate = (at_risk / len(pred_df_ml)) * 100
+
+    return html.Div(className="content", children=[
+        dbc.Row([
+            dbc.Col(html.H3("🔮 Prédictions ML", style={
+                "color": "#22d3ee",
+                "fontWeight": "800"
+            }), md=8),
+            dbc.Col(
+                dbc.Badge(
+                    f"Stockout prédit : {stockout_rate:.1f}%",
+                    color="danger" if stockout_rate > 15 else "warning" if stockout_rate > 5 else "success",
+                    style={"fontSize": "14px", "padding": "8px 15px"}
+                ),
+                md=4,
+                style={"display": "flex", "justifyContent": "flex-end", "alignItems": "center"}
+            )
+        ], className="mb-4"),
+        html.Br(),
+
+        # ========================================
+        # 📈 GRAPHIQUES LIGNE 1
+        # ========================================
+        dbc.Row([
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("📊 Top 20 - Target Quantity", className="section-title"),
+                    dcc.Graph(id="predictive-bar")
+                ])
+            ], md=12)
+        ]),
+        html.Br(),
+
+        # ========================================
+        # 📈 GRAPHIQUES LIGNE 2
+        # ========================================
+        dbc.Row([
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("🎯 Demande Projetée vs Stock", className="section-title"),
+                    dcc.Graph(id="predictive-scatter")
+                ])
+            ], md=6),
+
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("🛡️ Safety Stock par Catégorie", className="section-title"),
+                    dcc.Graph(id="predictive-safety-stock")
+                ])
+            ], md=6)
+        ]),
+        html.Br(),
+
+        # ========================================
+        # 📈 GRAPHIQUES LIGNE 3 - NOUVEAUX
+        # ========================================
+        dbc.Row([
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("📈 Tendances de Ventes", className="section-title"),
+                    dcc.Graph(id="predictive-trend")
+                ])
+            ], md=6),
+
+            dbc.Col([
+                html.Div(className="soft-card", children=[
+                    html.H5("⚠️ Produits à Risque", className="section-title"),
+                    dcc.Graph(id="predictive-risk")
+                ])
+            ], md=6)
+        ]),
+        html.Br(),
+
+        # ========================================
+        # 📋 TABLEAU DÉTAILLÉ
+        # ========================================
+        html.Div(className="soft-card", children=[
+            html.H5("📋 Données Prédictives Détaillées", className="section-title"),
+            dash_table.DataTable(
+                id="predictive-table",
+                columns=[{"name": c, "id": c} for c in pred_df.columns],
+                data=pred_df.to_dict("records"),
+                page_size=15,
+                filter_action="native",
+                sort_action="native",
+                sort_mode="multi",
+                style_table={"overflowX": "auto"},
+                style_header={
+                    "backgroundColor": "#0f1625",
+                    "border": "1px solid #2d3748",
+                    "fontWeight": "700",
+                    "textAlign": "center",
+                    "color": "#f0f4f8"
+                },
+                style_cell={
+                    "backgroundColor": "#0b1220",
+                    "color": "#e5e7eb",
+                    "border": "1px solid #1f2937",
+                    "fontSize": 12,
+                    "textAlign": "center"
+                },
+                style_data_conditional=[
+                    {
+                        "if": {"column_id": "target_quantity"},
+                        "fontWeight": "700",
+                        "color": "#22d3ee",
+                        "fontSize": "14px"
+                    }
+                ]
+            )
+        ]),
+
+        # ✅ Placeholder
+        create_hidden_table_placeholder()
+    ])
+
+
+# ==========================================
+# 🔮 CALLBACK PRÉDICTIONS - UTILISE FILTRES SIDEBAR
+# ==========================================
+
+@app.callback(
+    [Output("predictive-bar", "figure"),
+     Output("predictive-scatter", "figure"),
+     Output("predictive-safety-stock", "figure"),
+     Output("predictive-trend", "figure"),
+     Output("predictive-risk", "figure"),
+     Output("predictive-table", "data")],
+    [Input("filter-supplier", "value"),
+     Input("filter-category", "value"),
+     Input("filter-need", "value"),
+     Input("filtered-data", "data")],
+    prevent_initial_call=False
+)
+def update_predictive_all_charts(supplier_filter, category_filter, need_filter, filtered_json):
+    """
+    Met à jour tous les graphiques prédictifs selon les filtres sidebar
+    """
+    print(f"\n🔮 Prédictions - Filtres: {supplier_filter}, {category_filter}, {need_filter}")
+
+    # Charger données
+    if filtered_json:
+        df = pd.DataFrame(json.loads(filtered_json))
+    else:
+        df = get_df_cached()
+
+    # Colonnes ML
+    cols = [
+        "product_name", "Supplier", "Product Category",
+        "total_stock", "Average Daily Sales",
+        "target_quantity", "Ajusted_total_need",
+        "avg_daily_sold", "projected_demand",
+        "safety_stock", "trend_factor",
+        "max_daily_sold", "days_with_sales"
+    ]
+    df = df[[c for c in cols if c in df.columns]].copy()
+
+    print(f"   📊 {len(df)} produits pour prédictions")
+
+    color_map = {
+        "ORDER NOW": "#ef4444",
+        "ORDER NOT URGENT": "#f59e0b",
+        "NO NEED": "#10b981"
+    }
+
+    # ========================================
+    # 📊 GRAPHIQUE 1 : BAR CHART TOP 20
+    # ========================================
+    df_chart = df[df['target_quantity'] > 0].copy() if 'target_quantity' in df.columns else df.copy()
+
+    fig_bar = px.bar(
+        df_chart.sort_values("target_quantity", ascending=False).head(20),
+        x="product_name",
+        y="target_quantity",
+        color="Ajusted_total_need",
+        hover_data=["Supplier", "total_stock"],
+        labels={"target_quantity": "Quantité à Commander"},
+        color_discrete_map=color_map
+    )
+
+    fig_bar.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb", size=11),
+        xaxis=dict(tickangle=-45),
+        height=400
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 2 : SCATTER DEMANDE VS STOCK
+    # ========================================
+    if 'projected_demand' in df.columns:
+        fig_scatter = px.scatter(
+            df,
+            x="total_stock",
+            y="projected_demand",
+            color="Ajusted_total_need",
+            size="Average Daily Sales",
+            hover_data=["product_name", "Supplier"],
+            labels={
+                "total_stock": "Stock Actuel",
+                "projected_demand": "Demande Projetée"
+            },
+            color_discrete_map=color_map
+        )
+    else:
+        fig_scatter = px.scatter(
+            df,
+            x="total_stock",
+            y="Average Daily Sales",
+            color="Ajusted_total_need",
+            hover_data=["product_name"],
+            color_discrete_map=color_map
+        )
+
+    fig_scatter.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb", size=11),
+        height=400
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 3 : SAFETY STOCK PAR CATÉGORIE
+    # ========================================
+    if 'safety_stock' in df.columns:
+        safety_by_cat = (
+            df.groupby("Product Category")["safety_stock"]
+            .sum()
+            .reset_index()
+            .sort_values("safety_stock", ascending=False)
+        )
+
+        fig_safety = px.bar(
+            safety_by_cat,
+            x="Product Category",
+            y="safety_stock",
+            labels={"safety_stock": "Safety Stock Total"},
+            color="safety_stock",
+            color_continuous_scale="Blues"
+        )
+    else:
+        fig_safety = px.bar(
+            df.groupby("Product Category").size().reset_index(name="count"),
+            x="Product Category",
+            y="count"
+        )
+
+    fig_safety.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb", size=11),
+        height=400
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 4 : TENDANCES (TREND FACTOR)
+    # ========================================
+    if 'trend_factor' in df.columns:
+        trend_by_cat = (
+            df.groupby("Product Category")["trend_factor"]
+            .mean()
+            .reset_index()
+            .sort_values("trend_factor", ascending=False)
+        )
+
+        fig_trend = px.bar(
+            trend_by_cat,
+            x="Product Category",
+            y="trend_factor",
+            labels={"trend_factor": "Facteur de Tendance Moyen"},
+            color="trend_factor",
+            color_continuous_scale="RdYlGn"
+        )
+    else:
+        fig_trend = go.Figure()
+        fig_trend.add_annotation(
+            text="Données de tendance non disponibles",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14, color="#94a3b8")
+        )
+
+    fig_trend.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb", size=11),
+        height=400
+    )
+
+    # ========================================
+    # 📊 GRAPHIQUE 5 : PRODUITS À RISQUE
+    # ========================================
+    if 'avg_daily_sold' in df.columns and 'total_stock' in df.columns:
+        df_risk = df[df['avg_daily_sold'].notna()].copy()
+        df_risk['coverage'] = np.where(
+            df_risk['avg_daily_sold'] > 0,
+            df_risk['total_stock'] / df_risk['avg_daily_sold'],
+            999
+        )
+        df_risk['risk_level'] = pd.cut(
+            df_risk['coverage'],
+            bins=[0, 7, 14, 30, 999],
+            labels=["Critique (<7j)", "Attention (7-14j)", "Moyen (14-30j)", "OK (>30j)"]
+        )
+
+        risk_dist = df_risk['risk_level'].value_counts().reset_index()
+        risk_dist.columns = ["Niveau", "Nombre"]
+
+        fig_risk = px.pie(
+            risk_dist,
+            values="Nombre",
+            names="Niveau",
+            color="Niveau",
+            color_discrete_map={
+                "Critique (<7j)": "#ef4444",
+                "Attention (7-14j)": "#f59e0b",
+                "Moyen (14-30j)": "#eab308",
+                "OK (>30j)": "#10b981"
+            },
+            hole=0.4
+        )
+    else:
+        fig_risk = go.Figure()
+
+    fig_risk.update_layout(
+        plot_bgcolor="#0b1220",
+        paper_bgcolor="#0b1220",
+        font=dict(color="#e5e7eb", size=11),
+        height=400
+    )
+
+    print(f"   ✅ Prédictions graphiques générés\n")
+
+    return (
+        fig_bar,
+        fig_scatter,
+        fig_safety,
+        fig_trend,
+        fig_risk,
+        df.to_dict("records")
+    )
 def page_about():
     return html.Div(className="content", children=[
         html.H2("À propos", className="page-title"),
@@ -9420,13 +10540,16 @@ def valider_qac_selection(selected_rows, table_data):
 # ============================================
 # FONCTION 3 : GÉNÉRATION EXCEL AVEC FORMULES
 # ============================================
+# ============================================
+# FONCTION 3 : GÉNÉRATION EXCEL AVEC FORMULES + LOGO + SIGNATURE
+# ============================================
 def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
     """
-    Génère un Excel avec colonnes Remise/Escompte éditables
-    et formules automatiques
+    Génère un Excel avec colonnes Remise/Escompte éditables,
+    formules automatiques, LOGO en haut et SIGNATURE en bas
     """
     if not selected_products:
-        raise ValueError("Aucun produit")
+        raise ValueError("Aucun produit sélectionné")
 
     # Regroupement par fournisseur
     suppliers = {}
@@ -9441,36 +10564,107 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
     ws = wb.active
     ws.title = "Bon de Commande"
 
-    # Styles
+    # ========================================
+    # 🎨 STYLES
+    # ========================================
     header_fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True, size=11)
     remise_fill = PatternFill(start_color="FFF9C4", end_color="FFF9C4", fill_type="solid")
     escompte_fill = PatternFill(start_color="FFE0B2", end_color="FFE0B2", fill_type="solid")
     total_fill = PatternFill(start_color="C8E6C9", end_color="C8E6C9", fill_type="solid")
     border = Border(
-        left=Side(style='thin'), right=Side(style='thin'),
-        top=Side(style='thin'), bottom=Side(style='thin')
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
     )
 
-    # En-tête
+    # ========================================
+    # 🎨 LOGO EN HAUT
+    # ========================================
+    current_row = 1
+
+    try:
+        import os
+        from openpyxl.drawing.image import Image as XLImage
+
+        # Chercher le logo
+        logo_paths = [
+            "assets/logo.png",
+            "assets/logo.jpg",
+            "logo.png",
+            "logo.jpg"
+        ]
+
+        logo_path = None
+        for path in logo_paths:
+            if os.path.exists(path):
+                logo_path = path
+                break
+
+        if logo_path:
+            # Ajouter le logo
+            img = XLImage(logo_path)
+
+            # Redimensionner (largeur environ 200px)
+            img.width = 200
+            img.height = int(200 / img.width * img.height) if img.width > 0 else 60
+
+            # Positionner en A1
+            ws.add_image(img, 'A1')
+
+            print(f"   ✅ Logo ajouté dans Excel : {logo_path}")
+
+            # Laisser de l'espace pour le logo
+            current_row = 6
+        else:
+            print("   ⚠️ Logo non trouvé - continuez sans logo")
+            current_row = 1
+
+    except Exception as e:
+        print(f"   ⚠️ Erreur ajout logo Excel : {e}")
+        current_row = 1
+
+    # ========================================
+    # 📋 EN-TÊTE DU BON DE COMMANDE
+    # ========================================
+
     po_number = get_next_po_number()
-    ws['A1'] = f'BON DE COMMANDE N° {po_number}'
-    ws['A1'].font = Font(size=18, bold=True, color="003366")
-    ws.merge_cells('A1:J1')
-    ws['A1'].alignment = Alignment(horizontal='center')
 
-    ws['A2'] = COMPANY_NAME
-    ws['A2'].font = Font(bold=True, size=12)
-    ws['A3'] = COMPANY_ADDRESS
-    ws['A4'] = f"Tél : {COMPANY_PHONE}"
-    ws['A5'] = f"Email : {COMPANY_EMAIL}"
-    ws['A6'] = f"Date : {datetime.now().strftime('%d/%m/%Y')}"
-    ws['A6'].font = Font(bold=True)
+    # Titre
+    ws[f'A{current_row}'] = f'BON DE COMMANDE N° {po_number}'
+    ws[f'A{current_row}'].font = Font(size=18, bold=True, color="003366")
+    ws.merge_cells(f'A{current_row}:J{current_row}')
+    ws[f'A{current_row}'].alignment = Alignment(horizontal='center')
+    current_row += 1
 
-    current_row = 8
+    # Informations entreprise
+    ws[f'A{current_row}'] = COMPANY_NAME
+    ws[f'A{current_row}'].font = Font(bold=True, size=12, color="1E40AF")
+    current_row += 1
+
+    ws[f'A{current_row}'] = COMPANY_ADDRESS
+    ws[f'A{current_row}'].font = Font(size=10)
+    current_row += 1
+
+    ws[f'A{current_row}'] = f"Tél : {COMPANY_PHONE}"
+    ws[f'A{current_row}'].font = Font(size=10)
+    current_row += 1
+
+    ws[f'A{current_row}'] = f"Email : {COMPANY_EMAIL}"
+    ws[f'A{current_row}'].font = Font(size=10)
+    current_row += 1
+
+    ws[f'A{current_row}'] = f"Date : {datetime.now().strftime('%d/%m/%Y')}"
+    ws[f'A{current_row}'].font = Font(bold=True, size=11)
+    current_row += 2
+
     TVA_RATE = 0.18
 
-    # Tableaux par fournisseur
+    # ========================================
+    # 📊 TABLEAUX PAR FOURNISSEUR
+    # ========================================
+
     for supplier, products in suppliers.items():
         # Titre fournisseur
         ws[f'A{current_row}'] = f'📦 Fournisseur : {supplier}'
@@ -9478,23 +10672,38 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
         ws.merge_cells(f'A{current_row}:J{current_row}')
         current_row += 1
 
-        # En-têtes
-        headers = ['Réf.', 'Désignation', 'Qté', 'Unité', 'PU HT', 'Remise %', 'Escompte %', 'Total HT', 'TVA 18%',
-                   'Total TTC']
+        # En-têtes colonnes
+        headers = [
+            'Réf.',
+            'Désignation',
+            'Qté',
+            'Unité',
+            'PU HT',
+            'Remise %',
+            'Escompte %',
+            'Total HT',
+            'TVA 18%',
+            'Total TTC'
+        ]
+
         for col_idx, header in enumerate(headers, start=1):
             cell = ws.cell(row=current_row, column=col_idx, value=header)
             cell.fill = header_fill
             cell.font = header_font
-            cell.alignment = Alignment(horizontal='center')
+            cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = border
 
+        # Colorier colonnes éditables
         ws.cell(row=current_row, column=6).fill = remise_fill
         ws.cell(row=current_row, column=7).fill = escompte_fill
 
         current_row += 1
         first_data_row = current_row
 
-        # Lignes produits
+        # ========================================
+        # 📦 LIGNES PRODUITS
+        # ========================================
+
         for prod in products:
             prod_name = str(prod.get("product_name", "")).strip()
             prod_key = prod_name.lower()
@@ -9504,6 +10713,7 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             if qac_edited <= 0:
                 continue
 
+            # Récupération données
             packaging_text = packaging_map.get(prod_key, "")
             qty_major = consolidate_to_major(qac_edited, packaging_text, prod_name)
 
@@ -9511,59 +10721,89 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             if unit_price <= 0:
                 unit_price = 1000.0
 
-            ref_code = ref_from_name(prod_name)
+            # ✅ Récupérer product_id
+            product_id = prod.get("product_id", "")
 
-            # Remplissage cellules
-            ws.cell(row=current_row, column=1, value=ref_code).border = border
-            ws.cell(row=current_row, column=2, value=prod_name[:50]).border = border
+            if product_id:
+                try:
+                    product_id = int(float(product_id))
+                except (ValueError, TypeError):
+                    product_id = str(product_id)
+            else:
+                product_id = ""
 
+            # ========================================
+            # REMPLISSAGE CELLULES
+            # ========================================
+
+            # Colonne 1 : Réf. (product_id)
+            cell = ws.cell(row=current_row, column=1, value=product_id)
+            cell.border = border
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.font = Font(bold=True, size=10)
+
+            # Colonne 2 : Désignation
+            cell = ws.cell(row=current_row, column=2, value=prod_name[:50])
+            cell.border = border
+            cell.alignment = Alignment(horizontal='left', vertical='center')
+
+            # Colonne 3 : Qté
             cell = ws.cell(row=current_row, column=3, value=qty_major)
-            cell.alignment = Alignment(horizontal='center')
+            cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = border
+            cell.font = Font(bold=True)
 
+            # Colonne 4 : Unité
             cell = ws.cell(row=current_row, column=4, value="unité")
-            cell.alignment = Alignment(horizontal='center')
+            cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = border
 
+            # Colonne 5 : PU HT
             cell = ws.cell(row=current_row, column=5, value=unit_price)
             cell.number_format = '#,##0'
-            cell.alignment = Alignment(horizontal='right')
+            cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # Remise % (éditable)
+            # Colonne 6 : Remise % (ÉDITABLE)
             cell = ws.cell(row=current_row, column=6, value=0)
             cell.number_format = '0.00'
-            cell.alignment = Alignment(horizontal='center')
+            cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.fill = remise_fill
             cell.border = border
+            cell.font = Font(bold=True)
 
-            # Escompte % (éditable)
+            # Colonne 7 : Escompte % (ÉDITABLE)
             cell = ws.cell(row=current_row, column=7, value=0)
             cell.number_format = '0.00'
-            cell.alignment = Alignment(horizontal='center')
+            cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.fill = escompte_fill
             cell.border = border
+            cell.font = Font(bold=True)
 
+            # ========================================
             # FORMULES AUTOMATIQUES
+            # ========================================
+
+            # Colonne 8 : Total HT (formule)
             # Total HT = (PU × Qté) × (1-Remise/100) × (1-Escompte/100)
             formula_ht = f"=(E{current_row}*C{current_row})*(1-F{current_row}/100)*(1-G{current_row}/100)"
             cell = ws.cell(row=current_row, column=8, value=formula_ht)
             cell.number_format = '#,##0'
-            cell.alignment = Alignment(horizontal='right')
+            cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # TVA
+            # Colonne 9 : TVA 18% (formule)
             formula_tva = f"=H{current_row}*0.18"
             cell = ws.cell(row=current_row, column=9, value=formula_tva)
             cell.number_format = '#,##0'
-            cell.alignment = Alignment(horizontal='right')
+            cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # Total TTC
+            # Colonne 10 : Total TTC (formule)
             formula_ttc = f"=H{current_row}+I{current_row}"
             cell = ws.cell(row=current_row, column=10, value=formula_ttc)
             cell.number_format = '#,##0'
-            cell.alignment = Alignment(horizontal='right')
+            cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.fill = total_fill
             cell.border = border
             cell.font = Font(bold=True)
@@ -9572,30 +10812,39 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
 
         last_data_row = current_row - 1
 
-        # Sous-total
+        # ========================================
+        # 💰 SOUS-TOTAL PAR FOURNISSEUR
+        # ========================================
+
         if last_data_row >= first_data_row:
             ws.merge_cells(f'A{current_row}:E{current_row}')
             cell = ws.cell(row=current_row, column=1, value=f"SOUS-TOTAL {supplier.upper()}")
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal='right')
+            cell.font = Font(bold=True, size=11)
+            cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
+            cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
 
+            # Total HT
             cell = ws.cell(row=current_row, column=8, value=f"=SUM(H{first_data_row}:H{last_data_row})")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal='right')
+            cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
+            cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
 
+            # TVA
             cell = ws.cell(row=current_row, column=9, value=f"=SUM(I{first_data_row}:I{last_data_row})")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal='right')
+            cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
+            cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
 
+            # TTC
             cell = ws.cell(row=current_row, column=10, value=f"=SUM(J{first_data_row}:J{last_data_row})")
             cell.number_format = '#,##0'
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal='right')
+            cell.font = Font(bold=True, size=11)
+            cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
             cell.border = border
 
@@ -9603,24 +10852,35 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
 
         current_row += 2
 
-    # Totaux globaux
+    # ========================================
+    # 💰 TOTAUX GLOBAUX
+    # ========================================
+
     current_row += 1
+
+    # Total HT
     ws[f'G{current_row}'] = "TOTAL HT :"
     ws[f'G{current_row}'].font = Font(bold=True, size=12)
     ws[f'G{current_row}'].alignment = Alignment(horizontal='right')
     ws[f'H{current_row}'] = '=SUMIF(A:A,"SOUS-TOTAL*",H:H)'
     ws[f'H{current_row}'].number_format = '#,##0 "FCFA"'
     ws[f'H{current_row}'].font = Font(bold=True, size=12)
+    ws[f'H{current_row}'].border = Border(bottom=Side(style='thin'))
 
     current_row += 1
+
+    # TVA
     ws[f'G{current_row}'] = "TVA (18%) :"
     ws[f'G{current_row}'].font = Font(bold=True, size=12)
     ws[f'G{current_row}'].alignment = Alignment(horizontal='right')
     ws[f'H{current_row}'] = '=SUMIF(A:A,"SOUS-TOTAL*",I:I)'
     ws[f'H{current_row}'].number_format = '#,##0 "FCFA"'
     ws[f'H{current_row}'].font = Font(bold=True, size=12)
+    ws[f'H{current_row}'].border = Border(bottom=Side(style='thin'))
 
     current_row += 1
+
+    # Total TTC
     ws[f'G{current_row}'] = "TOTAL TTC :"
     ws[f'G{current_row}'].font = Font(bold=True, size=14, color="006400")
     ws[f'G{current_row}'].alignment = Alignment(horizontal='right')
@@ -9628,44 +10888,110 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
     ws[f'H{current_row}'].number_format = '#,##0 "FCFA"'
     ws[f'H{current_row}'].font = Font(bold=True, size=14, color="FFFFFF")
     ws[f'H{current_row}'].fill = PatternFill(start_color="27AE60", end_color="27AE60", fill_type="solid")
+    ws[f'H{current_row}'].border = Border(
+        top=Side(style='double'),
+        bottom=Side(style='double')
+    )
 
-    # Instructions
-    current_row += 3
-    ws[f'A{current_row}'] = "📌 INSTRUCTIONS :"
-    ws[f'A{current_row}'].font = Font(bold=True, size=12, color="FF0000")
-    current_row += 1
+    # ========================================
+    # ✍️ SIGNATURE EN BAS
+    # ========================================
 
-    instructions = [
-        "1. Colonnes 'Remise %' et 'Escompte %' ÉDITABLES (jaune/orange)",
-        "2. Saisissez un % (ex: 5 pour 5%)",
-        "3. Les montants se RECALCULENT AUTOMATIQUEMENT",
-        "4. Formule : TTC = (PU × Qté) × (1-Remise/100) × (1-Escompte/100) × 1.18",
-        "5. Remise s'applique d'abord, puis escompte"
-    ]
-    for instruction in instructions:
-        ws[f'A{current_row}'] = instruction
-        ws[f'A{current_row}'].font = Font(size=10)
+    current_row += 4  # Espace entre total et signature
+    signature_row = current_row
+
+    try:
+        # Chercher la signature
+        signature_paths = [
+            "assets/signature.png",
+            "assets/signature.jpg",
+            "signature.png",
+            "signature.jpg"
+        ]
+
+        signature_path = None
+        for path in signature_paths:
+            if os.path.exists(path):
+                signature_path = path
+                break
+
+        if signature_path:
+            # Ajouter la signature
+            sig_img = XLImage(signature_path)
+
+            # Redimensionner signature (largeur 150px)
+            sig_img.width = 150
+            sig_img.height = int(150 / sig_img.width * sig_img.height) if sig_img.width > 0 else 80
+
+            # Positionner en bas à droite (colonne H)
+            ws.add_image(sig_img, f'H{signature_row}')
+
+            print(f"   ✅ Signature ajoutée dans Excel : {signature_path}")
+
+            current_row += 6  # Espace pour la signature
+        else:
+            print("   ⚠️ Signature non trouvée - ajout cadre signature")
+
+            # Alternative : Zone pour signature manuscrite
+            ws.merge_cells(f'H{current_row}:J{current_row}')
+            ws[f'H{current_row}'] = "Signature et Cachet"
+            ws[f'H{current_row}'].font = Font(bold=True, size=11)
+            ws[f'H{current_row}'].alignment = Alignment(horizontal='center', vertical='center')
+            ws[f'H{current_row}'].border = Border(
+                bottom=Side(style='thin'),
+                top=Side(style='thin'),
+                left=Side(style='thin'),
+                right=Side(style='thin')
+            )
+            ws.row_dimensions[current_row].height = 60
+
+            current_row += 1
+
+    except Exception as e:
+        print(f"   ⚠️ Erreur ajout signature Excel : {e}")
+        import traceback
+        traceback.print_exc()
+
+        # Fallback : Ligne pour signature
+        ws.merge_cells(f'H{current_row}:J{current_row}')
+        ws[f'H{current_row}'] = "_" * 30
+        ws[f'H{current_row}'].alignment = Alignment(horizontal='center')
         current_row += 1
+        ws[f'H{current_row}'] = "Signature et Cachet"
+        ws[f'H{current_row}'].font = Font(bold=True, size=10)
+        ws[f'H{current_row}'].alignment = Alignment(horizontal='center')
+
+    # ========================================
+    # 📐 MISE EN PAGE
+    # ========================================
 
     # Largeurs colonnes
-    ws.column_dimensions['A'].width = 12
-    ws.column_dimensions['B'].width = 40
-    ws.column_dimensions['C'].width = 8
-    ws.column_dimensions['D'].width = 10
-    ws.column_dimensions['E'].width = 12
-    ws.column_dimensions['F'].width = 12
-    ws.column_dimensions['G'].width = 12
-    ws.column_dimensions['H'].width = 15
-    ws.column_dimensions['I'].width = 15
-    ws.column_dimensions['J'].width = 15
+    ws.column_dimensions['A'].width = 10  # Réf
+    ws.column_dimensions['B'].width = 40  # Désignation
+    ws.column_dimensions['C'].width = 8  # Qté
+    ws.column_dimensions['D'].width = 10  # Unité
+    ws.column_dimensions['E'].width = 12  # PU HT
+    ws.column_dimensions['F'].width = 12  # Remise %
+    ws.column_dimensions['G'].width = 12  # Escompte %
+    ws.column_dimensions['H'].width = 15  # Total HT
+    ws.column_dimensions['I'].width = 15  # TVA
+    ws.column_dimensions['J'].width = 15  # Total TTC
 
-    # Export
+    # Hauteur des premières lignes (pour le logo)
+    ws.row_dimensions[1].height = 60
+    ws.row_dimensions[2].height = 20
+
+    # ========================================
+    # 💾 EXPORT
+    # ========================================
+
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
 
-    return buf, po_number
+    print(f"   ✅ Excel généré : BC-{po_number}")
 
+    return buf, po_number
 
 # ===== CALLBACK : GÉNÉRATION BON DE COMMANDE EXCEL AVEC VALIDATION =====
 @app.callback(

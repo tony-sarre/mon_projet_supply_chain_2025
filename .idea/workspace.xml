@@ -5,8 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="css">
+      <change afterPath="$PROJECT_DIR$/signature.jpg" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/colorize.js" beforeDir="false" afterPath="$PROJECT_DIR$/assets/colorize.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/custom.css" beforeDir="false" afterPath="$PROJECT_DIR$/assets/custom.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/notes_database.json" beforeDir="false" afterPath="$PROJECT_DIR$/notes_database.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/po_counter.json" beforeDir="false" afterPath="$PROJECT_DIR$/po_counter.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supply_chain_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/supply_chain_analytics.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -54,7 +59,7 @@
     "Python.supply_chain_analytics.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "git-widget-placeholder": "main",
-    "last_opened_file_path": "C:/Users/CE PC/PycharmProjects/pythondash"
+    "last_opened_file_path": "C:/Users/CE PC/PycharmProjects/dashmodule"
   }
 }]]></component>
   <component name="RecentsManager">
@@ -77,14 +82,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00137" summary="local storage for QAC edit">
-      <option name="closed" value="true" />
-      <created>1761664828571</created>
-      <option name="number" value="00137" />
-      <option name="presentableId" value="LOCAL-00137" />
-      <option name="project" value="LOCAL" />
-      <updated>1761664828571</updated>
     </task>
     <task id="LOCAL-00138" summary="restore from storage for QAC edit">
       <option name="closed" value="true" />
@@ -470,7 +467,15 @@
       <option name="project" value="LOCAL" />
       <updated>1763138516210</updated>
     </task>
-    <option name="localTasksCounter" value="186" />
+    <task id="LOCAL-00186" summary="css">
+      <option name="closed" value="true" />
+      <created>1763631211232</created>
+      <option name="number" value="00186" />
+      <option name="presentableId" value="LOCAL-00186" />
+      <option name="project" value="LOCAL" />
+      <updated>1763631211232</updated>
+    </task>
+    <option name="localTasksCounter" value="187" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -539,16 +544,5 @@
     <MESSAGE value="ML risque de rupture" />
     <MESSAGE value="css" />
     <option name="LAST_COMMIT_MESSAGE" value="css" />
-  </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/supply_chain_analytics.py</url>
-          <line>4647</line>
-          <option name="timeStamp" value="1" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
   </component>
 </project>

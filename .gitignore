@@ -1,0 +1,31 @@
+﻿# Environnement
+.env
+venv/
+.venv/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Données sensibles
+dashboard_data.json
+notes_database.json
+po_counter.json
+qac_data.csv
+*.zip
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

@@ -139,3 +139,244 @@
 /* Marges adoucies */
 .section-title { font-size: 14px; margin: 8px 0; }
 .page-title { font-size: 20px; margin-bottom: 8px; }
+
+
+
+/* ========================================
+   💬 MODAL NOTES - THÈME CLAIR
+   ======================================== */
+
+/* Badges mentions */
+/*.mention-badge {
+    background: #dbeafe !important;
+    color: #1e40af !important;
+    padding: 4px 10px !important;
+    border-radius: 6px !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    display: inline-block !important;
+    transition: all 0.2s ease !important;
+}
+
+.mention-badge:hover {
+    background: #bfdbfe !important;
+    cursor: pointer;
+    transform: translateY(-1px);
+}
+
+/* ========================================
+   🎯 DROPDOWN CLAIR (pour modal notes)
+   ======================================== */
+/*
+.light-dropdown .Select-control {
+    background: #ffffff !important;
+    border: 2px solid #cbd5e1 !important;
+    border-radius: 10px !important;
+    transition: all 0.3s ease !important;
+}
+
+.light-dropdown .Select-control:hover {
+    border-color: #94a3b8 !important;
+}
+
+.light-dropdown .is-focused:not(.is-open) > .Select-control {
+    border-color: #22d3ee !important;
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15) !important;
+}
+
+.light-dropdown .Select-value-label,
+.light-dropdown .Select-placeholder {
+    color: #1e293b !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+}
+
+.light-dropdown .Select-placeholder {
+    color: #64748b !important;
+}
+
+.light-dropdown .Select-arrow-zone {
+    color: #475569 !important;
+}
+
+.light-dropdown .Select-arrow {
+    border-color: #475569 transparent transparent !important;
+}
+
+.light-dropdown .Select-menu-outer {
+    background: #ffffff !important;
+    border: 2px solid #cbd5e1 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.1) !important;
+    margin-top: 4px !important;
+}
+
+.light-dropdown .Select-menu {
+    max-height: 250px !important;
+}
+
+.light-dropdown .Select-option {
+    background: #ffffff !important;
+    color: #1e293b !important;
+    padding: 12px 16px !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease !important;
+}
+
+.light-dropdown .Select-option:hover,
+.light-dropdown .Select-option.is-focused {
+    background: #f0f9ff !important;
+    color: #0369a1 !important;
+}
+
+.light-dropdown .Select-option.is-selected {
+    background: #e0f2fe !important;
+    color: #0c4a6e !important;
+    font-weight: 700 !important;
+}
+*/
+/* ========================================
+   ✍️ TEXTAREA ET INPUTS (modal notes)
+   ======================================== */
+/*
+#note-text-input,
+#note-author-input {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    transition: all 0.3s ease !important;
+}
+
+#note-text-input:focus,
+#note-author-input:focus {
+    border-color: #22d3ee !important;
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15) !important;
+    outline: none !important;
+    background: #ffffff !important;
+}
+
+#note-text-input::placeholder,
+#note-author-input::placeholder {
+    color: #94a3b8 !important;
+    opacity: 1 !important;
+}
+*/
+/* ========================================
+   📋 SCROLLBAR LISTE NOTES
+   ======================================== */
+/*
+#notes-display-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+#notes-display-list::-webkit-scrollbar-track {
+    background: #e2e8f0;
+    border-radius: 10px;
+}
+
+#notes-display-list::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
+    border-radius: 10px;
+    transition: all 0.3s ease;
+}
+
+#notes-display-list::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #64748b 0%, #475569 100%);
+}
+*/
+/* ========================================
+   🎨 ANIMATIONS MODAL NOTES
+   ======================================== */
+
+/* Animation apparition notes */
+/* #notes-display-list > div {
+    animation: slideInNote 0.3s ease forwards;
+    opacity: 0;
+}
+
+#notes-display-list > div:nth-child(1) { animation-delay: 0.05s; }
+#notes-display-list > div:nth-child(2) { animation-delay: 0.1s; }
+#notes-display-list > div:nth-child(3) { animation-delay: 0.15s; }
+#notes-display-list > div:nth-child(4) { animation-delay: 0.2s; }
+#notes-display-list > div:nth-child(5) { animation-delay: 0.25s; }
+
+@keyframes slideInNote {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Hover sur les notes */
+#notes-display-list > div:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
+    transform: translateY(-2px);
+    border-color: #22d3ee !important;
+}
+*/
+/* ========================================
+   🎯 FEEDBACK MESSAGE
+   ======================================== */
+/*
+#note-feedback-new {
+    animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+*/
+/* ========================================
+   📱 RESPONSIVE MODAL NOTES
+   ======================================== */
+/*
+@media (max-width: 768px) {
+    #notes-modal-new .modal-dialog {
+        margin: 10px !important;
+    }
+
+    #notes-display-list {
+        max-height: 200px !important;
+    }
+
+    .mention-badge {
+        font-size: 10px !important;
+        padding: 3px 8px !important;
+    }
+}
+*/
+/* ========================================
+   🎨 BOUTON FLOTTANT NOTES (optionnel)
+   ======================================== */
+/*
+#notes-fab {
+    transition: all 0.3s ease !important;
+}
+
+#notes-fab:hover {
+    transform: translateY(-4px) scale(1.05) !important;
+    box-shadow: 0 16px 32px rgba(34, 211, 238, 0.4) !important;
+}
+
+#notes-fab:active {
+    transform: translateY(-2px) scale(1.02) !important;
+}
+*/
+/* ========================================
+   🎨 MENTIONS DANS LES MESSAGES
+   ======================================== */
+
+/* Style des mentions dans le texte des notes */
+/* #notes-display-list span[style*="background:#dbeafe"] {
+    display: inline-block;
+    margin: 0 2px;
+    transition: all 0.2s ease;
+}
+
+#notes-display-list span[style*="background:#dbeafe"]:hover {
+    background: #bfdbfe !important;
+    transform: scale(1.05);
+}*/

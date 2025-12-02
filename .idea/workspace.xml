@@ -5,12 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="css">
-      <change afterPath="$PROJECT_DIR$/signature.jpg" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/colorize.js" beforeDir="false" afterPath="$PROJECT_DIR$/assets/colorize.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/custom.css" beforeDir="false" afterPath="$PROJECT_DIR$/assets/custom.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notes_database.json" beforeDir="false" afterPath="$PROJECT_DIR$/notes_database.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/po_counter.json" beforeDir="false" afterPath="$PROJECT_DIR$/po_counter.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/supply_chain_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/supply_chain_analytics.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -54,14 +49,14 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Python.supply_chain_analytics.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "C:/Users/CE PC/PycharmProjects/dashmodule"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python.supply_chain_analytics.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/CE PC/PycharmProjects/dashmodule&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="C:\Users\CE PC\PycharmProjects\pythondash" />

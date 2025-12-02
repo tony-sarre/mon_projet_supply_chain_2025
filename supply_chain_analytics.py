@@ -10,7 +10,7 @@ from functools import lru_cache
 
 from dash.exceptions import PreventUpdate
 
-#import MATCH
+# import MATCH
 
 print("CWD:", os.getcwd())
 print("Dir files:", os.listdir("."))
@@ -22,9 +22,10 @@ import os
 import google.generativeai as genai
 import orjson
 
-opts = orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY
+ORJSON_OPTS = orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY
 
-app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP], prevent_initial_callbacks='initial_duplicate')
+app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP],
+           prevent_initial_callbacks='initial_duplicate')
 
 # ⚠️ Très important pour Render/Gunicorn
 server = app.server
@@ -58,6 +59,7 @@ from reportlab.platypus import Image
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
 # --- Word / python-docx (import paresseux & sûr) ---
 DOCX_AVAILABLE = False
 DOCX_IMPORT_ERROR = None
@@ -67,12 +69,13 @@ try:
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml.ns import qn
     from docx.oxml import OxmlElement
+
     DOCX_AVAILABLE = True
 except Exception as _e:
     DOCX_AVAILABLE = False
     DOCX_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
 # Imports existants + ces nouveaux
-#import anthropic
+# import anthropic
 import json
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -83,6 +86,7 @@ import requests
 import threading
 import plotly.graph_objects as go
 import time
+
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
 # Cache setup
@@ -93,23 +97,24 @@ cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TI
 def get_df_cached():
     return load_supply_data()  # Fonction pour charger vos données
 
+
 RENDER_ENV = os.getenv("RENDER", False)
 DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
 
 if RENDER_ENV:
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🚀 DÉMARRAGE SUR RENDER")
-    print("="*60)
+    print("=" * 60)
     print(f"Python version: {sys.version}")
     print(f"Working directory: {os.getcwd()}")
     print(f"Files: {os.listdir('.')[:10]}")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
 # ==========================================
 # ✅ TIMEOUT COMPATIBLE WINDOWS
 # ==========================================
-class TimeoutError(Exception):
+class CustomTimeoutError(Exception):
     """Exception levée en cas de timeout"""
     pass
 
@@ -149,12 +154,14 @@ def run_with_timeout(func, args=(), kwargs=None, timeout_seconds=30):
 
     if thread.is_alive():
         # Thread encore actif = timeout
-        raise TimeoutError(f"Opération timeout après {timeout_seconds} secondes")
+        raise CustomTimeoutError(f"Opération timeout après {timeout_seconds} secondes")
 
     if exception[0]:
         raise exception[0]
 
     return result[0]
+
+
 # ------------- OpenAI client (clé hardcodée à ta demande) ----------------
 # OPENAI_API_KEY_HARDCODED = "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"
 # Ligne ~45 dans votre code
@@ -544,6 +551,7 @@ Cet email a été envoyé automatiquement.
         traceback.print_exc()
         return False
 
+
 # ==================== VÉRIFIER LA CONFIGURATION EMAIL ====================
 # Vers ligne 200-250, vérifie que ces variables existent :
 
@@ -763,14 +771,15 @@ def get_next_po_number() -> str:
         return f"PO-{today}-{st['seq']:03d}"
 
 
-#import pandas as pd
-#import numpy as np
+# import pandas as pd
+# import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
-#import warnings
+
+# import warnings
 
 warnings.filterwarnings('ignore')
 
@@ -1328,6 +1337,7 @@ def calculate_ads_by_period(period_days: int = 7) -> pd.DataFrame:
         traceback.print_exc()
         return pd.DataFrame(columns=['product_name', f'Average Daily Sales ({period_days}d)'])
 
+
 def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     import numpy as np
     import pandas as pd
@@ -1381,13 +1391,15 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     try:
         delisting_df = pd.read_csv(DELISTING_URL, skiprows=3, usecols=[1, 3])
         delisting_df.columns = ["product_name", "delisting_status"]
-    except:
+    except Exception as e:
+        print(f"Warning: Could not load delisting data: {e}")
         delisting_df = pd.DataFrame(columns=["product_name", "delisting_status"])
 
     try:
         parametres_replenish_df = pd.read_csv(PARAMETRES_REPLENISH_URL)
         print("'Parametres Replenish' data loaded successfully.")
-    except:
+    except Exception as e:
+        print(f"Warning: Could not load parametres replenish: {e}")
         parametres_replenish_df = pd.DataFrame()
 
     # =========================
@@ -2698,6 +2710,8 @@ def get_preloaded_data(period_days="7d"):
         return DATA_30D.copy()
     else:
         return DATA_7D.copy()
+
+
 # ==================== CALLBACK ROTATION ADS ====================
 '''
 @app.callback(
@@ -2919,6 +2933,8 @@ def update_rotation_period(period_value):
         # ✅ RETOUR EN CAS D'ERREUR (4 valeurs)
         return no_update, no_update, no_update, error_indicator
 '''
+
+
 # Utility: add Actions columns
 def add_action_cols(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
@@ -2941,12 +2957,11 @@ def recalculate_product_metrics(row: pd.Series) -> pd.Series:
         pd.Series avec toutes les métriques recalculées
     """
 
-
     row = row.copy()
 
     # === VALIDATION & NETTOYAGE ===
     numeric_cols = {
-        #'total_stock': 0,
+        # 'total_stock': 0,
         'Average Daily Sales': 0.1,
         'Max Daily Sales (Pikine)': 0,
         'QAC': 0,
@@ -2955,8 +2970,8 @@ def recalculate_product_metrics(row: pd.Series) -> pd.Series:
         'credit_days': 0,
         'ADJUSTED_LEADTIME': 7,
         'AJUSTER_BUFFER': 0,
-        #'target_quantity': 0,
-        #'optimal stock': 0,
+        # 'target_quantity': 0,
+        # 'optimal stock': 0,
         'Max Coverage Day': 0
     }
 
@@ -3224,9 +3239,9 @@ def train_optimal_order_quantity_model(df: pd.DataFrame) -> tuple:
 
 
 # ----------------------------- App & Cache ---------------------------------------
-#app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
-#server = app.server
-#cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
+# app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
+# server = app.server
+# cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
 
 # ------------------------------ Custom CSS & JS ----------------------------------
 app.index_string = """
@@ -3239,16 +3254,16 @@ app.index_string = """
     function colorizeTableRows() {
         const table = document.querySelector('.dash-table-container table');
         if (!table) return;
-        
+
         const rows = table.querySelectorAll('tbody tr');
-        
+
         rows.forEach(row => {
             const cells = row.querySelectorAll('td');
-            
+
             // Trouver la cellule Ajusted_total_need
             cells.forEach((cell, index) => {
                 const text = cell.textContent.trim();
-                
+
                 if (text === 'ORDER NOW') {
                     // 🔴 Ligne rouge
                     row.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
@@ -3256,7 +3271,7 @@ app.index_string = """
                         c.style.color = '#fecaca';
                         c.style.fontWeight = '600';
                     });
-                    
+
                     // Badge rouge pour la cellule
                     cell.style.backgroundColor = 'rgba(239, 68, 68, 0.4)';
                     cell.style.color = '#ffffff';
@@ -3264,7 +3279,7 @@ app.index_string = """
                     cell.style.border = '2px solid #ef4444';
                     cell.style.borderRadius = '6px';
                     cell.style.textTransform = 'uppercase';
-                    
+
                     // Bordure gauche sur product_name
                     if (cells[1]) {
                         cells[1].style.borderLeft = '4px solid #ef4444';
@@ -3272,7 +3287,7 @@ app.index_string = """
                         cells[1].style.color = '#fee2e2';
                         cells[1].style.fontWeight = '700';
                     }
-                    
+
                     // Highlight QAC
                     cells.forEach((c, i) => {
                         const header = table.querySelectorAll('thead th')[i];
@@ -3284,7 +3299,7 @@ app.index_string = """
                         }
                     });
                 }
-                
+
                 else if (text === 'ORDER NOT URGENT') {
                     // 🟠 Ligne orange
                     row.style.backgroundColor = 'rgba(245, 158, 11, 0.12)';
@@ -3292,7 +3307,7 @@ app.index_string = """
                         c.style.color = '#fde68a';
                         c.style.fontWeight = '500';
                     });
-                    
+
                     // Badge orange
                     cell.style.backgroundColor = 'rgba(245, 158, 11, 0.35)';
                     cell.style.color = '#ffffff';
@@ -3300,7 +3315,7 @@ app.index_string = """
                     cell.style.border = '2px solid #f59e0b';
                     cell.style.borderRadius = '6px';
                     cell.style.textTransform = 'uppercase';
-                    
+
                     // Bordure gauche
                     if (cells[1]) {
                         cells[1].style.borderLeft = '4px solid #f59e0b';
@@ -3309,14 +3324,14 @@ app.index_string = """
                         cells[1].style.fontWeight = '600';
                     }
                 }
-                
+
                 else if (text === 'NO NEED') {
                     // 🟢 Ligne verte
                     row.style.backgroundColor = 'rgba(16, 185, 129, 0.08)';
                     cells.forEach(c => {
                         c.style.color = '#d1fae5';
                     });
-                    
+
                     // Badge vert
                     cell.style.backgroundColor = 'rgba(16, 185, 129, 0.3)';
                     cell.style.color = '#ffffff';
@@ -3324,7 +3339,7 @@ app.index_string = """
                     cell.style.border = '2px solid #10b981';
                     cell.style.borderRadius = '6px';
                     cell.style.textTransform = 'uppercase';
-                    
+
                     // Bordure gauche
                     if (cells[1]) {
                         cells[1].style.borderLeft = '4px solid #10b981';
@@ -3333,16 +3348,16 @@ app.index_string = """
             });
         });
     }
-    
+
     // Exécuter au chargement et après chaque mise à jour
     window.addEventListener('load', () => {
         colorizeTableRows();
-        
+
         // Observer les changements du DOM
         const observer = new MutationObserver(() => {
             setTimeout(colorizeTableRows, 100);
         });
-        
+
         const tableContainer = document.querySelector('.dash-table-container');
         if (tableContainer) {
             observer.observe(tableContainer, {
@@ -3970,10 +3985,12 @@ def get_df_cached():
     return load_supply_data()
 '''
 
+
 @lru_cache(maxsize=10)
 def get_df_cached(period: str = "7d"):
     """Cache avec support période rotation"""
     return load_supply_data(period_days=period)
+
 
 # ------------------------------ Sidebar ------------------------------------------
 def make_sidebar():
@@ -3995,7 +4012,7 @@ def make_sidebar():
             html.Div("Supply Chain Command Center", className="muted")
         ]),
         html.Hr(),
-        #html.Div(className="banner-risk", id="risk-banner", children="Chargement..."),
+        # html.Div(className="banner-risk", id="risk-banner", children="Chargement..."),
         html.Div(className="section-title", children="Recherche"),
         dbc.InputGroup(className="search-input", children=[
             dbc.Input(id="search-input", placeholder="Rechercher un produit...", type="text", debounce=True)
@@ -4047,7 +4064,8 @@ def make_sidebar():
         html.Br(),
         html.Div([
             html.Span(" "),
-            dbc.Button("📄 Bon de commande", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True), # Le bouton est désactivé par défaut
+            dbc.Button("📄 Bon de commande", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True),
+            # Le bouton est désactivé par défaut
             # ✅ AJOUTER : Modal de chargement
             dbc.Modal(
                 [
@@ -4221,8 +4239,6 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
             # Optionnel : garder aussi Suppliers (all) pour référence
 
     return grouped
-
-
 
 
 # ------------------------------ Pages --------------------------------------------
@@ -4576,6 +4592,8 @@ def make_kpis(df: pd.DataFrame):
     )
 
     return cards, bell
+
+
 '''
 def make_kpis(df: pd.DataFrame):
     """Calcule les KPIs (SKUs, ruptures, fournisseurs) + alerte dropdown produits à risque (ML)."""
@@ -4809,6 +4827,8 @@ def make_kpis(df: pd.DataFrame):
 
     return cards, bell
 '''
+
+
 @app.callback(
     Output("risk-alert-collapse", "is_open"),
     Input("risk-alert-toggle", "n_clicks"),
@@ -4820,14 +4840,13 @@ def _toggle_risk_dropdown(n, is_open):
         raise dash.exceptions.PreventUpdate
     return not is_open
 
+
 def page_overview(master_df: pd.DataFrame = None):
     # Charger les données
 
     print(master_df.head())
     df = master_df if master_df is not None else get_df_cached()
     df = df.copy()
-
-
 
     # === UI HARDENING (garantir présence + valeurs non vides) ===
     def _ui_harden(df):
@@ -4876,7 +4895,7 @@ def page_overview(master_df: pd.DataFrame = None):
     # ✅ 1. DÉFINIR colonnes prioritaires overview
     cols_priority_overview = [
 
-        #"delete",
+        # "delete",
         "product_id",
         "product_name",
         "Supplier",
@@ -4977,10 +4996,10 @@ def page_overview(master_df: pd.DataFrame = None):
     df_with_actions = df.copy()
 
     # Insérer les colonnes "edit" et "delete" dans le DataFrame avec un message d'action ou une valeur par défaut
-   # df_with_actions.insert(0, "delete", "delete")  # Colonne Delete
-    #df_with_actions.insert(0, "edit", "edit")  # Colonne Edit
+    # df_with_actions.insert(0, "delete", "delete")  # Colonne Delete
+    # df_with_actions.insert(0, "edit", "edit")  # Colonne Edit
     # Appliquer la fonction pour ajouter les colonnes "edit" et "delete"
-    #df_with_actions = add_action_cols(df)
+    # df_with_actions = add_action_cols(df)
 
     # Mettre à jour la liste des colonnes disponibles
     available_cols_with_actions = ["edit", "delete"] + available_cols
@@ -5028,7 +5047,7 @@ def page_overview(master_df: pd.DataFrame = None):
     })
 
     # Ajouter la nouvelle colonne 'QAC edited' dans available_cols
-    available_cols = available_cols #+ ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
+    available_cols = available_cols  # + ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
 
     # Générer dynamiquement les colonnes et rendre 'QAC edited' editable
     columns = [
@@ -5437,37 +5456,37 @@ def page_overview(master_df: pd.DataFrame = None):
     action_buttons = dbc.ButtonGroup([
         dbc.Button("🔄 Actualiser", id="btn-refresh", className="btn-outline-secondary", size="sm"),
         dbc.Button("➕ Ajouter produit", id="btn-add-row", className="btn-primary", size="sm"),
-        dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, className="btn-success", size="sm"), # ✅ nouveau
+        dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, className="btn-success",
+                   size="sm"),  # ✅ nouveau
     ], style={"marginBottom": "15px"})
 
-
     # Dropdown filter-status
-    #dcc.Dropdown(
-     #   id="filter-status",
-      #  options=[
-       #     {"label": "Tous", "value": "all"},
-        #    {"label": "Stock OK", "value": "ok"},
-         #   {"label": "Rupture", "value": "oos"}
-        #],
-        #value="all",
-        #className="filter-dropdown"
-    #)
+    # dcc.Dropdown(
+    #   id="filter-status",
+    #  options=[
+    #     {"label": "Tous", "value": "all"},
+    #    {"label": "Stock OK", "value": "ok"},
+    #   {"label": "Rupture", "value": "oos"}
+    # ],
+    # value="all",
+    # className="filter-dropdown"
+    # )
 
     # Modal édition
-    #edit_modal = dbc.Modal(
-     #   [
-      #      dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
-       #     dbc.ModalBody([
-        #        html.Div("Formulaire d'édition à implémenter ici…"),
-         #       dcc.Input(id="edit-input", type="text", placeholder="Modifier la valeur")
-          #  ]),
-           # dbc.ModalFooter(
-            #    dbc.Button("Fermer", id="close-edit", className="ms-auto", n_clicks=0)
-            #),
-        #],
-        #id="edit-modal",
-        #is_open=False,
-    #)
+    # edit_modal = dbc.Modal(
+    #   [
+    #      dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
+    #     dbc.ModalBody([
+    #        html.Div("Formulaire d'édition à implémenter ici…"),
+    #       dcc.Input(id="edit-input", type="text", placeholder="Modifier la valeur")
+    #  ]),
+    # dbc.ModalFooter(
+    #    dbc.Button("Fermer", id="close-edit", className="ms-auto", n_clicks=0)
+    # ),
+    # ],
+    # id="edit-modal",
+    # is_open=False,
+    # )
 
     # ✅ NOUVEAU : Bouton flottant + Modal amélioré
     notes_fab_button = html.Button(
@@ -5690,6 +5709,23 @@ def page_overview(master_df: pd.DataFrame = None):
         scrollable=True
     )
 
+    # ========== RETURN DU LAYOUT PAGE OVERVIEW ==========
+    return html.Div(className="content", children=[
+        # KPIs
+        html.Div(kpi_cards),
+        html.Br(),
+
+        # Boutons d'action
+        action_buttons,
+
+        # Table principale
+        html.Div(className="soft-card", children=[table]),
+
+        # Modal notes
+        notes_fab_button,
+        notes_modal
+    ])
+
 
 @app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
@@ -5701,7 +5737,7 @@ def page_overview(master_df: pd.DataFrame = None):
      Input("filter-need", "value"),
      Input("toggle-options", "value"),
      Input("master-data", "data")],
-    prevent_initial_call=False  # ✅ CHANGÉ : False pour s'exécuter au démarrage
+    prevent_initial_call=True  # ✅ CORRIGÉ: Évite erreur main-table au démarrage
 )
 def apply_filters(search, sup, cat, need, options, master_json):
     """
@@ -5795,6 +5831,7 @@ def apply_filters(search, sup, cat, need, options, master_json):
         []
     )
 
+
 @app.callback(
     Output("master-data", "data", allow_duplicate=True),
     Input("rotation-period", "value"),
@@ -5854,6 +5891,7 @@ def update_rotation_simple(period_value):
         import traceback
         traceback.print_exc()
         return no_update
+
 
 '''
 # Callback 2 : Filtrage (avec allow_duplicate)
@@ -6048,6 +6086,8 @@ def update_rotation(period_value):
         print(f"❌ Erreur : {e}\n")
         return no_update
 '''
+
+
 @app.callback(
     Output("master-data", "data", allow_duplicate=True),
     Input("btn-refresh", "n_clicks"),
@@ -6060,6 +6100,8 @@ def force_refresh_master(n_clicks):
         print(f"🔄 Données rechargées : {len(df)} produits")
         return df.to_json(orient="records")
     return no_update
+
+
 '''@app.callback(
     Output("main-table", "selected_rows", allow_duplicate=True),
     [Input("search-input", "value"),
@@ -6373,6 +6415,7 @@ def send_note_with_notifications(n_clicks, message, author, product_name):
 
     return notes_display, "", author, feedback
 
+
 @app.callback(
     Output('main-table', 'data', allow_duplicate=True),  # Cela dépend de ce que tu veux actualiser
     Input('btn-refresh', 'n_clicks'),
@@ -6384,6 +6427,8 @@ def refresh_data(n_clicks):
         updated_data = load_supply_data()  # Assure-toi d'avoir une fonction load_data() qui recharge les données
         return updated_data
     return no_update
+
+
 @app.callback(
     Output('main-table', 'data', allow_duplicate=True),
     Input('btn-add-row', 'n_clicks'),
@@ -6401,6 +6446,8 @@ def add_new_product(n_clicks, current_data):
         current_data.append(new_product)
         return current_data
     return no_update
+
+
 '''
 
 def page_analytics(master_df: pd.DataFrame = None):
@@ -7693,6 +7740,8 @@ def update_predictive_table(supplier_value, category_value):
 
     return df.to_dict("records")
 '''
+
+
 # ==========================================
 # 🔧 HELPER : PLACEHOLDER POUR ÉVITER ERREURS
 # ==========================================
@@ -7708,6 +7757,7 @@ def create_hidden_table_placeholder():
         columns=[],
         style_table={"display": "none"}
     )
+
 
 def page_analytics(master_df: pd.DataFrame = None):
     """Page Analytics avec filtres sidebar et graphiques dynamiques"""
@@ -8448,6 +8498,8 @@ def update_predictive_all_charts(supplier_filter, category_filter, need_filter, 
         fig_risk,
         df.to_dict("records")
     )
+
+
 def page_about():
     return html.Div(className="content", children=[
         html.H2("À propos", className="page-title"),
@@ -8665,6 +8717,8 @@ def display_page(pathname):
         ], className="error-message")
 
 '''
+
+
 # ------------------------------ Chatbot helpers ----------------------------------
 
 # =============================== Chatbot helpers ================================
@@ -9006,8 +9060,8 @@ except Exception as e:
     initial_df = pd.DataFrame(columns=['product_name', 'Supplier', 'total_stock'])
 
 initial_df = get_df_cached()
-initial_df['QAC edited']=' '
-#initial_df['delete']='delete'
+initial_df['QAC edited'] = ' '
+# initial_df['delete']='delete'
 # ==================== LAYOUT CORRIGÉ (remplacer TOUT votre app.layout actuel) ====================
 
 app.layout = html.Div([
@@ -9022,13 +9076,12 @@ app.layout = html.Div([
     dcc.Store(id="qac-edits-store", storage_type='local', data={}),  # ✅ Un seul Store pour QAC
     dcc.Store(id="edit-mode"),
     dcc.Store(id="edit-original-product"),
-# ========== STORES (données partagées entre callbacks) ==========
+    # ========== STORES (données partagées entre callbacks) ==========
     dcc.Store(id='agent-ia-recommendations', data=None),
     dcc.Store(id='bc-data-store', data=None),
 
     # ========== COMPOSANTS CACHÉS (pour callbacks) ==========
     html.Div(id='edit-product-output', style={"display": "none"}),
-
 
     # ========== EDIT MODAL (VISIBLE AU NIVEAU RACINE) ==========
     dbc.Modal(
@@ -9138,8 +9191,8 @@ app.layout = html.Div([
     ]),
 
     # ========== FEEDBACKS & COMPTEURS ==========
-   # html.Div(id="action-feedback", style={"position": "fixed", "top": "80px", "right": "20px", "zIndex": 10000}),
-     #html.Div(id="selection-counter"),
+    # html.Div(id="action-feedback", style={"position": "fixed", "top": "80px", "right": "20px", "zIndex": 10000}),
+    # html.Div(id="selection-counter"),
 
     # ========== CHATBOT FLOTTANT ==========
     html.Button(id="chat-fab", className="chat-fab", children=[html.Span("Assistant"), html.Span("💬")]),
@@ -9193,6 +9246,7 @@ def update_product_name(value):
     if value:
         return f"Produit modifié: {value}"
     return no_update
+
 
 # Callback pour stocker les données locales
 @app.callback(
@@ -9267,7 +9321,6 @@ def capture_qac_edits(table_data, stored_edits):
     print(f"💾 [localStorage] {len(stored_edits)} QAC sauvegardés")
     return stored_edits
 '''
-
 
 
 # ==================== CALLBACK 2 : RESTAURER LES QAC AU CHARGEMENT ====================
@@ -9535,9 +9588,10 @@ def load_qac_from_csv_on_startup(pathname):
         return {}
 '''
 
+
 # Callback pour mettre à jour le Store 'selected-product-for-notes'
 @app.callback(
-    Output('selected-product-for-notes', 'data', allow_duplicate = True),
+    Output('selected-product-for-notes', 'data', allow_duplicate=True),
     Input('main-table', 'active_cell'),
     State('main-table', 'data'),
     prevent_initial_call=True
@@ -9551,63 +9605,63 @@ def update_selected_product(active_cell, table_data):
 
 
 # Validation layout
-#app.validation_layout = html.Div([
- #   dcc.Location(id="url"),
-  #  dcc.Store(id="master-data"),
-   # dcc.Store(id="filtered-data"),
-    #dcc.Dropdown(id="filter-supplier"),
- #   dcc.Dropdown(id="filter-category"),
-  #  dcc.Dropdown(id="filter-need"),  # ✅ IMPORTANT
-   # dcc.Dropdown(
-    #    id='filter-status',
-     #   options=[
-      #      {'label': 'Status 1', 'value': 'status1'},
-       #     {'label': 'Status 2', 'value': 'status2'}
-        #],
- #       value='status1'
-  #  ),
+# app.validation_layout = html.Div([
+#   dcc.Location(id="url"),
+#  dcc.Store(id="master-data"),
+# dcc.Store(id="filtered-data"),
+# dcc.Dropdown(id="filter-supplier"),
+#   dcc.Dropdown(id="filter-category"),
+#  dcc.Dropdown(id="filter-need"),  # ✅ IMPORTANT
+# dcc.Dropdown(
+#    id='filter-status',
+#   options=[
+#      {'label': 'Status 1', 'value': 'status1'},
+#     {'label': 'Status 2', 'value': 'status2'}
+# ],
+#       value='status1'
+#  ),
 
-   # dcc.Input(id="search-input"),
-    #dbc.Checklist(id="toggle-options"),
-    #dcc.Store(id="uploaded-csv"),
- #   dcc.Store(id="chat-store"),
-  #  dcc.Store(id="chat-open"),
-   # make_sidebar(),
-    #page_overview(initial_df),
-  #  page_analytics(),
-  #  page_predictive(),
-   # page_about(),
-    #html.Div(id="page-container"),
-  #  html.Button(id="chat-fab"),
-   # html.Div(id="chat-window"),
-    #html.Div(id="chat-messages"),
-  #  dbc.Textarea(id="chat-input"),
-   # dcc.Upload(id="chat-upload"),
-  #  html.Small(id="upload-status"),
-   # dbc.Button(id="chat-send"),
-  #  dbc.Button(id="chat-close"),
-   # dcc.Download(id="download-data"),
-    #dcc.Download(id="download-po"),
-   # dbc.Button(id="btn-add-row"),
-    #dbc.Modal(id="edit-modal"),
-   # dbc.Input(id="edit-product"),
-    #dbc.Input(id="edit-supplier"),
-  #  dbc.Input(id="edit-category"),
-   # dbc.Input(id="edit-stock"),
-    #dbc.Modal(id="notes-modal"),
-   # html.Div(id="notes-modal-title"),
-    # ✅ Ajouter les nouveaux composants
-   # html.Button(id="notes-fab"),
- #   dcc.Dropdown(id="note-product-selector"),
-  #  dbc.Modal(id="notes-modal-new"),
-   # html.Div(id="notes-display-list"),
-    #dbc.Textarea(id="note-text-input"),
-  #  dbc.Input(id="note-author-input"),
-   # html.Div(id="note-feedback-new"),
-    #dbc.Button(id="note-modal-send"),
-  #  dbc.Button(id="note-modal-close"),
-   # dcc.Store(id="selected-product-for-notes"),
-#])
+# dcc.Input(id="search-input"),
+# dbc.Checklist(id="toggle-options"),
+# dcc.Store(id="uploaded-csv"),
+#   dcc.Store(id="chat-store"),
+#  dcc.Store(id="chat-open"),
+# make_sidebar(),
+# page_overview(initial_df),
+#  page_analytics(),
+#  page_predictive(),
+# page_about(),
+# html.Div(id="page-container"),
+#  html.Button(id="chat-fab"),
+# html.Div(id="chat-window"),
+# html.Div(id="chat-messages"),
+#  dbc.Textarea(id="chat-input"),
+# dcc.Upload(id="chat-upload"),
+#  html.Small(id="upload-status"),
+# dbc.Button(id="chat-send"),
+#  dbc.Button(id="chat-close"),
+# dcc.Download(id="download-data"),
+# dcc.Download(id="download-po"),
+# dbc.Button(id="btn-add-row"),
+# dbc.Modal(id="edit-modal"),
+# dbc.Input(id="edit-product"),
+# dbc.Input(id="edit-supplier"),
+#  dbc.Input(id="edit-category"),
+# dbc.Input(id="edit-stock"),
+# dbc.Modal(id="notes-modal"),
+# html.Div(id="notes-modal-title"),
+# ✅ Ajouter les nouveaux composants
+# html.Button(id="notes-fab"),
+#   dcc.Dropdown(id="note-product-selector"),
+#  dbc.Modal(id="notes-modal-new"),
+# html.Div(id="notes-display-list"),
+# dbc.Textarea(id="note-text-input"),
+#  dbc.Input(id="note-author-input"),
+# html.Div(id="note-feedback-new"),
+# dbc.Button(id="note-modal-send"),
+#  dbc.Button(id="note-modal-close"),
+# dcc.Store(id="selected-product-for-notes"),
+# ])
 # Validation layout
 # Validation layout
 app.validation_layout = html.Div([
@@ -9621,22 +9675,22 @@ app.validation_layout = html.Div([
     dcc.Store(id={'type': 'selected-product-for-notes', 'index': '2'}),
     dcc.Store(id="edit-mode"),
     dcc.Store(id="edit-original-product"),
-    #dcc.Store(id="qac-edits"),
+    # dcc.Store(id="qac-edits"),
     dcc.Store(id="qac-edits-store"),
 
     # ==================== SIDEBAR COMPONENTS ====================
-    #html.Div(id="risk-banner"),
+    # html.Div(id="risk-banner"),
     html.Div(id="action-feedback"),  # ✅ AJOUTER
     html.Div(id="selection-counter"),  # ✅ AJOUTER
     dcc.Input(id="search-input"),
     dcc.Dropdown(id="filter-supplier"),
     dcc.Dropdown(id="filter-category"),
     dcc.Dropdown(id="filter-need"),
-    #dcc.Dropdown(id="filter-status", options=[
-     #   {'label': 'Tous', 'value': 'all'},
-      #  {'label': 'Stock OK', 'value': 'ok'},
-       # {'label': 'Rupture', 'value': 'oos'}
-    #], value='all'),
+    # dcc.Dropdown(id="filter-status", options=[
+    #   {'label': 'Tous', 'value': 'all'},
+    #  {'label': 'Stock OK', 'value': 'ok'},
+    # {'label': 'Rupture', 'value': 'oos'}
+    # ], value='all'),
     dbc.Checklist(id="toggle-options"),
     dbc.Button(id="btn-refresh"),
     dbc.Button(id="btn-add-row"),
@@ -9645,9 +9699,9 @@ app.validation_layout = html.Div([
     dcc.Download(id="download-data"),
     dcc.Download(id="download-po"),
     html.Div(id="debug-info"),
-    #html.Div(id="action-feedback"),
-    #html.Div(id="selection-counter"),
-    #dbc.Button("✅ Tout sélectionner (vue filtrée)", id="btn-select-all", size="sm", color="secondary", className="me-2"),
+    # html.Div(id="action-feedback"),
+    # html.Div(id="selection-counter"),
+    # dbc.Button("✅ Tout sélectionner (vue filtrée)", id="btn-select-all", size="sm", color="secondary", className="me-2"),
     ## Remplacez votre section boutons par celle-ci :
     html.Div([
         dbc.Button("🤖 Lancer Agent IA", id="btn-run-agent-ia", color="success", size="sm", className="me-2"),
@@ -9699,7 +9753,7 @@ app.validation_layout = html.Div([
                     dbc.ModalBody([
                         html.Label("Nom du produit", style={"fontWeight": "600", "marginBottom": "5px"}),
                         dbc.Input(id="edit-product-name", placeholder="Nom du produit", type="text"),
-                       # dcc.Input(id='edit-product', type='text', placeholder='Modifier produit'),
+                        # dcc.Input(id='edit-product', type='text', placeholder='Modifier produit'),
                         html.Br(),
 
                         html.Label("Fournisseur", style={"fontWeight": "600", "marginBottom": "5px"}),
@@ -9801,6 +9855,8 @@ app.validation_layout = html.Div([
     html.Div(id="conflict-alert"),
     dcc.ConfirmDialog(id="confirm-dialog"),
 ])
+
+
 # ------------------------------ Routing ------------------------------------------
 @app.callback(
     Output("page-container", "children"),
@@ -9878,6 +9934,7 @@ def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: li
     print(f"[filter_dataframe] ✅ Résultat final: {len(out)} lignes")
     return out
 
+
 def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Garantit que les colonnes critiques existent et sont valides"""
     df = df.copy()
@@ -9916,7 +9973,7 @@ def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
      Output("main-table", "data", allow_duplicate=True),
      Output("main-table", "selected_rows", allow_duplicate=True)],
     Input("master-data", "data"),
-    prevent_initial_call=False  # ✅ S'exécute AU DÉMARRAGE
+    prevent_initial_call=True  # ✅ CORRIGÉ: Ne pas s'exécuter avant que main-table existe
 )
 def initialize_table(master_json):
     """
@@ -10013,6 +10070,7 @@ def initialize_table(master_json):
         # Retourner données vides en cas d'erreur
         return "[]", [], []
 
+
 '''@app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
@@ -10044,6 +10102,8 @@ def initial_load_table(pathname, master_json):
 
     return df.to_json(orient="records"), df.to_dict("records"), []
 '''
+
+
 # ------------------------------ Notes System Callbacks ----------------------------
 
 # ------------------------------ Export CSV ---------------------------------------
@@ -10192,6 +10252,8 @@ def get_packaging_map_cached():
     except Exception as e:
         print(f"❌ Erreur packaging : {e}")
         return {}
+
+
 # ====== IMPORTS NÉCESSAIRES ======
 
 # ===== Helpers packaging (ROBUSTES) =====
@@ -10200,23 +10262,27 @@ from datetime import datetime
 
 PACKAGING_URL = "https://data.heroku.com/dataclips/cnmhrqqjneeunkbqibxklyxwcsrl.csv"
 
+
 def load_packaging_map():
     """Map: product_name_lower -> packaging (ex: '1/2 carton')."""
     try:
         dfp = pd.read_csv(PACKAGING_URL)
         name_col = next((c for c in dfp.columns if c.lower() in ("name", "product_name", "designation")), None)
-        pack_col = next((c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
+        pack_col = next(
+            (c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
         if not name_col or not pack_col:
             print("⚠️ Dataclip: colonnes name/packaging non trouvées.")
             return {}
-        dfp["__key__"]  = dfp[name_col].astype(str).str.lower().str.strip()
+        dfp["__key__"] = dfp[name_col].astype(str).str.lower().str.strip()
         dfp["__pack__"] = dfp[pack_col].astype(str).str.lower().str.strip()
         return dict(zip(dfp["__key__"], dfp["__pack__"]))
     except Exception as e:
         print(f"❌ load_packaging_map: {e}")
         return {}
 
+
 FRACTION_FINDER = re.compile(r"(\d+)\s*/\s*(\d+)", re.IGNORECASE)
+
 
 def detect_fraction_from_text(txt: str) -> float:
     """Retourne la fraction trouvée (ex: '1/2' -> 0.5) ou 1.0 si rien."""
@@ -10226,12 +10292,14 @@ def detect_fraction_from_text(txt: str) -> float:
     m = FRACTION_FINDER.search(s)
     if m:
         try:
-            num = int(m.group(1)); den = int(m.group(2))
+            num = int(m.group(1));
+            den = int(m.group(2))
             if den > 0:
                 return num / den
-        except:
+        except (ValueError, TypeError):
             pass
     return 1.0
+
 
 def consolidate_to_major(qty_units: float, packaging_text: str, product_name: str) -> int:
     """Convertit la QAC (éventuellement en sous-unité) → unités majeures entières (ceil)."""
@@ -10243,12 +10311,13 @@ def consolidate_to_major(qty_units: float, packaging_text: str, product_name: st
     maj = float(qty_units) * float(frac)
     return max(0, int(math.ceil(maj)))
 
+
 def safe_float(v, default=0.0):
     try:
         if v is None or str(v).strip() == "":
             return default
         return float(str(v).strip())
-    except:
+    except (ValueError, TypeError):
         return default
 
 
@@ -10506,6 +10575,8 @@ def run_agent_ia_calcul(n_clicks, table_data):
 
     return updated_data, sorted(indices_selection), button_disabled
 '''
+
+
 # ============================================
 # FONCTION 2 : VALIDATION QAC
 # ============================================
@@ -10993,6 +11064,7 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
 
     return buf, po_number
 
+
 # ===== CALLBACK : GÉNÉRATION BON DE COMMANDE EXCEL AVEC VALIDATION =====
 @app.callback(
     [Output("download-po", "data"),
@@ -11061,7 +11133,7 @@ def export_po_excel_validated(n_clicks, selected_rows, table_data):
     Output("btn-po-pdf", "disabled"),
     [Input("main-table", "selected_rows"),
      Input("main-table", "data")],
-    prevent_initial_call=False  # ✅ IMPORTANT
+    prevent_initial_call=True  # ✅ CORRIGÉ: main-table doit exister d'abord
 )
 def toggle_po_button(selected_rows, data):
     if not data or not selected_rows or len(selected_rows) == 0:
@@ -11172,6 +11244,7 @@ def preselect_qac_rows(table_data, ia_clicks, ia_clicks_state):
 
     return no_update
 
+
 # ===== CALLBACK 3 : REMPLIR QAC =====
 # ===== CALLBACK : REMPLIR QAC DEPUIS TARGET (CORRIGÉ) =====
 @app.callback(
@@ -11201,6 +11274,7 @@ def fill_qac_from_target(n_clicks, selected_rows, master_json):
     print(f"✅ {count} QAC remplies depuis target_quantity")
 
     return master_df.to_json(orient="records")
+
 
 # ====== EXPORT BON DE COMMANDE WORD ======
 '''
@@ -11266,8 +11340,8 @@ def export_po_word_optimized(n_clicks, selected_rows, table_data):
         try:
             doc.add_picture(str(logo_path), width=Inches(1.2))
             doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.LEFT
-        except:
-            pass
+        except Exception as e:
+            print(f"Warning: Could not add logo: {e}")
 
     # En-tête
     po_number = get_next_po_number()
@@ -11428,7 +11502,6 @@ def export_po_word_optimized(n_clicks, selected_rows, table_data):
 
     return dcc.send_bytes(buf.read(), filename=fname), False  # ✅ Fermer overlay
 '''
-
 
 '''
 @app.callback(
@@ -11802,11 +11875,13 @@ def toggle_po_button(selected_rows, data):
     # Sinon, désactiver
     return True
 '''
+
+
 # ==================== CALLBACK 4 : COMPTEUR DE SÉLECTION ====================
 @app.callback(
     Output("selection-counter", "children"),
     Input("main-table", "selected_rows"),
-    prevent_initial_call=False
+    prevent_initial_call=True  # ✅ CORRIGÉ: main-table doit exister d'abord
 )
 def update_selection_counter(selected_rows):
     """Affiche le nombre de lignes sélectionnées"""
@@ -11855,6 +11930,7 @@ def clear_selection(n_clicks):
         return no_update
     return []
 
+
 # ------------------------------ Edit/Add/Delete rows -----------------------------
 '''@app.callback(
    # Output("edit-modal", "is_open"),
@@ -11868,6 +11944,8 @@ def clear_selection(n_clicks):
     State("main-table", "data"),
     prevent_initial_call=True
 )'''
+
+
 def open_edit_modal(n_add, active_cell, data):
     ctx = dash.callback_context
     if not ctx.triggered:
@@ -11887,18 +11965,17 @@ def open_edit_modal(n_add, active_cell, data):
 
 import json
 
+
 @app.callback(
     [Output("master-data", "data", allow_duplicate=True),
      Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
      Output("main-table", "selected_rows", allow_duplicate=True)],
-    # Output("risk-banner", "children", allow_duplicate=True)],  # ✅ Décommenté
-    Input("main-table", "data"),
     Input("edit-modal-save", "n_clicks"),
-    State("edit-product-name", "value"),  # Utilisé
-    State("edit-supplier", "value"),  # Utilisé
-    State("edit-category", "value"),  # Utilisé
-    State("edit-stock", "value"),  # Utilisé
+    State("edit-product-name", "value"),
+    State("edit-supplier", "value"),
+    State("edit-category", "value"),
+    State("edit-stock", "value"),
     State("main-table", "active_cell"),
     State("main-table", "data"),
     State("search-input", "value"),
@@ -11906,9 +11983,9 @@ import json
     State("filter-category", "value"),
     State("toggle-options", "value"),
     State("master-data", "data"),
-    prevent_initial_call="initial_duplicate"
+    prevent_initial_call=True
 )
-def save_edit(n_clicks, table_data, prod, sup, cat, stock, active_cell, master_json, q, fs, fc, opts, test):
+def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, fc, filter_opts, master_json):
     # If master_json is already a list (not a JSON string), use it directly
     if isinstance(master_json, str):
         base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
@@ -11932,7 +12009,7 @@ def save_edit(n_clicks, table_data, prod, sup, cat, stock, active_cell, master_j
             if stock is not None:
                 try:
                     df.at[i, "total_stock"] = float(stock)
-                except:
+                except (ValueError, TypeError):
                     pass
     else:
         new_row = {c: np.nan for c in df.columns}
@@ -11941,7 +12018,7 @@ def save_edit(n_clicks, table_data, prod, sup, cat, stock, active_cell, master_j
         new_row["Product Category"] = cat or ""
         try:
             new_row["total_stock"] = float(stock or 0)
-        except:
+        except (ValueError, TypeError):
             new_row["total_stock"] = 0.0
         for c in ["optimal stock ", "Max Lead Time", "Max Avg Daily Sales", "Max Coverage Day",
                   "Daily OOS Rate (30d)", "Predicted Order Quantity"]:
@@ -11957,7 +12034,7 @@ def save_edit(n_clicks, table_data, prod, sup, cat, stock, active_cell, master_j
     sup_list = fs or []
     stat_list = []  # 'fst' n'était pas utilisé dans la fonction précédente
     cat_list = fc or []
-    options = opts or []
+    options = filter_opts or []
 
     # Vérification si fdf n'est pas vide avant application des filtres
     if not df.empty:
@@ -11973,9 +12050,9 @@ def save_edit(n_clicks, table_data, prod, sup, cat, stock, active_cell, master_j
     # Application des actions sur fdf
     fdf_actions = add_action_cols(fdf)
 
-    # Retour des résultats sous forme de JSON
-    # Make sure you return 5 outputs:
-    return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), [], False
+    # Retour des résultats sous forme de JSON (4 outputs = 4 valeurs)
+    return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), []
+
 
 '''
 @app.callback(
@@ -12014,6 +12091,8 @@ def delete_row(master_json):
     # filtered-data, main-table, selected_rows (empty list), and risk-banner
     return df.to_json(orient="records"), df.to_dict("records"), [], banner
 '''
+
+
 # ------------------------------ Floating Chat callbacks ---------------------------
 @app.callback(
     Output("chat-open", "data"),

@@ -3459,6 +3459,25 @@ app.index_string = """
                 border-color: rgba(34, 211, 238, 0.3);
             }
 
+            /* ========================================
+               CARTES PRODUITS À RISQUE (CLIQUABLES)
+               ======================================== */
+            .risk-product-card {
+                transition: all 0.2s ease !important;
+            }
+
+            .risk-product-card:hover {
+                background: #1a2332 !important;
+                transform: translateX(4px);
+                box-shadow: 0 4px 12px rgba(34, 211, 238, 0.2);
+                border-color: #22d3ee !important;
+            }
+
+            .risk-product-card:active {
+                transform: translateX(2px);
+                background: #243244 !important;
+            }
+
             .kpi h3 {
                 color: var(--brand-accent) !important;
                 font-weight: 700 !important;
@@ -4429,11 +4448,11 @@ def make_kpis(df: pd.DataFrame):
         ]), md=4),
     ], className="gy-3")
 
-    # ---------- Dropdown avec vraie proba ML ----------
+    # ---------- Dropdown avec vraie proba ML + NAVIGATION CLIQUABLE ----------
     dropdown_children = []
 
     if risk_products:
-        for prod in risk_products:
+        for idx, prod in enumerate(risk_products):
             # ✅ Couleur basée sur ML probability
             ml_prob = prod.get('ml_probability', 0)
 
@@ -4450,35 +4469,55 @@ def make_kpis(df: pd.DataFrame):
                 badge_text = f"Risque faible ({ml_prob:.0%})"
                 badge_color = "info"
 
+            # ✅ NOUVEAU: Carte cliquable avec ID pour navigation
             dropdown_children.append(
                 html.Div(
+                    id={'type': 'risk-product-item', 'index': idx},
+                    n_clicks=0,
                     style={
-                        "padding": "10px",
+                        "padding": "12px",
                         "marginBottom": "8px",
                         "background": "#0f1625",
                         "border": "1px solid #1f2937",
                         "borderLeft": f"4px solid {color_border}",
                         "borderRadius": "8px",
+                        "cursor": "pointer",
+                        "transition": "all 0.2s ease",
                     },
+                    className="risk-product-card",
                     children=[
+                        # ✅ Stocker le nom du produit pour le callback
+                        dcc.Store(
+                            id={'type': 'risk-product-name', 'index': idx},
+                            data=prod['product_name']
+                        ),
+
+                        # Header avec nom et badge
                         html.Div([
                             html.Strong(prod['product_name'], style={
                                 "color": "#22d3ee",
                                 "fontSize": "13px",
                                 "marginRight": "8px"
                             }),
-                            dbc.Badge(badge_text, color=badge_color, pill=True, style={"fontSize": "9px"})
-                        ], style={"marginBottom": "6px"}),
+                            dbc.Badge(badge_text, color=badge_color, pill=True, style={"fontSize": "9px"}),
+                            # ✅ NOUVEAU: Icône de navigation
+                            html.Span("→", style={
+                                "marginLeft": "auto",
+                                "color": "#6b7280",
+                                "fontSize": "14px",
+                                "fontWeight": "bold"
+                            })
+                        ], style={"marginBottom": "6px", "display": "flex", "alignItems": "center"}),
 
                         html.Div([
-                            html.Small(f" {prod['supplier']}", style={"color": "#9ca3af", "fontSize": "11px"}),
+                            html.Small(f"📦 {prod['supplier']}", style={"color": "#9ca3af", "fontSize": "11px"}),
                             html.Span(" • ", style={"color": "#4b5563"}),
-                            html.Small(f" Stock: {prod['stock']:.0f}", style={"color": "#9ca3af", "fontSize": "11px"}),
+                            html.Small(f"Stock: {prod['stock']:.0f}", style={"color": "#9ca3af", "fontSize": "11px"}),
                         ], style={"marginBottom": "4px"}),
 
                         html.Div([
                             html.Small(
-                                f" Couverture: {prod['coverage_days']:.1f} jours",
+                                f"⏱️ Couverture: {prod['coverage_days']:.1f} jours",
                                 style={
                                     "color": "#ef4444" if prod['coverage_days'] < 7 else "#f59e0b",
                                     "fontSize": "11px",
@@ -4486,7 +4525,7 @@ def make_kpis(df: pd.DataFrame):
                                     "marginRight": "12px"
                                 }
                             ),
-                            html.Small(f" ADS: {prod['ads']:.1f}/j", style={"color": "#6b7280", "fontSize": "11px"}),
+                            html.Small(f"📈 ADS: {prod['ads']:.1f}/j", style={"color": "#6b7280", "fontSize": "11px"}),
                         ], style={"marginBottom": "6px"}),
 
                         html.Div([
@@ -4498,7 +4537,16 @@ def make_kpis(df: pd.DataFrame):
                                 pill=True,
                                 style={"fontSize": "9px"}
                             ),
-                        ])
+                        ]),
+
+                        # ✅ Hint de clic
+                        html.Small("Cliquer pour voir les détails", style={
+                            "color": "#4b5563",
+                            "fontSize": "10px",
+                            "marginTop": "6px",
+                            "display": "block",
+                            "fontStyle": "italic"
+                        })
                     ]
                 )
             )
@@ -4839,6 +4887,53 @@ def _toggle_risk_dropdown(n, is_open):
     if not n:
         raise dash.exceptions.PreventUpdate
     return not is_open
+
+
+# ✅ NOUVEAU CALLBACK: Navigation vers le produit cliqué dans le dropdown
+@app.callback(
+    [Output("search-input", "value", allow_duplicate=True),
+     Output("risk-alert-collapse", "is_open", allow_duplicate=True)],
+    Input({'type': 'risk-product-item', 'index': ALL}, 'n_clicks'),
+    State({'type': 'risk-product-name', 'index': ALL}, 'data'),
+    prevent_initial_call=True
+)
+def navigate_to_risk_product(n_clicks_list, product_names):
+    """
+    Quand on clique sur un produit à risque dans le dropdown:
+    1. Ferme le dropdown
+    2. Met le nom du produit dans la barre de recherche
+    3. La table se filtre automatiquement sur ce produit
+    """
+    if not n_clicks_list or not any(n_clicks_list):
+        raise dash.exceptions.PreventUpdate
+
+    # Trouver quel produit a été cliqué
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        raise dash.exceptions.PreventUpdate
+
+    # Extraire l'index du produit cliqué
+    triggered_id = ctx.triggered[0]['prop_id']
+
+    # Parser l'ID pour obtenir l'index
+    try:
+        import json as json_parser
+        # Format: {"type":"risk-product-item","index":0}.n_clicks
+        id_str = triggered_id.split('.')[0]
+        id_dict = json_parser.loads(id_str)
+        clicked_index = id_dict.get('index', 0)
+    except Exception:
+        clicked_index = 0
+
+    # Récupérer le nom du produit
+    if clicked_index < len(product_names):
+        product_name = product_names[clicked_index]
+        print(f"🎯 Navigation vers produit: {product_name}")
+
+        # Retourner le nom du produit pour la recherche et fermer le dropdown
+        return product_name, False
+
+    raise dash.exceptions.PreventUpdate
 
 
 def page_overview(master_df: pd.DataFrame = None):
@@ -5717,15 +5812,15 @@ def page_overview(master_df: pd.DataFrame = None):
 
         # Boutons d'action
         action_buttons,
-
+        html.Br(),
+        rotation_dropdown,
         # Table principale
         html.Div(className="soft-card", children=[table]),
 
-        # Modal notes
+
         notes_fab_button,
         notes_modal
     ])
-
 
 @app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),

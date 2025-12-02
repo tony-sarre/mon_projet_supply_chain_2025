@@ -1377,6 +1377,9 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     SUPPLIER_CATEGORIZATION_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQax3ZQW2QhDLE-waDewtdD8x_Q5tpn2FWzVJftr9egik4_JF3s2ytSYJmXh55aUnp79vmF-XtkaTmN/pub?gid=1938047484&single=true&output=csv"
     CATALOG_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRTyAxh6v8o0FXV0r7f6ALPDgmeJNkjTZITjrEoKBHo2gs_f3iyV8sFk8fOzcAsUSkJMXBJCpJnhQKi/pub?gid=751531326&single=true&output=csv"
 
+    # ✅ NOUVEAU: URL des dernières réceptions (Heroku Dataclip)
+    LAST_RECEPTIONS_URL = "https://data.heroku.com/dataclips/vftfnhyqonsbclucridburrwdfpe.csv"
+
     # =========================
     # Load CSV
     # =========================
@@ -1401,6 +1404,48 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     except Exception as e:
         print(f"Warning: Could not load parametres replenish: {e}")
         parametres_replenish_df = pd.DataFrame()
+
+    # ✅ NOUVEAU: Charger les dernières réceptions (Heroku Dataclip)
+    try:
+        print("\n📦 Chargement des dernières réceptions...")
+        last_receptions_df = pd.read_csv(LAST_RECEPTIONS_URL)
+        print(f"   ✅ {len(last_receptions_df)} réceptions chargées")
+        print(f"   📊 Colonnes: {last_receptions_df.columns.tolist()}")
+
+        # Harmoniser les noms de colonnes
+        last_receptions_df.columns = (
+            last_receptions_df.columns.astype(str)
+            .str.strip()
+            .str.lower()
+            .str.replace(" ", "_")
+        )
+
+        # Identifier les colonnes clés
+        # On s'attend à: product_name/product, quantity/qty, date/reception_date
+        col_renames = {}
+        for col in last_receptions_df.columns:
+            if 'product' in col and 'name' in col:
+                col_renames[col] = 'product_name'
+            elif col in ['product', 'produit', 'nom_produit']:
+                col_renames[col] = 'product_name'
+            elif 'quantity' in col or 'qty' in col or 'qte' in col:
+                if 'last' in col or 'reception' in col or 'received' in col:
+                    col_renames[col] = 'last_reception_qty'
+                else:
+                    col_renames[col] = 'last_reception_qty'
+            elif 'date' in col:
+                if 'last' in col or 'reception' in col:
+                    col_renames[col] = 'last_reception_date'
+                else:
+                    col_renames[col] = 'last_reception_date'
+
+        if col_renames:
+            last_receptions_df.rename(columns=col_renames, inplace=True)
+            print(f"   🔄 Colonnes renommées: {col_renames}")
+
+    except Exception as e:
+        print(f"⚠️ Warning: Could not load last receptions data: {e}")
+        last_receptions_df = pd.DataFrame(columns=['product_name', 'last_reception_qty', 'last_reception_date'])
 
     # =========================
     # Harmonisation inventaire
@@ -2156,6 +2201,70 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
         print("'delisting_status' column merged.")
     else:
         final_stock_sales_df["delisting_status"] = "Not Delisted"
+
+    # =========================
+    # ✅ NOUVEAU: Merge des dernières réceptions
+    # =========================
+    if not last_receptions_df.empty and 'product_name' in last_receptions_df.columns:
+        print("\n📦 Fusion des données de réception...")
+
+        # Préparer les données de réception
+        receptions_cols = ['product_name']
+        if 'last_reception_qty' in last_receptions_df.columns:
+            receptions_cols.append('last_reception_qty')
+        if 'last_reception_date' in last_receptions_df.columns:
+            receptions_cols.append('last_reception_date')
+
+        # Ajouter toutes les colonnes pertinentes du dataclip
+        for col in last_receptions_df.columns:
+            if col not in receptions_cols and col != 'product_name':
+                receptions_cols.append(col)
+
+        receptions_to_merge = last_receptions_df[receptions_cols].drop_duplicates(subset=['product_name'], keep='first')
+
+        # Harmoniser product_name pour le merge
+        receptions_to_merge['product_name'] = receptions_to_merge['product_name'].astype(str).str.strip().str.lower()
+        final_stock_sales_df['_merge_key'] = final_stock_sales_df['product_name'].astype(str).str.strip().str.lower()
+
+        before_merge = len(final_stock_sales_df)
+        final_stock_sales_df = final_stock_sales_df.merge(
+            receptions_to_merge.rename(columns={'product_name': '_merge_key'}),
+            on='_merge_key',
+            how='left',
+            validate='m:1'
+        )
+        final_stock_sales_df.drop(columns=['_merge_key'], inplace=True)
+
+        # Formater la date de réception si présente
+        if 'last_reception_date' in final_stock_sales_df.columns:
+            try:
+                final_stock_sales_df['last_reception_date'] = pd.to_datetime(
+                    final_stock_sales_df['last_reception_date'],
+                    errors='coerce'
+                )
+                # Calculer les jours depuis dernière réception
+                final_stock_sales_df['days_since_reception'] = (
+                        pd.Timestamp.now() - final_stock_sales_df['last_reception_date']
+                ).dt.days
+                final_stock_sales_df['last_reception_date'] = final_stock_sales_df['last_reception_date'].dt.strftime(
+                    '%d/%m/%Y')
+            except Exception as e:
+                print(f"   ⚠️ Erreur formatage date: {e}")
+
+        # Formater la quantité reçue
+        if 'last_reception_qty' in final_stock_sales_df.columns:
+            final_stock_sales_df['last_reception_qty'] = safe_numeric(
+                final_stock_sales_df['last_reception_qty'], 0
+            ).astype(int)
+
+        matched = final_stock_sales_df[
+            'last_reception_qty'].notna().sum() if 'last_reception_qty' in final_stock_sales_df.columns else 0
+        print(f"   ✅ {matched}/{before_merge} produits avec données de réception")
+    else:
+        print("⚠️ Pas de données de réception à fusionner")
+        final_stock_sales_df['last_reception_qty'] = 0
+        final_stock_sales_df['last_reception_date'] = None
+        final_stock_sales_df['days_since_reception'] = None
 
     # =========================
     # Dédupes
@@ -5003,6 +5112,10 @@ def page_overview(master_df: pd.DataFrame = None):
         "QAC",
         "target_quantity",
         "Max Coverage Day",
+        # ✅ NOUVEAU: Colonnes de dernière réception
+        "last_reception_qty",
+        "last_reception_date",
+        "days_since_reception",
         "Product Category",
         "credit_days",
         "Credit_cumulable",
@@ -5276,6 +5389,29 @@ def page_overview(master_df: pd.DataFrame = None):
                 "fontSize": "11px",
                 "textTransform": "uppercase",
                 "letterSpacing": "0.5px"
+            },
+
+            # ✅ NOUVEAU: Colonnes de dernière réception
+            {
+                "if": {"column_id": "last_reception_qty"},
+                "fontWeight": "700",
+                "fontSize": "13px",
+                "color": "#34d399",  # Vert
+                "backgroundColor": "rgba(16, 185, 129, 0.1)",
+                "textAlign": "center"
+            },
+            {
+                "if": {"column_id": "last_reception_date"},
+                "fontSize": "11px",
+                "color": "#94a3b8",
+                "textAlign": "center",
+                "fontStyle": "italic"
+            },
+            {
+                "if": {"column_id": "days_since_reception"},
+                "fontWeight": "600",
+                "fontSize": "12px",
+                "textAlign": "center"
             }
         ],
 
@@ -5504,6 +5640,50 @@ def page_overview(master_df: pd.DataFrame = None):
                 },
                 "backgroundColor": "rgba(16, 185, 129, 0.15)",
                 "color": "#a7f3d0"
+            },
+
+            # ========================================
+            # 📦 JOURS DEPUIS RÉCEPTION - COULEURS PAR ANCIENNETÉ
+            # ========================================
+            # Réception récente (< 7 jours) - Vert
+            {
+                "if": {
+                    "filter_query": "{days_since_reception} < 7",
+                    "column_id": "days_since_reception"
+                },
+                "backgroundColor": "rgba(16, 185, 129, 0.25)",
+                "color": "#34d399",
+                "fontWeight": "700"
+            },
+            # Réception moyenne (7-14 jours) - Jaune
+            {
+                "if": {
+                    "filter_query": "{days_since_reception} >= 7 && {days_since_reception} < 14",
+                    "column_id": "days_since_reception"
+                },
+                "backgroundColor": "rgba(245, 158, 11, 0.2)",
+                "color": "#fbbf24",
+                "fontWeight": "600"
+            },
+            # Réception ancienne (14-30 jours) - Orange
+            {
+                "if": {
+                    "filter_query": "{days_since_reception} >= 14 && {days_since_reception} < 30",
+                    "column_id": "days_since_reception"
+                },
+                "backgroundColor": "rgba(249, 115, 22, 0.2)",
+                "color": "#fb923c",
+                "fontWeight": "600"
+            },
+            # Réception très ancienne (> 30 jours) - Rouge
+            {
+                "if": {
+                    "filter_query": "{days_since_reception} >= 30",
+                    "column_id": "days_since_reception"
+                },
+                "backgroundColor": "rgba(239, 68, 68, 0.2)",
+                "color": "#f87171",
+                "fontWeight": "700"
             },
 
             # ========================================
@@ -5806,21 +5986,31 @@ def page_overview(master_df: pd.DataFrame = None):
 
     # ========== RETURN DU LAYOUT PAGE OVERVIEW ==========
     return html.Div(className="content", children=[
-        # KPIs
+        # En-tête avec titre + KPI risque de rupture
+        dbc.Row([
+            dbc.Col(html.H2("📊 Overview", style={"color": "#22d3ee", "fontWeight": "800"}), md=8),
+            dbc.Col(html.Div(risk_bell, style={"textAlign": "right"}), md=4),
+        ], className="mb-3"),
+
+        # KPIs (SKUs, Ruptures, Fournisseurs)
         html.Div(kpi_cards),
+        html.Br(),
+
+        # Dropdown période rotation
+        rotation_dropdown,
         html.Br(),
 
         # Boutons d'action
         action_buttons,
-        html.Br(),
-        rotation_dropdown,
+
         # Table principale
         html.Div(className="soft-card", children=[table]),
 
-
+        # Modal notes
         notes_fab_button,
         notes_modal
     ])
+
 
 @app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),

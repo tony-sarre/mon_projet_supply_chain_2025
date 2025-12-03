@@ -2,7 +2,7 @@
 # Requirements:
 # pip install dash==2.17.1 dash-bootstrap-components==1.6.0 plotly==5.22.0
 # pip install pandas scikit-learn flask-caching numpy
-# pip install reportlab
+# pip install reportlab supabase
 # Optional: pip install openai
 import csv
 import os, sys
@@ -11,7 +11,16 @@ import hashlib  # ✅ NOUVEAU: Pour l'authentification
 
 from dash.exceptions import PreventUpdate
 
-#import MATCH
+# ✅ NOUVEAU: Import Supabase pour tracking utilisateurs
+try:
+    from supabase import create_client, Client
+
+    SUPABASE_AVAILABLE = True
+except ImportError:
+    SUPABASE_AVAILABLE = False
+    print("⚠️ Supabase non installé. Exécuter: pip install supabase")
+
+# import MATCH
 
 print("CWD:", os.getcwd())
 print("Dir files:", os.listdir("."))
@@ -25,7 +34,8 @@ import orjson
 
 ORJSON_OPTS = orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY
 
-app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP], prevent_initial_callbacks='initial_duplicate')
+app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP],
+           prevent_initial_callbacks='initial_duplicate')
 
 # ⚠️ Très important pour Render/Gunicorn
 server = app.server
@@ -66,6 +76,7 @@ from reportlab.platypus import Image
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
 # --- Word / python-docx (import paresseux & sûr) ---
 DOCX_AVAILABLE = False
 DOCX_IMPORT_ERROR = None
@@ -75,12 +86,13 @@ try:
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml.ns import qn
     from docx.oxml import OxmlElement
+
     DOCX_AVAILABLE = True
 except Exception as _e:
     DOCX_AVAILABLE = False
     DOCX_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
 # Imports existants + ces nouveaux
-#import anthropic
+# import anthropic
 import json
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -91,6 +103,7 @@ import requests
 import threading
 import plotly.graph_objects as go
 import time
+
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
 # Cache setup
@@ -101,17 +114,197 @@ cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TI
 def get_df_cached():
     return load_supply_data()  # Fonction pour charger vos données
 
+
 RENDER_ENV = os.getenv("RENDER", False)
 DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
 
+# ============================================================
+# 🗄️ CONFIGURATION SUPABASE
+# ============================================================
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://tvaxxzkilrsgfqjswtkt.supabase.co")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY",
+                         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR2YXh4emtpbHJzZ2ZxanN3dGt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ3Mzc1NzksImV4cCI6MjA4MDMxMzU3OX0.uIbLmOm2z9YlD5bxh8nXMY2JjqJr8Qj12hmBc7hBPy0")
+
+# Initialiser le client Supabase
+supabase_client = None
+if SUPABASE_AVAILABLE:
+    try:
+        supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print("✅ Supabase connecté avec succès")
+    except Exception as e:
+        print(f"⚠️ Erreur connexion Supabase: {e}")
+        supabase_client = None
+else:
+    print("⚠️ Supabase non disponible - tracking désactivé")
+
+
+# ============================================================
+# 📊 FONCTIONS DE TRACKING SUPABASE
+# ============================================================
+
+def get_or_create_user(username: str) -> dict:
+    """Récupère ou crée un utilisateur dans Supabase"""
+    if not supabase_client or not username:
+        return None
+
+    try:
+        username = username.lower().strip()
+
+        # Chercher l'utilisateur existant
+        result = supabase_client.table("users").select("*").eq("username", username).execute()
+
+        if result.data and len(result.data) > 0:
+            return result.data[0]
+
+        # Créer l'utilisateur s'il n'existe pas
+        if username in AUTH_USERS:
+            user_info = AUTH_USERS[username]
+            new_user = {
+                "username": username,
+                "name": user_info.get("name", username),
+                "email": user_info.get("email", ""),
+                "role": user_info.get("role", "user")
+            }
+            result = supabase_client.table("users").insert(new_user).execute()
+            if result.data:
+                print(f"✅ Utilisateur {username} créé dans Supabase")
+                return result.data[0]
+
+        return None
+    except Exception as e:
+        print(f"⚠️ Erreur get_or_create_user: {e}")
+        return None
+
+
+def create_session(user_id: str, ip_address: str = None, user_agent: str = None) -> str:
+    """Crée une nouvelle session utilisateur"""
+    if not supabase_client or not user_id:
+        return None
+
+    try:
+        session_data = {
+            "user_id": user_id,
+            "ip_address": ip_address,
+            "user_agent": user_agent,
+            "is_active": True
+        }
+        result = supabase_client.table("user_sessions").insert(session_data).execute()
+        if result.data:
+            print(f"✅ Session créée: {result.data[0]['id']}")
+            return result.data[0]["id"]
+        return None
+    except Exception as e:
+        print(f"⚠️ Erreur create_session: {e}")
+        return None
+
+
+def end_session(session_id: str):
+    """Termine une session utilisateur"""
+    if not supabase_client or not session_id:
+        return
+
+    try:
+        supabase_client.table("user_sessions").update({
+            "logout_at": "now()",
+            "is_active": False
+        }).eq("id", session_id).execute()
+        print(f"✅ Session terminée: {session_id}")
+    except Exception as e:
+        print(f"⚠️ Erreur end_session: {e}")
+
+
+def track_activity(user_id: str, session_id: str, action_type: str, page: str = None, details: dict = None):
+    """Enregistre une activité utilisateur"""
+    if not supabase_client:
+        return
+
+    try:
+        activity_data = {
+            "user_id": user_id,
+            "session_id": session_id,
+            "action_type": action_type,
+            "page": page,
+            "action_details": details or {}
+        }
+        supabase_client.table("user_activities").insert(activity_data).execute()
+        print(f"📊 Activité trackée: {action_type} sur {page}")
+    except Exception as e:
+        print(f"⚠️ Erreur track_activity: {e}")
+
+
+def track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: int, new_value: int,
+                   supplier: str = None):
+    """Enregistre une modification QAC"""
+    if not supabase_client:
+        return
+
+    try:
+        edit_data = {
+            "user_id": user_id,
+            "session_id": session_id,
+            "product_name": product_name,
+            "supplier": supplier,
+            "old_qac_value": old_value,
+            "new_qac_value": new_value
+        }
+        supabase_client.table("qac_edits_history").insert(edit_data).execute()
+        print(f"📝 QAC edit tracké: {product_name} ({old_value} → {new_value})")
+    except Exception as e:
+        print(f"⚠️ Erreur track_qac_edit: {e}")
+
+
+def save_product_note(user_id: str, product_name: str, note_text: str, mentions: list = None, supplier: str = None):
+    """Sauvegarde une note produit"""
+    if not supabase_client:
+        return None
+
+    try:
+        note_data = {
+            "user_id": user_id,
+            "product_name": product_name,
+            "supplier": supplier,
+            "note_text": note_text,
+            "mentions": mentions or []
+        }
+        result = supabase_client.table("product_notes").insert(note_data).execute()
+        if result.data:
+            print(f"📝 Note sauvegardée pour: {product_name}")
+            return result.data[0]
+        return None
+    except Exception as e:
+        print(f"⚠️ Erreur save_product_note: {e}")
+        return None
+
+
+def get_product_notes(product_name: str) -> list:
+    """Récupère les notes d'un produit"""
+    if not supabase_client:
+        return []
+
+    try:
+        result = supabase_client.table("product_notes") \
+            .select("*, users(username, name)") \
+            .eq("product_name", product_name) \
+            .eq("is_deleted", False) \
+            .order("created_at", desc=True) \
+            .execute()
+        return result.data or []
+    except Exception as e:
+        print(f"⚠️ Erreur get_product_notes: {e}")
+        return []
+
+
+# Variable globale pour stocker la session active
+ACTIVE_SESSIONS = {}  # {username: {"user_id": ..., "session_id": ...}}
+
 if RENDER_ENV:
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🚀 DÉMARRAGE SUR RENDER")
-    print("="*60)
+    print("=" * 60)
     print(f"Python version: {sys.version}")
     print(f"Working directory: {os.getcwd()}")
     print(f"Files: {os.listdir('.')[:10]}")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
 # ==========================================
@@ -163,6 +356,8 @@ def run_with_timeout(func, args=(), kwargs=None, timeout_seconds=30):
         raise exception[0]
 
     return result[0]
+
+
 # ------------- OpenAI client (clé hardcodée à ta demande) ----------------
 # OPENAI_API_KEY_HARDCODED = "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"
 # Ligne ~45 dans votre code
@@ -552,6 +747,7 @@ Cet email a été envoyé automatiquement.
         traceback.print_exc()
         return False
 
+
 # ==================== VÉRIFIER LA CONFIGURATION EMAIL ====================
 # Vers ligne 200-250, vérifie que ces variables existent :
 
@@ -572,20 +768,19 @@ TEAM_MEMBERS = {
     "Insa": {"name": "Insa Niang", "email": "insa.niang@maad.io"},
 }
 
-
 # ============================================================
 # 🔐 SYSTÈME D'AUTHENTIFICATION
 # ============================================================
 
-# Mot de passe par défaut: "maad2025" (à changer en production via variables d'environnement)
-DEFAULT_PASSWORD_HASH = hashlib.sha256("maad2025".encode()).hexdigest()
+# Mot de passe par défaut: "maad2024" (à changer en production via variables d'environnement)
+DEFAULT_PASSWORD_HASH = hashlib.sha256("maad2024".encode()).hexdigest()
 
 # Utilisateurs autorisés avec leurs mots de passe hashés
 AUTH_USERS = {
     "tony": {
         "name": "Tony SARRE",
         "email": "tony.sarre@maad.io",
-        "password_hash": hashlib.sha256(os.getenv("TONY_PASSWORD", "maad2025").encode()).hexdigest(),
+        "password_hash": hashlib.sha256(os.getenv("TONY_PASSWORD", "maad2024").encode()).hexdigest(),
         "role": "admin"
     },
     "samuel": {
@@ -1289,14 +1484,15 @@ def get_next_po_number() -> str:
         return f"PO-{today}-{st['seq']:03d}"
 
 
-#import pandas as pd
-#import numpy as np
+# import pandas as pd
+# import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
-#import warnings
+
+# import warnings
 
 warnings.filterwarnings('ignore')
 
@@ -1854,6 +2050,7 @@ def calculate_ads_by_period(period_days: int = 7) -> pd.DataFrame:
         traceback.print_exc()
         return pd.DataFrame(columns=['product_name', f'Average Daily Sales ({period_days}d)'])
 
+
 def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     import numpy as np
     import pandas as pd
@@ -1922,46 +2119,52 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
         parametres_replenish_df = pd.DataFrame()
 
     # ✅ NOUVEAU: Charger les dernières réceptions (Heroku Dataclip)
-    try:
-        print("\n📦 Chargement des dernières réceptions...")
-        last_receptions_df = pd.read_csv(LAST_RECEPTIONS_URL)
-        print(f"   ✅ {len(last_receptions_df)} réceptions chargées")
-        print(f"   📊 Colonnes: {last_receptions_df.columns.tolist()}")
+    # ⚠️ DÉSACTIVÉ temporairement car peut bloquer le chargement
+    # Pour réactiver, décommenter le bloc try ci-dessous
+    last_receptions_df = pd.DataFrame(columns=['product_name', 'last_reception_qty', 'last_reception_date'])
+    print("\n📦 Chargement des dernières réceptions: DÉSACTIVÉ (pour éviter les timeouts)")
 
-        # Harmoniser les noms de colonnes
-        last_receptions_df.columns = (
-            last_receptions_df.columns.astype(str)
-            .str.strip()
-            .str.lower()
-            .str.replace(" ", "_")
-        )
-
-        # Identifier les colonnes clés
-        # On s'attend à: product_name/product, quantity/qty, date/reception_date
-        col_renames = {}
-        for col in last_receptions_df.columns:
-            if 'product' in col and 'name' in col:
-                col_renames[col] = 'product_name'
-            elif col in ['product', 'produit', 'nom_produit']:
-                col_renames[col] = 'product_name'
-            elif 'quantity' in col or 'qty' in col or 'qte' in col:
-                if 'last' in col or 'reception' in col or 'received' in col:
-                    col_renames[col] = 'last_reception_qty'
-                else:
-                    col_renames[col] = 'last_reception_qty'
-            elif 'date' in col:
-                if 'last' in col or 'reception' in col:
-                    col_renames[col] = 'last_reception_date'
-                else:
-                    col_renames[col] = 'last_reception_date'
-
-        if col_renames:
-            last_receptions_df.rename(columns=col_renames, inplace=True)
-            print(f"   🔄 Colonnes renommées: {col_renames}")
-
-    except Exception as e:
-        print(f"⚠️ Warning: Could not load last receptions data: {e}")
-        last_receptions_df = pd.DataFrame(columns=['product_name', 'last_reception_qty', 'last_reception_date'])
+    # try:
+    #     import requests
+    #     print("\n📦 Chargement des dernières réceptions...")
+    #     # Utiliser requests avec timeout au lieu de pd.read_csv direct
+    #     response = requests.get(LAST_RECEPTIONS_URL, timeout=10)
+    #     if response.status_code == 200:
+    #         from io import StringIO
+    #         last_receptions_df = pd.read_csv(StringIO(response.text))
+    #         print(f"   ✅ {len(last_receptions_df)} réceptions chargées")
+    #         print(f"   📊 Colonnes: {last_receptions_df.columns.tolist()}")
+    #
+    #         # Harmoniser les noms de colonnes
+    #         last_receptions_df.columns = (
+    #             last_receptions_df.columns.astype(str)
+    #             .str.strip()
+    #             .str.lower()
+    #             .str.replace(" ", "_")
+    #         )
+    #
+    #         # Identifier les colonnes clés
+    #         col_renames = {}
+    #         for col in last_receptions_df.columns:
+    #             if 'product' in col and 'name' in col:
+    #                 col_renames[col] = 'product_name'
+    #             elif col in ['product', 'produit', 'nom_produit']:
+    #                 col_renames[col] = 'product_name'
+    #             elif 'quantity' in col or 'qty' in col or 'qte' in col:
+    #                 col_renames[col] = 'last_reception_qty'
+    #             elif 'date' in col:
+    #                 col_renames[col] = 'last_reception_date'
+    #
+    #         if col_renames:
+    #             last_receptions_df.rename(columns=col_renames, inplace=True)
+    #             print(f"   🔄 Colonnes renommées: {col_renames}")
+    #     else:
+    #         print(f"⚠️ Erreur HTTP {response.status_code}")
+    #         last_receptions_df = pd.DataFrame(columns=['product_name', 'last_reception_qty', 'last_reception_date'])
+    #
+    # except Exception as e:
+    #     print(f"⚠️ Warning: Could not load last receptions data: {e}")
+    #     last_receptions_df = pd.DataFrame(columns=['product_name', 'last_reception_qty', 'last_reception_date'])
 
     # =========================
     # Harmonisation inventaire
@@ -2286,41 +2489,16 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     if period_days == "3d":
         # ✅ POUR 3J : Tenter calcul depuis historique, sinon utiliser ADS 7j
         try:
-            ads_3d = calculate_ads_by_period(period_days=3)
+            # ✅ SIMPLIFIÉ: Utiliser ADS 7j directement au lieu de recalculer depuis l'historique
+            # Cela évite un rechargement des données qui peut bloquer
+            print(f"   → Utilisation de ADS 7j comme base pour période 3j")
 
-            if not ads_3d.empty:
-                # Nettoyer product_name
-                final_stock_sales_df['product_name'] = (
-                    final_stock_sales_df['product_name']
-                    .astype(str).str.lower().str.strip()
-                )
-
-                # Renommer colonne
-                if 'Average Daily Sales (3d)' in ads_3d.columns:
-                    ads_3d.rename(columns={'Average Daily Sales (3d)': 'Average Daily Sales'}, inplace=True)
-
-                # Merger
-                final_stock_sales_df = final_stock_sales_df.merge(
-                    ads_3d[['product_name', 'Average Daily Sales']],
-                    on='product_name',
-                    how='left',
-                    suffixes=('_old', '')
-                )
-
-                # Supprimer colonne temporaire si existe
-                if 'Average Daily Sales_old' in final_stock_sales_df.columns:
-                    final_stock_sales_df.drop(columns=['Average Daily Sales_old'], inplace=True)
-
-                # Remplir manquants avec ADS 7j
-                final_stock_sales_df['Average Daily Sales'] = (
-                    final_stock_sales_df['Average Daily Sales']
-                    .fillna(final_stock_sales_df.get('Average Daily Sales (7d)', 0.1))
-                    .clip(lower=0.1)
-                )
-
-                print(f"   ✅ ADS 3j calculée depuis historique")
-            else:
-                raise ValueError("Historique vide")
+            final_stock_sales_df['Average Daily Sales'] = (
+                final_stock_sales_df.get('Average Daily Sales (7d)', pd.Series([0.1] * len(final_stock_sales_df)))
+                .fillna(0.1)
+                .clip(lower=0.1)
+            )
+            print(f"   ✅ ADS 3j = ADS 7j (optimisé)")
 
         except Exception as e:
             print(f"   ⚠️ Erreur ADS 3j : {e}")
@@ -2762,7 +2940,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                 final_stock_sales_df['days_since_reception'] = (
                         pd.Timestamp.now() - final_stock_sales_df['last_reception_date']
                 ).dt.days
-                final_stock_sales_df['last_reception_date'] = final_stock_sales_df['last_reception_date'].dt.strftime('%d/%m/%Y')
+                final_stock_sales_df['last_reception_date'] = final_stock_sales_df['last_reception_date'].dt.strftime(
+                    '%d/%m/%Y')
             except Exception as e:
                 print(f"   ⚠️ Erreur formatage date: {e}")
 
@@ -2772,7 +2951,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                 final_stock_sales_df['last_reception_qty'], 0
             ).astype(int)
 
-        matched = final_stock_sales_df['last_reception_qty'].notna().sum() if 'last_reception_qty' in final_stock_sales_df.columns else 0
+        matched = final_stock_sales_df[
+            'last_reception_qty'].notna().sum() if 'last_reception_qty' in final_stock_sales_df.columns else 0
         print(f"   ✅ {matched}/{before_merge} produits avec données de réception")
     else:
         print("⚠️ Pas de données de réception à fusionner")
@@ -3333,6 +3513,8 @@ def get_preloaded_data(period_days="7d"):
         return DATA_30D.copy()
     else:
         return DATA_7D.copy()
+
+
 # ==================== CALLBACK ROTATION ADS ====================
 '''
 @app.callback(
@@ -3554,6 +3736,8 @@ def update_rotation_period(period_value):
         # ✅ RETOUR EN CAS D'ERREUR (4 valeurs)
         return no_update, no_update, no_update, error_indicator
 '''
+
+
 # Utility: add Actions columns
 def add_action_cols(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
@@ -3576,12 +3760,11 @@ def recalculate_product_metrics(row: pd.Series) -> pd.Series:
         pd.Series avec toutes les métriques recalculées
     """
 
-
     row = row.copy()
 
     # === VALIDATION & NETTOYAGE ===
     numeric_cols = {
-        #'total_stock': 0,
+        # 'total_stock': 0,
         'Average Daily Sales': 0.1,
         'Max Daily Sales (Pikine)': 0,
         'QAC': 0,
@@ -3590,8 +3773,8 @@ def recalculate_product_metrics(row: pd.Series) -> pd.Series:
         'credit_days': 0,
         'ADJUSTED_LEADTIME': 7,
         'AJUSTER_BUFFER': 0,
-        #'target_quantity': 0,
-        #'optimal stock': 0,
+        # 'target_quantity': 0,
+        # 'optimal stock': 0,
         'Max Coverage Day': 0
     }
 
@@ -3859,9 +4042,9 @@ def train_optimal_order_quantity_model(df: pd.DataFrame) -> tuple:
 
 
 # ----------------------------- App & Cache ---------------------------------------
-#app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
-#server = app.server
-#cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
+# app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
+# server = app.server
+# cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
 
 # ------------------------------ Custom CSS & JS ----------------------------------
 app.index_string = """
@@ -4624,10 +4807,12 @@ def get_df_cached():
     return load_supply_data()
 '''
 
+
 @lru_cache(maxsize=10)
 def get_df_cached(period: str = "7d"):
     """Cache avec support période rotation"""
     return load_supply_data(period_days=period)
+
 
 # ------------------------------ Sidebar ------------------------------------------
 def make_sidebar():
@@ -4649,7 +4834,7 @@ def make_sidebar():
             html.Div("Supply Chain Command Center", className="muted")
         ]),
         html.Hr(),
-        #html.Div(className="banner-risk", id="risk-banner", children="Chargement..."),
+        # html.Div(className="banner-risk", id="risk-banner", children="Chargement..."),
         html.Div(className="section-title", children="Recherche"),
         dbc.InputGroup(className="search-input", children=[
             dbc.Input(id="search-input", placeholder="Rechercher un produit...", type="text", debounce=True)
@@ -4701,7 +4886,8 @@ def make_sidebar():
         html.Br(),
         html.Div([
             html.Span(" "),
-            dbc.Button("📄 Bon de commande", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True), # Le bouton est désactivé par défaut
+            dbc.Button("📄 Bon de commande", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True),
+            # Le bouton est désactivé par défaut
             # ✅ AJOUTER : Modal de chargement
             dbc.Modal(
                 [
@@ -4875,8 +5061,6 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
             # Optionnel : garder aussi Suppliers (all) pour référence
 
     return grouped
-
-
 
 
 # ------------------------------ Pages --------------------------------------------
@@ -5201,7 +5385,7 @@ def make_kpis(df: pd.DataFrame):
         style={"marginTop": "10px"},
         children=[
             dbc.Button([
-                html.Span("🤖", style={"fontSize": "16px", "Center": "8px"}),
+                html.Span("🤖", style={"fontSize": "16px", "marginRight": "8px"}),
                 html.B("À risque de rupture : "),
                 dbc.Badge(
                     f"{risk_count}",
@@ -5259,6 +5443,8 @@ def make_kpis(df: pd.DataFrame):
     )
 
     return cards, bell
+
+
 '''
 def make_kpis(df: pd.DataFrame):
     """Calcule les KPIs (SKUs, ruptures, fournisseurs) + alerte dropdown produits à risque (ML)."""
@@ -5492,6 +5678,8 @@ def make_kpis(df: pd.DataFrame):
 
     return cards, bell
 '''
+
+
 @app.callback(
     Output("risk-alert-collapse", "is_open"),
     Input("risk-alert-toggle", "n_clicks"),
@@ -5558,8 +5746,6 @@ def page_overview(master_df: pd.DataFrame = None):
     df = master_df if master_df is not None else get_df_cached()
     df = df.copy()
 
-
-
     # === UI HARDENING (garantir présence + valeurs non vides) ===
     def _ui_harden(df):
         # Supplier non vide
@@ -5607,7 +5793,7 @@ def page_overview(master_df: pd.DataFrame = None):
     # ✅ 1. DÉFINIR colonnes prioritaires overview
     cols_priority_overview = [
 
-        #"delete",
+        # "delete",
         "product_id",
         "product_name",
         "Supplier",
@@ -5713,9 +5899,9 @@ def page_overview(master_df: pd.DataFrame = None):
 
     # Insérer les colonnes "edit" et "delete" dans le DataFrame avec un message d'action ou une valeur par défaut
     # df_with_actions.insert(0, "delete", "delete")  # Colonne Delete
-    #df_with_actions.insert(0, "edit", "edit")  # Colonne Edit
+    # df_with_actions.insert(0, "edit", "edit")  # Colonne Edit
     # Appliquer la fonction pour ajouter les colonnes "edit" et "delete"
-    #df_with_actions = add_action_cols(df)
+    # df_with_actions = add_action_cols(df)
 
     # Mettre à jour la liste des colonnes disponibles
     available_cols_with_actions = ["edit", "delete"] + available_cols
@@ -5763,7 +5949,7 @@ def page_overview(master_df: pd.DataFrame = None):
     })
 
     # Ajouter la nouvelle colonne 'QAC edited' dans available_cols
-    available_cols = available_cols #+ ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
+    available_cols = available_cols  # + ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
 
     # Générer dynamiquement les colonnes et rendre 'QAC edited' editable
     columns = [
@@ -6239,24 +6425,24 @@ def page_overview(master_df: pd.DataFrame = None):
     action_buttons = dbc.ButtonGroup([
         dbc.Button("🔄 Actualiser", id="btn-refresh", className="btn-outline-secondary", size="sm"),
         dbc.Button("➕ Ajouter produit", id="btn-add-row", className="btn-primary", size="sm"),
-        dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, className="btn-success", size="sm"), # ✅ nouveau
+        dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, className="btn-success",
+                   size="sm"),  # ✅ nouveau
     ], style={"marginBottom": "15px"})
 
-
     # Dropdown filter-status
-    #dcc.Dropdown(
+    # dcc.Dropdown(
     #   id="filter-status",
     #  options=[
     #     {"label": "Tous", "value": "all"},
     #    {"label": "Stock OK", "value": "ok"},
     #   {"label": "Rupture", "value": "oos"}
-    #],
-    #value="all",
-    #className="filter-dropdown"
-    #)
+    # ],
+    # value="all",
+    # className="filter-dropdown"
+    # )
 
     # Modal édition
-    #edit_modal = dbc.Modal(
+    # edit_modal = dbc.Modal(
     #   [
     #      dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
     #     dbc.ModalBody([
@@ -6265,11 +6451,11 @@ def page_overview(master_df: pd.DataFrame = None):
     #  ]),
     # dbc.ModalFooter(
     #    dbc.Button("Fermer", id="close-edit", className="ms-auto", n_clicks=0)
-    #),
-    #],
-    #id="edit-modal",
-    #is_open=False,
-    #)
+    # ),
+    # ],
+    # id="edit-modal",
+    # is_open=False,
+    # )
 
     # ✅ NOUVEAU : Bouton flottant + Modal amélioré
     notes_fab_button = html.Button(
@@ -6624,6 +6810,7 @@ def apply_filters(search, sup, cat, need, options, master_json):
         []
     )
 
+
 @app.callback(
     Output("master-data", "data", allow_duplicate=True),
     Input("rotation-period", "value"),
@@ -6683,6 +6870,7 @@ def update_rotation_simple(period_value):
         import traceback
         traceback.print_exc()
         return no_update
+
 
 '''
 # Callback 2 : Filtrage (avec allow_duplicate)
@@ -6877,6 +7065,8 @@ def update_rotation(period_value):
         print(f"❌ Erreur : {e}\n")
         return no_update
 '''
+
+
 @app.callback(
     Output("master-data", "data", allow_duplicate=True),
     Input("btn-refresh", "n_clicks"),
@@ -6889,6 +7079,8 @@ def force_refresh_master(n_clicks):
         print(f"🔄 Données rechargées : {len(df)} produits")
         return df.to_json(orient="records")
     return no_update
+
+
 '''@app.callback(
     Output("main-table", "selected_rows", allow_duplicate=True),
     [Input("search-input", "value"),
@@ -7202,6 +7394,7 @@ def send_note_with_notifications(n_clicks, message, author, product_name):
 
     return notes_display, "", author, feedback
 
+
 @app.callback(
     Output('main-table', 'data', allow_duplicate=True),  # Cela dépend de ce que tu veux actualiser
     Input('btn-refresh', 'n_clicks'),
@@ -7213,6 +7406,8 @@ def refresh_data(n_clicks):
         updated_data = load_supply_data()  # Assure-toi d'avoir une fonction load_data() qui recharge les données
         return updated_data
     return no_update
+
+
 @app.callback(
     Output('main-table', 'data', allow_duplicate=True),
     Input('btn-add-row', 'n_clicks'),
@@ -7230,6 +7425,8 @@ def add_new_product(n_clicks, current_data):
         current_data.append(new_product)
         return current_data
     return no_update
+
+
 '''
 
 def page_analytics(master_df: pd.DataFrame = None):
@@ -8522,6 +8719,8 @@ def update_predictive_table(supplier_value, category_value):
 
     return df.to_dict("records")
 '''
+
+
 # ==========================================
 # 🔧 HELPER : PLACEHOLDER POUR ÉVITER ERREURS
 # ==========================================
@@ -8537,6 +8736,7 @@ def create_hidden_table_placeholder():
         columns=[],
         style_table={"display": "none"}
     )
+
 
 def page_analytics(master_df: pd.DataFrame = None):
     """Page Analytics avec filtres sidebar et graphiques dynamiques"""
@@ -9277,6 +9477,8 @@ def update_predictive_all_charts(supplier_filter, category_filter, need_filter, 
         fig_risk,
         df.to_dict("records")
     )
+
+
 def page_about():
     return html.Div(className="content", children=[
         html.H2("À propos", className="page-title"),
@@ -9494,6 +9696,8 @@ def display_page(pathname):
         ], className="error-message")
 
 '''
+
+
 # ------------------------------ Chatbot helpers ----------------------------------
 
 # =============================== Chatbot helpers ================================
@@ -9835,8 +10039,8 @@ except Exception as e:
     initial_df = pd.DataFrame(columns=['product_name', 'Supplier', 'total_stock'])
 
 initial_df = get_df_cached()
-initial_df['QAC edited']=' '
-#initial_df['delete']='delete'
+initial_df['QAC edited'] = ' '
+# initial_df['delete']='delete'
 # ==================== LAYOUT CORRIGÉ AVEC AUTHENTIFICATION ====================
 
 app.layout = html.Div([
@@ -9864,7 +10068,6 @@ app.layout = html.Div([
 
     # ========== COMPOSANTS CACHÉS (pour callbacks) ==========
     html.Div(id='edit-product-output', style={"display": "none"}),
-
 
     # ========== EDIT MODAL (VISIBLE AU NIVEAU RACINE) ==========
     dbc.Modal(
@@ -9977,7 +10180,7 @@ app.layout = html.Div([
 
     # ========== FEEDBACKS & COMPTEURS ==========
     # html.Div(id="action-feedback", style={"position": "fixed", "top": "80px", "right": "20px", "zIndex": 10000}),
-    #html.Div(id="selection-counter"),
+    # html.Div(id="selection-counter"),
 
     # ========== CHATBOT FLOTTANT ==========
     html.Button(id="chat-fab", className="chat-fab", children=[html.Span("Assistant"), html.Span("💬")]),
@@ -10042,20 +10245,44 @@ def render_page_content(auth_state, pathname):
     # Créer la sidebar
     sidebar = make_sidebar()
 
+    # Déterminer la page
+    page_name = "overview"  # Par défaut
+
     # Sélectionner la page appropriée selon l'URL
     if pathname is None or pathname == "/" or pathname == "/overview":
         page_content = page_overview(initial_df)
+        page_name = "overview"
     elif pathname == "/analytics":
         page_content = page_analytics(initial_df)
+        page_name = "analytics"
     elif pathname == "/predictions":
         page_content = page_predictive(initial_df)
+        page_name = "predictions"
     elif pathname == "/promotions":
         page_content = page_promotions()
+        page_name = "promotions"
     elif pathname == "/about":
         page_content = page_about()
+        page_name = "about"
     else:
         # Page par défaut
         page_content = page_overview(initial_df)
+        page_name = "overview"
+
+    # ✅ TRACKING SUPABASE: Page view
+    if supabase_client and username:
+        try:
+            if username in ACTIVE_SESSIONS:
+                session_info = ACTIVE_SESSIONS[username]
+                track_activity(
+                    session_info.get("user_id"),
+                    session_info.get("session_id"),
+                    "page_view",
+                    page=page_name,
+                    details={"pathname": pathname}
+                )
+        except Exception as e:
+            print(f"⚠️ Erreur tracking page_view: {e}")
 
     # Retourner le layout complet avec navbar + sidebar + page
     return html.Div([
@@ -10093,7 +10320,15 @@ def handle_login(n_clicks, username, password, current_auth):
             html.Div([
                 html.Span("⚠️", style={"marginRight": "8px"}),
                 "Veuillez remplir tous les champs"
-            ], className="login-error"),
+            ], style={
+                "background": "rgba(239, 68, 68, 0.15)",
+                "border": "1px solid #ef4444",
+                "borderRadius": "10px",
+                "padding": "12px 16px",
+                "marginBottom": "20px",
+                "color": "#fca5a5",
+                "fontSize": "13px"
+            }),
             {"display": "block"}
         )
 
@@ -10104,33 +10339,99 @@ def handle_login(n_clicks, username, password, current_auth):
         # Connexion réussie
         print(f"   ✅ Connexion réussie pour {username}")
         user_info = get_user_info(username)
+
+        # ✅ TRACKING SUPABASE: Créer session
+        session_id = None
+        user_id = None
+        if supabase_client:
+            try:
+                # Récupérer ou créer l'utilisateur
+                db_user = get_or_create_user(username)
+                if db_user:
+                    user_id = db_user["id"]
+                    # Créer une session
+                    session_id = create_session(user_id)
+                    # Stocker la session active
+                    ACTIVE_SESSIONS[username] = {
+                        "user_id": user_id,
+                        "session_id": session_id
+                    }
+                    # Tracker l'activité de login
+                    track_activity(user_id, session_id, "login", page="login")
+            except Exception as e:
+                print(f"⚠️ Erreur tracking login: {e}")
+
         return (
-            {"authenticated": True, "username": username, "user_info": user_info},
+            {
+                "authenticated": True,
+                "username": username,
+                "user_info": user_info,
+                "session_id": session_id,
+                "user_id": user_id
+            },
             "",
             {"display": "none"}
         )
     else:
         # Échec de connexion
         print(f"   ❌ Échec de connexion pour {username}")
+
+        # ✅ TRACKING: Logger les tentatives échouées
+        if supabase_client:
+            try:
+                track_activity(None, None, "login_failed", page="login", details={"username_attempted": username})
+            except:
+                pass
+
         return (
             {"authenticated": False, "username": None},
             html.Div([
                 html.Span("❌", style={"marginRight": "8px"}),
                 "Identifiant ou mot de passe incorrect"
-            ], className="login-error"),
+            ], style={
+                "background": "rgba(239, 68, 68, 0.15)",
+                "border": "1px solid #ef4444",
+                "borderRadius": "10px",
+                "padding": "12px 16px",
+                "marginBottom": "20px",
+                "color": "#fca5a5",
+                "fontSize": "13px"
+            }),
             {"display": "block"}
         )
 
 
 @app.callback(
     Output("auth-state", "data", allow_duplicate=True),
-    Input("logout-button", "n_clicks"),
+    [Input("logout-button", "n_clicks")],
+    [State("auth-state", "data")],
     prevent_initial_call=True
 )
-def handle_logout(n_clicks):
+def handle_logout(n_clicks, current_auth):
     """Gère la déconnexion"""
     if n_clicks:
         print("🔐 Déconnexion utilisateur")
+
+        # ✅ TRACKING SUPABASE: Terminer la session
+        if current_auth and supabase_client:
+            try:
+                username = current_auth.get("username")
+                if username and username in ACTIVE_SESSIONS:
+                    session_info = ACTIVE_SESSIONS[username]
+                    # Tracker l'activité de logout
+                    track_activity(
+                        session_info.get("user_id"),
+                        session_info.get("session_id"),
+                        "logout",
+                        page="logout"
+                    )
+                    # Terminer la session
+                    end_session(session_info.get("session_id"))
+                    # Nettoyer
+                    del ACTIVE_SESSIONS[username]
+            except Exception as e:
+                print(f"⚠️ Erreur tracking logout: {e}")
+
         return {"authenticated": False, "username": None}
     raise dash.exceptions.PreventUpdate
 
@@ -10162,6 +10463,7 @@ def update_product_name(value):
     if value:
         return f"Produit modifié: {value}"
     return no_update
+
 
 # Callback pour stocker les données locales
 @app.callback(
@@ -10236,7 +10538,6 @@ def capture_qac_edits(table_data, stored_edits):
     print(f"💾 [localStorage] {len(stored_edits)} QAC sauvegardés")
     return stored_edits
 '''
-
 
 
 # ==================== CALLBACK 2 : RESTAURER LES QAC AU CHARGEMENT ====================
@@ -10504,9 +10805,10 @@ def load_qac_from_csv_on_startup(pathname):
         return {}
 '''
 
+
 # Callback pour mettre à jour le Store 'selected-product-for-notes'
 @app.callback(
-    Output('selected-product-for-notes', 'data', allow_duplicate = True),
+    Output('selected-product-for-notes', 'data', allow_duplicate=True),
     Input('main-table', 'active_cell'),
     State('main-table', 'data'),
     prevent_initial_call=True
@@ -10520,11 +10822,11 @@ def update_selected_product(active_cell, table_data):
 
 
 # Validation layout
-#app.validation_layout = html.Div([
+# app.validation_layout = html.Div([
 #   dcc.Location(id="url"),
 #  dcc.Store(id="master-data"),
 # dcc.Store(id="filtered-data"),
-#dcc.Dropdown(id="filter-supplier"),
+# dcc.Dropdown(id="filter-supplier"),
 #   dcc.Dropdown(id="filter-category"),
 #  dcc.Dropdown(id="filter-need"),  # ✅ IMPORTANT
 # dcc.Dropdown(
@@ -10532,51 +10834,51 @@ def update_selected_product(active_cell, table_data):
 #   options=[
 #      {'label': 'Status 1', 'value': 'status1'},
 #     {'label': 'Status 2', 'value': 'status2'}
-#],
+# ],
 #       value='status1'
 #  ),
 
 # dcc.Input(id="search-input"),
-#dbc.Checklist(id="toggle-options"),
-#dcc.Store(id="uploaded-csv"),
+# dbc.Checklist(id="toggle-options"),
+# dcc.Store(id="uploaded-csv"),
 #   dcc.Store(id="chat-store"),
 #  dcc.Store(id="chat-open"),
 # make_sidebar(),
-#page_overview(initial_df),
+# page_overview(initial_df),
 #  page_analytics(),
 #  page_predictive(),
 # page_about(),
-#html.Div(id="page-container"),
+# html.Div(id="page-container"),
 #  html.Button(id="chat-fab"),
 # html.Div(id="chat-window"),
-#html.Div(id="chat-messages"),
+# html.Div(id="chat-messages"),
 #  dbc.Textarea(id="chat-input"),
 # dcc.Upload(id="chat-upload"),
 #  html.Small(id="upload-status"),
 # dbc.Button(id="chat-send"),
 #  dbc.Button(id="chat-close"),
 # dcc.Download(id="download-data"),
-#dcc.Download(id="download-po"),
+# dcc.Download(id="download-po"),
 # dbc.Button(id="btn-add-row"),
-#dbc.Modal(id="edit-modal"),
+# dbc.Modal(id="edit-modal"),
 # dbc.Input(id="edit-product"),
-#dbc.Input(id="edit-supplier"),
+# dbc.Input(id="edit-supplier"),
 #  dbc.Input(id="edit-category"),
 # dbc.Input(id="edit-stock"),
-#dbc.Modal(id="notes-modal"),
+# dbc.Modal(id="notes-modal"),
 # html.Div(id="notes-modal-title"),
 # ✅ Ajouter les nouveaux composants
 # html.Button(id="notes-fab"),
 #   dcc.Dropdown(id="note-product-selector"),
 #  dbc.Modal(id="notes-modal-new"),
 # html.Div(id="notes-display-list"),
-#dbc.Textarea(id="note-text-input"),
+# dbc.Textarea(id="note-text-input"),
 #  dbc.Input(id="note-author-input"),
 # html.Div(id="note-feedback-new"),
-#dbc.Button(id="note-modal-send"),
+# dbc.Button(id="note-modal-send"),
 #  dbc.Button(id="note-modal-close"),
 # dcc.Store(id="selected-product-for-notes"),
-#])
+# ])
 # Validation layout
 # Validation layout
 app.validation_layout = html.Div([
@@ -10590,22 +10892,22 @@ app.validation_layout = html.Div([
     dcc.Store(id={'type': 'selected-product-for-notes', 'index': '2'}),
     dcc.Store(id="edit-mode"),
     dcc.Store(id="edit-original-product"),
-    #dcc.Store(id="qac-edits"),
+    # dcc.Store(id="qac-edits"),
     dcc.Store(id="qac-edits-store"),
 
     # ==================== SIDEBAR COMPONENTS ====================
-    #html.Div(id="risk-banner"),
+    # html.Div(id="risk-banner"),
     html.Div(id="action-feedback"),  # ✅ AJOUTER
     html.Div(id="selection-counter"),  # ✅ AJOUTER
     dcc.Input(id="search-input"),
     dcc.Dropdown(id="filter-supplier"),
     dcc.Dropdown(id="filter-category"),
     dcc.Dropdown(id="filter-need"),
-    #dcc.Dropdown(id="filter-status", options=[
+    # dcc.Dropdown(id="filter-status", options=[
     #   {'label': 'Tous', 'value': 'all'},
     #  {'label': 'Stock OK', 'value': 'ok'},
     # {'label': 'Rupture', 'value': 'oos'}
-    #], value='all'),
+    # ], value='all'),
     dbc.Checklist(id="toggle-options"),
     dbc.Button(id="btn-refresh"),
     dbc.Button(id="btn-add-row"),
@@ -10614,9 +10916,9 @@ app.validation_layout = html.Div([
     dcc.Download(id="download-data"),
     dcc.Download(id="download-po"),
     html.Div(id="debug-info"),
-    #html.Div(id="action-feedback"),
-    #html.Div(id="selection-counter"),
-    #dbc.Button("✅ Tout sélectionner (vue filtrée)", id="btn-select-all", size="sm", color="secondary", className="me-2"),
+    # html.Div(id="action-feedback"),
+    # html.Div(id="selection-counter"),
+    # dbc.Button("✅ Tout sélectionner (vue filtrée)", id="btn-select-all", size="sm", color="secondary", className="me-2"),
     ## Remplacez votre section boutons par celle-ci :
     html.Div([
         dbc.Button("🤖 Lancer Agent IA", id="btn-run-agent-ia", color="success", size="sm", className="me-2"),
@@ -10770,6 +11072,8 @@ app.validation_layout = html.Div([
     html.Div(id="conflict-alert"),
     dcc.ConfirmDialog(id="confirm-dialog"),
 ])
+
+
 # ------------------------------ Routing ------------------------------------------
 # ⚠️ ANCIEN CALLBACK DÉSACTIVÉ - Remplacé par render_page_content (avec authentification)
 # @app.callback(
@@ -10847,6 +11151,7 @@ def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: li
 
     print(f"[filter_dataframe] ✅ Résultat final: {len(out)} lignes")
     return out
+
 
 def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Garantit que les colonnes critiques existent et sont valides"""
@@ -10983,6 +11288,7 @@ def initialize_table(master_json):
         # Retourner données vides en cas d'erreur
         return "[]", [], []
 
+
 '''@app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
@@ -11014,6 +11320,8 @@ def initial_load_table(pathname, master_json):
 
     return df.to_json(orient="records"), df.to_dict("records"), []
 '''
+
+
 # ------------------------------ Notes System Callbacks ----------------------------
 
 # ------------------------------ Export CSV ---------------------------------------
@@ -11162,6 +11470,8 @@ def get_packaging_map_cached():
     except Exception as e:
         print(f"❌ Erreur packaging : {e}")
         return {}
+
+
 # ====== IMPORTS NÉCESSAIRES ======
 
 # ===== Helpers packaging (ROBUSTES) =====
@@ -11170,23 +11480,27 @@ from datetime import datetime
 
 PACKAGING_URL = "https://data.heroku.com/dataclips/cnmhrqqjneeunkbqibxklyxwcsrl.csv"
 
+
 def load_packaging_map():
     """Map: product_name_lower -> packaging (ex: '1/2 carton')."""
     try:
         dfp = pd.read_csv(PACKAGING_URL)
         name_col = next((c for c in dfp.columns if c.lower() in ("name", "product_name", "designation")), None)
-        pack_col = next((c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
+        pack_col = next(
+            (c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
         if not name_col or not pack_col:
             print("⚠️ Dataclip: colonnes name/packaging non trouvées.")
             return {}
-        dfp["__key__"]  = dfp[name_col].astype(str).str.lower().str.strip()
+        dfp["__key__"] = dfp[name_col].astype(str).str.lower().str.strip()
         dfp["__pack__"] = dfp[pack_col].astype(str).str.lower().str.strip()
         return dict(zip(dfp["__key__"], dfp["__pack__"]))
     except Exception as e:
         print(f"❌ load_packaging_map: {e}")
         return {}
 
+
 FRACTION_FINDER = re.compile(r"(\d+)\s*/\s*(\d+)", re.IGNORECASE)
+
 
 def detect_fraction_from_text(txt: str) -> float:
     """Retourne la fraction trouvée (ex: '1/2' -> 0.5) ou 1.0 si rien."""
@@ -11196,12 +11510,14 @@ def detect_fraction_from_text(txt: str) -> float:
     m = FRACTION_FINDER.search(s)
     if m:
         try:
-            num = int(m.group(1)); den = int(m.group(2))
+            num = int(m.group(1));
+            den = int(m.group(2))
             if den > 0:
                 return num / den
         except (ValueError, TypeError):
             pass
     return 1.0
+
 
 def consolidate_to_major(qty_units: float, packaging_text: str, product_name: str) -> int:
     """Convertit la QAC (éventuellement en sous-unité) → unités majeures entières (ceil)."""
@@ -11212,6 +11528,7 @@ def consolidate_to_major(qty_units: float, packaging_text: str, product_name: st
         frac = 1.0
     maj = float(qty_units) * float(frac)
     return max(0, int(math.ceil(maj)))
+
 
 def safe_float(v, default=0.0):
     try:
@@ -11476,6 +11793,8 @@ def run_agent_ia_calcul(n_clicks, table_data):
 
     return updated_data, sorted(indices_selection), button_disabled
 '''
+
+
 # ============================================
 # FONCTION 2 : VALIDATION QAC
 # ============================================
@@ -11963,6 +12282,7 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
 
     return buf, po_number
 
+
 # ===== CALLBACK : GÉNÉRATION BON DE COMMANDE EXCEL AVEC VALIDATION =====
 @app.callback(
     [Output("download-po", "data"),
@@ -12142,6 +12462,7 @@ def preselect_qac_rows(table_data, ia_clicks, ia_clicks_state):
 
     return no_update
 
+
 # ===== CALLBACK 3 : REMPLIR QAC =====
 # ===== CALLBACK : REMPLIR QAC DEPUIS TARGET (CORRIGÉ) =====
 @app.callback(
@@ -12171,6 +12492,7 @@ def fill_qac_from_target(n_clicks, selected_rows, master_json):
     print(f"✅ {count} QAC remplies depuis target_quantity")
 
     return master_df.to_json(orient="records")
+
 
 # ====== EXPORT BON DE COMMANDE WORD ======
 '''
@@ -12398,7 +12720,6 @@ def export_po_word_optimized(n_clicks, selected_rows, table_data):
 
     return dcc.send_bytes(buf.read(), filename=fname), False  # ✅ Fermer overlay
 '''
-
 
 '''
 @app.callback(
@@ -12772,6 +13093,8 @@ def toggle_po_button(selected_rows, data):
     # Sinon, désactiver
     return True
 '''
+
+
 # ==================== CALLBACK 4 : COMPTEUR DE SÉLECTION ====================
 @app.callback(
     Output("selection-counter", "children"),
@@ -12825,6 +13148,7 @@ def clear_selection(n_clicks):
         return no_update
     return []
 
+
 # ------------------------------ Edit/Add/Delete rows -----------------------------
 '''@app.callback(
    # Output("edit-modal", "is_open"),
@@ -12838,6 +13162,8 @@ def clear_selection(n_clicks):
     State("main-table", "data"),
     prevent_initial_call=True
 )'''
+
+
 def open_edit_modal(n_add, active_cell, data):
     ctx = dash.callback_context
     if not ctx.triggered:
@@ -12856,6 +13182,7 @@ def open_edit_modal(n_add, active_cell, data):
 
 
 import json
+
 
 @app.callback(
     [Output("master-data", "data", allow_duplicate=True),
@@ -12944,6 +13271,7 @@ def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, f
     # Retour des résultats sous forme de JSON (4 outputs = 4 valeurs)
     return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), []
 
+
 '''
 @app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
@@ -12981,6 +13309,8 @@ def delete_row(master_json):
     # filtered-data, main-table, selected_rows (empty list), and risk-banner
     return df.to_json(orient="records"), df.to_dict("records"), [], banner
 '''
+
+
 # ------------------------------ Floating Chat callbacks ---------------------------
 @app.callback(
     Output("chat-open", "data"),

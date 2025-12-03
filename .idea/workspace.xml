@@ -4,10 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="debug return overview">
+    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="auth">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notes_database.json" beforeDir="false" afterPath="$PROJECT_DIR$/notes_database.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/po_counter.json" beforeDir="false" afterPath="$PROJECT_DIR$/po_counter.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/supply_chain_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/supply_chain_analytics.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -79,30 +77,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00141" summary="callback save to csv for QAC edit">
-      <option name="closed" value="true" />
-      <created>1761666655377</created>
-      <option name="number" value="00141" />
-      <option name="presentableId" value="LOCAL-00141" />
-      <option name="project" value="LOCAL" />
-      <updated>1761666655377</updated>
-    </task>
-    <task id="LOCAL-00142" summary="callback save to csv for QAC edit">
-      <option name="closed" value="true" />
-      <created>1761666756558</created>
-      <option name="number" value="00142" />
-      <option name="presentableId" value="LOCAL-00142" />
-      <option name="project" value="LOCAL" />
-      <updated>1761666756558</updated>
-    </task>
-    <task id="LOCAL-00143" summary="callback load from csv for QAC edit">
-      <option name="closed" value="true" />
-      <created>1761666815335</created>
-      <option name="number" value="00143" />
-      <option name="presentableId" value="LOCAL-00143" />
-      <option name="project" value="LOCAL" />
-      <updated>1761666815335</updated>
     </task>
     <task id="LOCAL-00144" summary="callback load from csv for QAC edit">
       <option name="closed" value="true" />
@@ -472,7 +446,31 @@
       <option name="project" value="LOCAL" />
       <updated>1764689236052</updated>
     </task>
-    <option name="localTasksCounter" value="190" />
+    <task id="LOCAL-00190" summary="debug return overview">
+      <option name="closed" value="true" />
+      <created>1764749560452</created>
+      <option name="number" value="00190" />
+      <option name="presentableId" value="LOCAL-00190" />
+      <option name="project" value="LOCAL" />
+      <updated>1764749560452</updated>
+    </task>
+    <task id="LOCAL-00191" summary="debug return overview">
+      <option name="closed" value="true" />
+      <created>1764749585671</created>
+      <option name="number" value="00191" />
+      <option name="presentableId" value="LOCAL-00191" />
+      <option name="project" value="LOCAL" />
+      <updated>1764749585671</updated>
+    </task>
+    <task id="LOCAL-00192" summary="auth">
+      <option name="closed" value="true" />
+      <created>1764749601506</created>
+      <option name="number" value="00192" />
+      <option name="presentableId" value="LOCAL-00192" />
+      <option name="project" value="LOCAL" />
+      <updated>1764749601506</updated>
+    </task>
+    <option name="localTasksCounter" value="193" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -541,6 +539,7 @@
     <MESSAGE value="ML risque de rupture" />
     <MESSAGE value="css" />
     <MESSAGE value="debug return overview" />
-    <option name="LAST_COMMIT_MESSAGE" value="debug return overview" />
+    <MESSAGE value="auth" />
+    <option name="LAST_COMMIT_MESSAGE" value="auth" />
   </component>
 </project>

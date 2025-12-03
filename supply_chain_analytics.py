@@ -6708,7 +6708,7 @@ def page_overview(master_df: pd.DataFrame = None):
     return html.Div(className="content", children=[
         # En-tête avec titre + KPI risque de rupture
         dbc.Row([
-            dbc.Col(html.H2("📊 Overview", style={"color": "#22d3ee", "fontWeight": "800"}), md=8),
+            dbc.Col(html.H2(" Overview", style={"color": "#22d3ee", "fontWeight": "800"}), md=8),
             dbc.Col(html.Div(risk_bell, style={"textAlign": "right"}), md=4),
         ], className="mb-3"),
 

@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="css page">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-    </list>
+    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="css page" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -76,22 +74,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00148" summary="refresh_data">
-      <option name="closed" value="true" />
-      <created>1761667679631</created>
-      <option name="number" value="00148" />
-      <option name="presentableId" value="LOCAL-00148" />
-      <option name="project" value="LOCAL" />
-      <updated>1761667679631</updated>
-    </task>
-    <task id="LOCAL-00149" summary="reset_selection_on_filter">
-      <option name="closed" value="true" />
-      <created>1761670140465</created>
-      <option name="number" value="00149" />
-      <option name="presentableId" value="LOCAL-00149" />
-      <option name="project" value="LOCAL" />
-      <updated>1761670140465</updated>
     </task>
     <task id="LOCAL-00150" summary="reset_selection_on_filter">
       <option name="closed" value="true" />
@@ -469,7 +451,23 @@
       <option name="project" value="LOCAL" />
       <updated>1764766115165</updated>
     </task>
-    <option name="localTasksCounter" value="197" />
+    <task id="LOCAL-00197" summary="css page">
+      <option name="closed" value="true" />
+      <created>1764766928848</created>
+      <option name="number" value="00197" />
+      <option name="presentableId" value="LOCAL-00197" />
+      <option name="project" value="LOCAL" />
+      <updated>1764766928848</updated>
+    </task>
+    <task id="LOCAL-00198" summary="css page">
+      <option name="closed" value="true" />
+      <created>1764767092383</created>
+      <option name="number" value="00198" />
+      <option name="presentableId" value="LOCAL-00198" />
+      <option name="project" value="LOCAL" />
+      <updated>1764767092383</updated>
+    </task>
+    <option name="localTasksCounter" value="199" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">

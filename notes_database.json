@@ -38,5 +38,60 @@
     ],
     "timestamp": "2025-11-20T11:40:10.125212",
     "read_by": []
+  },
+  {
+    "id": "note_20251202_160231_4",
+    "product_name": "1/2 carton biscuits chico miko fraise gm 125g x12",
+    "author": "sam",
+    "message": "teste @tony",
+    "mentions": [
+      "tony"
+    ],
+    "timestamp": "2025-12-02T16:02:31.171115",
+    "read_by": []
+  },
+  {
+    "id": "note_20251202_160301_5",
+    "product_name": "1/2 carton biscuits chico miko fraise gm 125g x12",
+    "author": "tony",
+    "message": "hello test @arame",
+    "mentions": [
+      "arame"
+    ],
+    "timestamp": "2025-12-02T16:03:01.315211",
+    "read_by": []
+  },
+  {
+    "id": "note_20251202_160323_6",
+    "product_name": "1/2 carton biscuits chico miko fraise gm 125g x12",
+    "author": "tony",
+    "message": "test @arame",
+    "mentions": [
+      "arame"
+    ],
+    "timestamp": "2025-12-02T16:03:23.760137",
+    "read_by": []
+  },
+  {
+    "id": "note_20251202_160440_7",
+    "product_name": "1/2 carton lait en poudre lalia gm 400g x5",
+    "author": "tony",
+    "message": "test @Arame",
+    "mentions": [
+      "Arame"
+    ],
+    "timestamp": "2025-12-02T16:04:40.468375",
+    "read_by": []
+  },
+  {
+    "id": "note_20251202_171358_8",
+    "product_name": "huile bidon 20l zita",
+    "author": "sam",
+    "message": "test @tony",
+    "mentions": [
+      "tony"
+    ],
+    "timestamp": "2025-12-02T17:13:58.119031",
+    "read_by": []
   }
 ]

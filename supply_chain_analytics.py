@@ -7,10 +7,11 @@
 import csv
 import os, sys
 from functools import lru_cache
+import hashlib  # ✅ NOUVEAU: Pour l'authentification
 
 from dash.exceptions import PreventUpdate
 
-# import MATCH
+#import MATCH
 
 print("CWD:", os.getcwd())
 print("Dir files:", os.listdir("."))
@@ -24,11 +25,17 @@ import orjson
 
 ORJSON_OPTS = orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY
 
-app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP],
-           prevent_initial_callbacks='initial_duplicate')
+app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP], prevent_initial_callbacks='initial_duplicate')
 
 # ⚠️ Très important pour Render/Gunicorn
 server = app.server
+
+# ✅ NOUVEAU: Secret key pour les sessions Flask (authentification)
+server.secret_key = os.getenv("SECRET_KEY", "maad-supply-chain-secret-key-change-in-production-2024")
+
+# ✅ NOTE: L'authentification est intégrée directement dans ce fichier (voir section AUTH_USERS plus bas)
+# Pas besoin d'importer depuis auth.py
+
 import re
 from dotenv import load_dotenv
 import io
@@ -59,7 +66,6 @@ from reportlab.platypus import Image
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-
 # --- Word / python-docx (import paresseux & sûr) ---
 DOCX_AVAILABLE = False
 DOCX_IMPORT_ERROR = None
@@ -69,13 +75,12 @@ try:
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml.ns import qn
     from docx.oxml import OxmlElement
-
     DOCX_AVAILABLE = True
 except Exception as _e:
     DOCX_AVAILABLE = False
     DOCX_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
 # Imports existants + ces nouveaux
-# import anthropic
+#import anthropic
 import json
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -86,7 +91,6 @@ import requests
 import threading
 import plotly.graph_objects as go
 import time
-
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
 # Cache setup
@@ -97,18 +101,17 @@ cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TI
 def get_df_cached():
     return load_supply_data()  # Fonction pour charger vos données
 
-
 RENDER_ENV = os.getenv("RENDER", False)
 DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
 
 if RENDER_ENV:
-    print("\n" + "=" * 60)
+    print("\n" + "="*60)
     print("🚀 DÉMARRAGE SUR RENDER")
-    print("=" * 60)
+    print("="*60)
     print(f"Python version: {sys.version}")
     print(f"Working directory: {os.getcwd()}")
     print(f"Files: {os.listdir('.')[:10]}")
-    print("=" * 60 + "\n")
+    print("="*60 + "\n")
 
 
 # ==========================================
@@ -160,8 +163,6 @@ def run_with_timeout(func, args=(), kwargs=None, timeout_seconds=30):
         raise exception[0]
 
     return result[0]
-
-
 # ------------- OpenAI client (clé hardcodée à ta demande) ----------------
 # OPENAI_API_KEY_HARDCODED = "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"
 # Ligne ~45 dans votre code
@@ -551,7 +552,6 @@ Cet email a été envoyé automatiquement.
         traceback.print_exc()
         return False
 
-
 # ==================== VÉRIFIER LA CONFIGURATION EMAIL ====================
 # Vers ligne 200-250, vérifie que ces variables existent :
 
@@ -571,6 +571,524 @@ TEAM_MEMBERS = {
     "Ravane": {"name": "Ravane Diop", "email": "pr.diop@maad.io"},
     "Insa": {"name": "Insa Niang", "email": "insa.niang@maad.io"},
 }
+
+
+# ============================================================
+# 🔐 SYSTÈME D'AUTHENTIFICATION
+# ============================================================
+
+# Mot de passe par défaut: "maad2025" (à changer en production via variables d'environnement)
+DEFAULT_PASSWORD_HASH = hashlib.sha256("maad2025".encode()).hexdigest()
+
+# Utilisateurs autorisés avec leurs mots de passe hashés
+AUTH_USERS = {
+    "tony": {
+        "name": "Tony SARRE",
+        "email": "tony.sarre@maad.io",
+        "password_hash": hashlib.sha256(os.getenv("TONY_PASSWORD", "maad2025").encode()).hexdigest(),
+        "role": "admin"
+    },
+    "samuel": {
+        "name": "Samuel Essodeke",
+        "email": "essodeke@maad.io",
+        "password_hash": DEFAULT_PASSWORD_HASH,
+        "role": "manager"
+    },
+    "maimouna": {
+        "name": "Maimouna Dagois",
+        "email": "maimouna@maad.io",
+        "password_hash": DEFAULT_PASSWORD_HASH,
+        "role": "user"
+    },
+    "seydouna": {
+        "name": "Seydouna Oumar Niang",
+        "email": "seydouna@maad.io",
+        "password_hash": DEFAULT_PASSWORD_HASH,
+        "role": "manager"
+    },
+    "arame": {
+        "name": "Arame Toure",
+        "email": "arame.toure@maad.io",
+        "password_hash": DEFAULT_PASSWORD_HASH,
+        "role": "user"
+    },
+    "coumba": {
+        "name": "Coumba Cisse",
+        "email": "ndeyecoumba.cisse@maad.io",
+        "password_hash": DEFAULT_PASSWORD_HASH,
+        "role": "user"
+    },
+    "fallou": {
+        "name": "Fallou Diop",
+        "email": "serigne.diop@maad.io",
+        "password_hash": DEFAULT_PASSWORD_HASH,
+        "role": "user"
+    },
+    "ravane": {
+        "name": "Ravane Diop",
+        "email": "pr.diop@maad.io",
+        "password_hash": DEFAULT_PASSWORD_HASH,
+        "role": "manager"
+    },
+    "insa": {
+        "name": "Insa Niang",
+        "email": "insa.niang@maad.io",
+        "password_hash": DEFAULT_PASSWORD_HASH,
+        "role": "user"
+    },
+}
+
+
+def verify_password(username: str, password: str) -> bool:
+    """Vérifie le mot de passe d'un utilisateur"""
+    username = username.lower().strip()
+    if username not in AUTH_USERS:
+        return False
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    return password_hash == AUTH_USERS[username]["password_hash"]
+
+
+def get_user_info(username: str) -> dict:
+    """Retourne les informations d'un utilisateur"""
+    username = username.lower().strip()
+    if username in AUTH_USERS:
+        return {
+            "username": username,
+            "name": AUTH_USERS[username]["name"],
+            "email": AUTH_USERS[username]["email"],
+            "role": AUTH_USERS[username]["role"]
+        }
+    return None
+
+
+# ============================================================
+# 🎨 CSS STYLES POUR LA PAGE DE CONNEXION
+# ============================================================
+
+LOGIN_CSS = """
+/* ===== FOND ANIMÉ ===== */
+.login-background {
+    min-height: 100vh;
+    background: linear-gradient(-45deg, #0f172a, #1e293b, #0f172a, #1a1a2e);
+    background-size: 400% 400%;
+    animation: gradientBG 15s ease infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+@keyframes gradientBG {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* ===== CARTE LOGIN ===== */
+.login-card {
+    background: rgba(30, 41, 59, 0.95);
+    backdrop-filter: blur(20px);
+    border-radius: 24px;
+    padding: 48px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ===== LOGO ===== */
+.login-logo {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.login-logo-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.login-title {
+    font-size: 28px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #22d3ee 0%, #a78bfa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+}
+
+.login-subtitle {
+    color: #94a3b8;
+    font-size: 14px;
+}
+
+/* ===== FORMULAIRE ===== */
+.login-form {
+    margin-top: 24px;
+}
+
+.login-input-group {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.login-input-icon {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #64748b;
+    font-size: 18px;
+    z-index: 10;
+}
+
+.login-input {
+    width: 100%;
+    padding: 16px 16px 16px 48px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 2px solid #334155;
+    border-radius: 12px;
+    color: #f0f4f8;
+    font-size: 15px;
+    transition: all 0.3s ease;
+}
+
+.login-input:focus {
+    outline: none;
+    border-color: #22d3ee;
+    box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.15);
+    background: rgba(15, 23, 42, 1);
+}
+
+.login-input::placeholder {
+    color: #64748b;
+}
+
+/* ===== BOUTON ===== */
+.login-button {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%);
+    border: none;
+    border-radius: 12px;
+    color: #0f172a;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.login-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(34, 211, 238, 0.4);
+}
+
+.login-button:active {
+    transform: translateY(0);
+}
+
+/* ===== MESSAGE ERREUR ===== */
+.login-error {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid #ef4444;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    color: #fca5a5;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* ===== USER NAVBAR ===== */
+.user-navbar {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: rgba(30, 41, 59, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 50px;
+    border: 1px solid #334155;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.user-avatar {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #22d3ee, #a78bfa);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: #0f172a;
+    font-size: 14px;
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.user-name {
+    color: #f0f4f8;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.user-role {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.logout-btn {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s;
+    color: #f87171;
+}
+
+.logout-btn:hover {
+    background: rgba(239, 68, 68, 0.4);
+    border-color: #ef4444;
+}
+"""
+
+
+def create_login_layout():
+    """Crée le layout de la page de connexion"""
+    return html.Div([
+        # Styles CSS injectés via une balise style dans un Iframe srcdoc ou via style inline
+        # On utilise un Div avec dangerouslySetInnerHTML n'existe pas en Dash, donc on met les styles inline
+
+        # Conteneur principal avec styles inline
+        html.Div(className="login-background", style={
+            "minHeight": "100vh",
+            "background": "linear-gradient(-45deg, #0f172a, #1e293b, #0f172a, #1a1a2e)",
+            "backgroundSize": "400% 400%",
+            "display": "flex",
+            "alignItems": "center",
+            "justifyContent": "center",
+            "padding": "20px",
+            "fontFamily": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+        }, children=[
+            html.Div(className="login-card", style={
+                "background": "rgba(30, 41, 59, 0.95)",
+                "backdropFilter": "blur(20px)",
+                "borderRadius": "24px",
+                "padding": "48px",
+                "width": "100%",
+                "maxWidth": "420px",
+                "boxShadow": "0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1)",
+                "border": "1px solid rgba(255, 255, 255, 0.1)"
+            }, children=[
+
+                # Logo et titre
+                html.Div(className="login-logo", style={"textAlign": "center", "marginBottom": "32px"}, children=[
+                    html.Div("📦", style={"fontSize": "64px", "marginBottom": "16px"}),
+                    html.H1("Supply Chain Analytics", style={
+                        "fontSize": "28px",
+                        "fontWeight": "800",
+                        "background": "linear-gradient(135deg, #22d3ee 0%, #a78bfa 100%)",
+                        "WebkitBackgroundClip": "text",
+                        "WebkitTextFillColor": "transparent",
+                        "marginBottom": "8px"
+                    }),
+                    html.P("Connectez-vous pour accéder au dashboard", style={
+                        "color": "#94a3b8",
+                        "fontSize": "14px"
+                    })
+                ]),
+
+                # Zone d'erreur (cachée par défaut)
+                html.Div(id="login-error", style={"display": "none"}),
+
+                # Formulaire
+                html.Div(className="login-form", style={"marginTop": "24px"}, children=[
+
+                    # Champ identifiant
+                    html.Div(style={"position": "relative", "marginBottom": "20px"}, children=[
+                        html.Span("👤", style={
+                            "position": "absolute",
+                            "left": "16px",
+                            "top": "50%",
+                            "transform": "translateY(-50%)",
+                            "color": "#64748b",
+                            "fontSize": "18px",
+                            "zIndex": "10"
+                        }),
+                        dcc.Input(
+                            id="login-username",
+                            type="text",
+                            placeholder="Identifiant (ex: tony, samuel...)",
+                            style={
+                                "width": "100%",
+                                "padding": "16px 16px 16px 48px",
+                                "background": "rgba(15, 23, 42, 0.8)",
+                                "border": "2px solid #334155",
+                                "borderRadius": "12px",
+                                "color": "#f0f4f8",
+                                "fontSize": "15px",
+                                "boxSizing": "border-box"
+                            },
+                            autoComplete="username"
+                        )
+                    ]),
+
+                    # Champ mot de passe
+                    html.Div(style={"position": "relative", "marginBottom": "20px"}, children=[
+                        html.Span("🔒", style={
+                            "position": "absolute",
+                            "left": "16px",
+                            "top": "50%",
+                            "transform": "translateY(-50%)",
+                            "color": "#64748b",
+                            "fontSize": "18px",
+                            "zIndex": "10"
+                        }),
+                        dcc.Input(
+                            id="login-password",
+                            type="password",
+                            placeholder="Mot de passe",
+                            style={
+                                "width": "100%",
+                                "padding": "16px 16px 16px 48px",
+                                "background": "rgba(15, 23, 42, 0.8)",
+                                "border": "2px solid #334155",
+                                "borderRadius": "12px",
+                                "color": "#f0f4f8",
+                                "fontSize": "15px",
+                                "boxSizing": "border-box"
+                            },
+                            autoComplete="current-password"
+                        )
+                    ]),
+
+                    # Bouton de connexion
+                    html.Button(
+                        "🚀 Se connecter",
+                        id="login-button",
+                        n_clicks=0,
+                        style={
+                            "width": "100%",
+                            "padding": "16px",
+                            "background": "linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)",
+                            "border": "none",
+                            "borderRadius": "12px",
+                            "color": "#0f172a",
+                            "fontSize": "16px",
+                            "fontWeight": "700",
+                            "cursor": "pointer",
+                            "marginTop": "8px",
+                            "textTransform": "uppercase",
+                            "letterSpacing": "1px"
+                        }
+                    )
+                ]),
+
+                # Footer
+                html.Div([
+                    html.P([
+                        "Mot de passe oublié? Contactez ",
+                        html.A("l'administrateur", href="mailto:tony.sarre@maad.io",
+                               style={"color": "#22d3ee", "textDecoration": "none"})
+                    ], style={"color": "#64748b", "fontSize": "12px", "textAlign": "center", "marginTop": "32px"}),
+                    html.P("© 2024 MAAD - Supply Chain Analytics",
+                           style={"color": "#475569", "fontSize": "11px", "textAlign": "center", "marginTop": "8px"})
+                ])
+            ])
+        ])
+    ])
+
+
+def create_user_navbar(username: str):
+    """Crée la barre utilisateur connecté"""
+    if not username or username.lower() not in AUTH_USERS:
+        return html.Div()
+
+    user = AUTH_USERS[username.lower()]
+    initials = "".join([n[0].upper() for n in user["name"].split()[:2]])
+
+    role_colors = {"admin": "#ef4444", "manager": "#f59e0b", "user": "#22d3ee"}
+    role_labels = {"admin": "Administrateur", "manager": "Manager", "user": "Utilisateur"}
+
+    return html.Div([
+        html.Div(style={
+            "position": "fixed",
+            "top": "16px",
+            "right": "16px",
+            "zIndex": "9999",
+            "display": "flex",
+            "alignItems": "center",
+            "gap": "12px",
+            "padding": "10px 16px",
+            "background": "rgba(30, 41, 59, 0.95)",
+            "backdropFilter": "blur(10px)",
+            "borderRadius": "50px",
+            "border": "1px solid #334155",
+            "boxShadow": "0 4px 20px rgba(0, 0, 0, 0.3)"
+        }, children=[
+            # Avatar
+            html.Div(initials, style={
+                "width": "36px",
+                "height": "36px",
+                "background": f"linear-gradient(135deg, {role_colors.get(user['role'], '#22d3ee')}, #a78bfa)",
+                "borderRadius": "50%",
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "fontWeight": "700",
+                "color": "#0f172a",
+                "fontSize": "14px"
+            }),
+
+            # Infos
+            html.Div([
+                html.Div(user["name"], style={
+                    "color": "#f0f4f8",
+                    "fontWeight": "600",
+                    "fontSize": "14px"
+                }),
+                html.Div(role_labels.get(user["role"], "Utilisateur"), style={
+                    "color": role_colors.get(user["role"], "#64748b"),
+                    "fontSize": "11px",
+                    "textTransform": "uppercase",
+                    "letterSpacing": "0.5px"
+                })
+            ]),
+
+            # Bouton déconnexion
+            html.Button("🚪", id="logout-button", n_clicks=0, style={
+                "background": "rgba(239, 68, 68, 0.2)",
+                "border": "1px solid rgba(239, 68, 68, 0.4)",
+                "borderRadius": "8px",
+                "padding": "8px 12px",
+                "cursor": "pointer",
+                "fontSize": "16px",
+                "color": "#f87171"
+            }, title="Se déconnecter")
+        ])
+    ])
 
 
 # ------------------------------ Email Configuration -------------------------------
@@ -771,15 +1289,14 @@ def get_next_po_number() -> str:
         return f"PO-{today}-{st['seq']:03d}"
 
 
-# import pandas as pd
-# import numpy as np
+#import pandas as pd
+#import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
-
-# import warnings
+#import warnings
 
 warnings.filterwarnings('ignore')
 
@@ -1336,7 +1853,6 @@ def calculate_ads_by_period(period_days: int = 7) -> pd.DataFrame:
         import traceback
         traceback.print_exc()
         return pd.DataFrame(columns=['product_name', f'Average Daily Sales ({period_days}d)'])
-
 
 def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     import numpy as np
@@ -2246,8 +2762,7 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                 final_stock_sales_df['days_since_reception'] = (
                         pd.Timestamp.now() - final_stock_sales_df['last_reception_date']
                 ).dt.days
-                final_stock_sales_df['last_reception_date'] = final_stock_sales_df['last_reception_date'].dt.strftime(
-                    '%d/%m/%Y')
+                final_stock_sales_df['last_reception_date'] = final_stock_sales_df['last_reception_date'].dt.strftime('%d/%m/%Y')
             except Exception as e:
                 print(f"   ⚠️ Erreur formatage date: {e}")
 
@@ -2257,8 +2772,7 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                 final_stock_sales_df['last_reception_qty'], 0
             ).astype(int)
 
-        matched = final_stock_sales_df[
-            'last_reception_qty'].notna().sum() if 'last_reception_qty' in final_stock_sales_df.columns else 0
+        matched = final_stock_sales_df['last_reception_qty'].notna().sum() if 'last_reception_qty' in final_stock_sales_df.columns else 0
         print(f"   ✅ {matched}/{before_merge} produits avec données de réception")
     else:
         print("⚠️ Pas de données de réception à fusionner")
@@ -2819,8 +3333,6 @@ def get_preloaded_data(period_days="7d"):
         return DATA_30D.copy()
     else:
         return DATA_7D.copy()
-
-
 # ==================== CALLBACK ROTATION ADS ====================
 '''
 @app.callback(
@@ -3042,8 +3554,6 @@ def update_rotation_period(period_value):
         # ✅ RETOUR EN CAS D'ERREUR (4 valeurs)
         return no_update, no_update, no_update, error_indicator
 '''
-
-
 # Utility: add Actions columns
 def add_action_cols(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
@@ -3066,11 +3576,12 @@ def recalculate_product_metrics(row: pd.Series) -> pd.Series:
         pd.Series avec toutes les métriques recalculées
     """
 
+
     row = row.copy()
 
     # === VALIDATION & NETTOYAGE ===
     numeric_cols = {
-        # 'total_stock': 0,
+        #'total_stock': 0,
         'Average Daily Sales': 0.1,
         'Max Daily Sales (Pikine)': 0,
         'QAC': 0,
@@ -3079,8 +3590,8 @@ def recalculate_product_metrics(row: pd.Series) -> pd.Series:
         'credit_days': 0,
         'ADJUSTED_LEADTIME': 7,
         'AJUSTER_BUFFER': 0,
-        # 'target_quantity': 0,
-        # 'optimal stock': 0,
+        #'target_quantity': 0,
+        #'optimal stock': 0,
         'Max Coverage Day': 0
     }
 
@@ -3348,9 +3859,9 @@ def train_optimal_order_quantity_model(df: pd.DataFrame) -> tuple:
 
 
 # ----------------------------- App & Cache ---------------------------------------
-# app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
-# server = app.server
-# cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
+#app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
+#server = app.server
+#cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
 
 # ------------------------------ Custom CSS & JS ----------------------------------
 app.index_string = """
@@ -4113,12 +4624,10 @@ def get_df_cached():
     return load_supply_data()
 '''
 
-
 @lru_cache(maxsize=10)
 def get_df_cached(period: str = "7d"):
     """Cache avec support période rotation"""
     return load_supply_data(period_days=period)
-
 
 # ------------------------------ Sidebar ------------------------------------------
 def make_sidebar():
@@ -4140,7 +4649,7 @@ def make_sidebar():
             html.Div("Supply Chain Command Center", className="muted")
         ]),
         html.Hr(),
-        # html.Div(className="banner-risk", id="risk-banner", children="Chargement..."),
+        #html.Div(className="banner-risk", id="risk-banner", children="Chargement..."),
         html.Div(className="section-title", children="Recherche"),
         dbc.InputGroup(className="search-input", children=[
             dbc.Input(id="search-input", placeholder="Rechercher un produit...", type="text", debounce=True)
@@ -4192,8 +4701,7 @@ def make_sidebar():
         html.Br(),
         html.Div([
             html.Span(" "),
-            dbc.Button("📄 Bon de commande", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True),
-            # Le bouton est désactivé par défaut
+            dbc.Button("📄 Bon de commande", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True), # Le bouton est désactivé par défaut
             # ✅ AJOUTER : Modal de chargement
             dbc.Modal(
                 [
@@ -4367,6 +4875,8 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
             # Optionnel : garder aussi Suppliers (all) pour référence
 
     return grouped
+
+
 
 
 # ------------------------------ Pages --------------------------------------------
@@ -4691,7 +5201,7 @@ def make_kpis(df: pd.DataFrame):
         style={"marginTop": "10px"},
         children=[
             dbc.Button([
-                html.Span("🤖", style={"fontSize": "16px", "marginRight": "8px"}),
+                html.Span("🤖", style={"fontSize": "16px", "Center": "8px"}),
                 html.B("À risque de rupture : "),
                 dbc.Badge(
                     f"{risk_count}",
@@ -4749,8 +5259,6 @@ def make_kpis(df: pd.DataFrame):
     )
 
     return cards, bell
-
-
 '''
 def make_kpis(df: pd.DataFrame):
     """Calcule les KPIs (SKUs, ruptures, fournisseurs) + alerte dropdown produits à risque (ML)."""
@@ -4984,8 +5492,6 @@ def make_kpis(df: pd.DataFrame):
 
     return cards, bell
 '''
-
-
 @app.callback(
     Output("risk-alert-collapse", "is_open"),
     Input("risk-alert-toggle", "n_clicks"),
@@ -5052,6 +5558,8 @@ def page_overview(master_df: pd.DataFrame = None):
     df = master_df if master_df is not None else get_df_cached()
     df = df.copy()
 
+
+
     # === UI HARDENING (garantir présence + valeurs non vides) ===
     def _ui_harden(df):
         # Supplier non vide
@@ -5099,7 +5607,7 @@ def page_overview(master_df: pd.DataFrame = None):
     # ✅ 1. DÉFINIR colonnes prioritaires overview
     cols_priority_overview = [
 
-        # "delete",
+        #"delete",
         "product_id",
         "product_name",
         "Supplier",
@@ -5205,9 +5713,9 @@ def page_overview(master_df: pd.DataFrame = None):
 
     # Insérer les colonnes "edit" et "delete" dans le DataFrame avec un message d'action ou une valeur par défaut
     # df_with_actions.insert(0, "delete", "delete")  # Colonne Delete
-    # df_with_actions.insert(0, "edit", "edit")  # Colonne Edit
+    #df_with_actions.insert(0, "edit", "edit")  # Colonne Edit
     # Appliquer la fonction pour ajouter les colonnes "edit" et "delete"
-    # df_with_actions = add_action_cols(df)
+    #df_with_actions = add_action_cols(df)
 
     # Mettre à jour la liste des colonnes disponibles
     available_cols_with_actions = ["edit", "delete"] + available_cols
@@ -5255,7 +5763,7 @@ def page_overview(master_df: pd.DataFrame = None):
     })
 
     # Ajouter la nouvelle colonne 'QAC edited' dans available_cols
-    available_cols = available_cols  # + ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
+    available_cols = available_cols #+ ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
 
     # Générer dynamiquement les colonnes et rendre 'QAC edited' editable
     columns = [
@@ -5731,24 +6239,24 @@ def page_overview(master_df: pd.DataFrame = None):
     action_buttons = dbc.ButtonGroup([
         dbc.Button("🔄 Actualiser", id="btn-refresh", className="btn-outline-secondary", size="sm"),
         dbc.Button("➕ Ajouter produit", id="btn-add-row", className="btn-primary", size="sm"),
-        dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, className="btn-success",
-                   size="sm"),  # ✅ nouveau
+        dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, className="btn-success", size="sm"), # ✅ nouveau
     ], style={"marginBottom": "15px"})
 
+
     # Dropdown filter-status
-    # dcc.Dropdown(
+    #dcc.Dropdown(
     #   id="filter-status",
     #  options=[
     #     {"label": "Tous", "value": "all"},
     #    {"label": "Stock OK", "value": "ok"},
     #   {"label": "Rupture", "value": "oos"}
-    # ],
-    # value="all",
-    # className="filter-dropdown"
-    # )
+    #],
+    #value="all",
+    #className="filter-dropdown"
+    #)
 
     # Modal édition
-    # edit_modal = dbc.Modal(
+    #edit_modal = dbc.Modal(
     #   [
     #      dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
     #     dbc.ModalBody([
@@ -5757,11 +6265,11 @@ def page_overview(master_df: pd.DataFrame = None):
     #  ]),
     # dbc.ModalFooter(
     #    dbc.Button("Fermer", id="close-edit", className="ms-auto", n_clicks=0)
-    # ),
-    # ],
-    # id="edit-modal",
-    # is_open=False,
-    # )
+    #),
+    #],
+    #id="edit-modal",
+    #is_open=False,
+    #)
 
     # ✅ NOUVEAU : Bouton flottant + Modal amélioré
     notes_fab_button = html.Button(
@@ -6116,7 +6624,6 @@ def apply_filters(search, sup, cat, need, options, master_json):
         []
     )
 
-
 @app.callback(
     Output("master-data", "data", allow_duplicate=True),
     Input("rotation-period", "value"),
@@ -6176,7 +6683,6 @@ def update_rotation_simple(period_value):
         import traceback
         traceback.print_exc()
         return no_update
-
 
 '''
 # Callback 2 : Filtrage (avec allow_duplicate)
@@ -6371,8 +6877,6 @@ def update_rotation(period_value):
         print(f"❌ Erreur : {e}\n")
         return no_update
 '''
-
-
 @app.callback(
     Output("master-data", "data", allow_duplicate=True),
     Input("btn-refresh", "n_clicks"),
@@ -6385,8 +6889,6 @@ def force_refresh_master(n_clicks):
         print(f"🔄 Données rechargées : {len(df)} produits")
         return df.to_json(orient="records")
     return no_update
-
-
 '''@app.callback(
     Output("main-table", "selected_rows", allow_duplicate=True),
     [Input("search-input", "value"),
@@ -6700,7 +7202,6 @@ def send_note_with_notifications(n_clicks, message, author, product_name):
 
     return notes_display, "", author, feedback
 
-
 @app.callback(
     Output('main-table', 'data', allow_duplicate=True),  # Cela dépend de ce que tu veux actualiser
     Input('btn-refresh', 'n_clicks'),
@@ -6712,8 +7213,6 @@ def refresh_data(n_clicks):
         updated_data = load_supply_data()  # Assure-toi d'avoir une fonction load_data() qui recharge les données
         return updated_data
     return no_update
-
-
 @app.callback(
     Output('main-table', 'data', allow_duplicate=True),
     Input('btn-add-row', 'n_clicks'),
@@ -6731,8 +7230,6 @@ def add_new_product(n_clicks, current_data):
         current_data.append(new_product)
         return current_data
     return no_update
-
-
 '''
 
 def page_analytics(master_df: pd.DataFrame = None):
@@ -8025,8 +8522,6 @@ def update_predictive_table(supplier_value, category_value):
 
     return df.to_dict("records")
 '''
-
-
 # ==========================================
 # 🔧 HELPER : PLACEHOLDER POUR ÉVITER ERREURS
 # ==========================================
@@ -8042,7 +8537,6 @@ def create_hidden_table_placeholder():
         columns=[],
         style_table={"display": "none"}
     )
-
 
 def page_analytics(master_df: pd.DataFrame = None):
     """Page Analytics avec filtres sidebar et graphiques dynamiques"""
@@ -8783,8 +9277,6 @@ def update_predictive_all_charts(supplier_filter, category_filter, need_filter, 
         fig_risk,
         df.to_dict("records")
     )
-
-
 def page_about():
     return html.Div(className="content", children=[
         html.H2("À propos", className="page-title"),
@@ -9002,8 +9494,6 @@ def display_page(pathname):
         ], className="error-message")
 
 '''
-
-
 # ------------------------------ Chatbot helpers ----------------------------------
 
 # =============================== Chatbot helpers ================================
@@ -9345,13 +9835,17 @@ except Exception as e:
     initial_df = pd.DataFrame(columns=['product_name', 'Supplier', 'total_stock'])
 
 initial_df = get_df_cached()
-initial_df['QAC edited'] = ' '
-# initial_df['delete']='delete'
-# ==================== LAYOUT CORRIGÉ (remplacer TOUT votre app.layout actuel) ====================
+initial_df['QAC edited']=' '
+#initial_df['delete']='delete'
+# ==================== LAYOUT CORRIGÉ AVEC AUTHENTIFICATION ====================
 
 app.layout = html.Div([
+    # ========== STORES AUTHENTIFICATION ==========
+    dcc.Store(id="auth-state", storage_type="session", data={"authenticated": False, "username": None}),
+    dcc.Store(id="user-info-store", storage_type="session"),
+
     # ========== NAVIGATION & STORES ==========
-    dcc.Location(id="url"),
+    dcc.Location(id="url", refresh=False),
     dcc.Store(id="master-data", data=initial_df.to_json(orient="records")),
     dcc.Store(id="filtered-data"),
     dcc.Store(id="uploaded-csv"),
@@ -9365,8 +9859,12 @@ app.layout = html.Div([
     dcc.Store(id='agent-ia-recommendations', data=None),
     dcc.Store(id='bc-data-store', data=None),
 
+    # ========== CONTENEUR PRINCIPAL (login ou dashboard) ==========
+    html.Div(id="app-container"),
+
     # ========== COMPOSANTS CACHÉS (pour callbacks) ==========
     html.Div(id='edit-product-output', style={"display": "none"}),
+
 
     # ========== EDIT MODAL (VISIBLE AU NIVEAU RACINE) ==========
     dbc.Modal(
@@ -9459,10 +9957,12 @@ app.layout = html.Div([
     ]),
 
     # ========== SIDEBAR ==========
-    make_sidebar(),
+    # Note: La sidebar est maintenant gérée par le callback render_page_content
+    # make_sidebar(),
 
     # ========== CONTENU PRINCIPAL ==========
-    html.Div(id="page-container", children=page_overview(initial_df)),
+    # Note: page-container est maintenant géré par le callback d'authentification (render_page_content)
+    # html.Div(id="page-container", children=page_overview(initial_df)),
 
     # Dans la page concernée, ajoutez :
     html.Div([
@@ -9473,11 +9973,11 @@ app.layout = html.Div([
             className="mb-3"
         ),
         html.Div(id="agent-ia-output")  # Output du callback
-    ]),
+    ], style={"display": "none"}),  # Caché par défaut, visible après login
 
     # ========== FEEDBACKS & COMPTEURS ==========
     # html.Div(id="action-feedback", style={"position": "fixed", "top": "80px", "right": "20px", "zIndex": 10000}),
-    # html.Div(id="selection-counter"),
+    #html.Div(id="selection-counter"),
 
     # ========== CHATBOT FLOTTANT ==========
     html.Button(id="chat-fab", className="chat-fab", children=[html.Span("Assistant"), html.Span("💬")]),
@@ -9509,6 +10009,137 @@ app.layout = html.Div([
 ])
 
 
+# ============================================================
+# 🔐 CALLBACKS D'AUTHENTIFICATION
+# ============================================================
+
+@app.callback(
+    Output("app-container", "children"),
+    [Input("auth-state", "data"),
+     Input("url", "pathname")],
+    prevent_initial_call=False
+)
+def render_page_content(auth_state, pathname):
+    """
+    Callback principal qui gère l'affichage:
+    - Si non authentifié → page de connexion
+    - Si authentifié → dashboard avec barre utilisateur
+    """
+    print(f"🔐 render_page_content: auth_state={auth_state}, pathname={pathname}")
+
+    # Vérifier si l'utilisateur est authentifié
+    if not auth_state or not auth_state.get("authenticated"):
+        print("   → Affichage page de connexion")
+        return create_login_layout()
+
+    # Utilisateur connecté - afficher le dashboard
+    username = auth_state.get("username", "")
+    print(f"   → Utilisateur connecté: {username}")
+
+    # Créer la barre utilisateur
+    user_navbar = create_user_navbar(username)
+
+    # Créer la sidebar
+    sidebar = make_sidebar()
+
+    # Sélectionner la page appropriée selon l'URL
+    if pathname is None or pathname == "/" or pathname == "/overview":
+        page_content = page_overview(initial_df)
+    elif pathname == "/analytics":
+        page_content = page_analytics(initial_df)
+    elif pathname == "/predictions":
+        page_content = page_predictive(initial_df)
+    elif pathname == "/promotions":
+        page_content = page_promotions()
+    elif pathname == "/about":
+        page_content = page_about()
+    else:
+        # Page par défaut
+        page_content = page_overview(initial_df)
+
+    # Retourner le layout complet avec navbar + sidebar + page
+    return html.Div([
+        user_navbar,
+        sidebar,
+        html.Div(
+            id="page-container",
+            className="main-content",
+            children=page_content
+        )
+    ])
+
+
+@app.callback(
+    [Output("auth-state", "data", allow_duplicate=True),
+     Output("login-error", "children"),
+     Output("login-error", "style")],
+    [Input("login-button", "n_clicks")],
+    [State("login-username", "value"),
+     State("login-password", "value"),
+     State("auth-state", "data")],
+    prevent_initial_call=True
+)
+def handle_login(n_clicks, username, password, current_auth):
+    """Gère la tentative de connexion"""
+    print(f"🔐 handle_login: n_clicks={n_clicks}, username={username}")
+
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+
+    # Validation des champs
+    if not username or not password:
+        return (
+            current_auth or {"authenticated": False, "username": None},
+            html.Div([
+                html.Span("⚠️", style={"marginRight": "8px"}),
+                "Veuillez remplir tous les champs"
+            ], className="login-error"),
+            {"display": "block"}
+        )
+
+    # Vérification des identifiants
+    username = username.lower().strip()
+
+    if verify_password(username, password):
+        # Connexion réussie
+        print(f"   ✅ Connexion réussie pour {username}")
+        user_info = get_user_info(username)
+        return (
+            {"authenticated": True, "username": username, "user_info": user_info},
+            "",
+            {"display": "none"}
+        )
+    else:
+        # Échec de connexion
+        print(f"   ❌ Échec de connexion pour {username}")
+        return (
+            {"authenticated": False, "username": None},
+            html.Div([
+                html.Span("❌", style={"marginRight": "8px"}),
+                "Identifiant ou mot de passe incorrect"
+            ], className="login-error"),
+            {"display": "block"}
+        )
+
+
+@app.callback(
+    Output("auth-state", "data", allow_duplicate=True),
+    Input("logout-button", "n_clicks"),
+    prevent_initial_call=True
+)
+def handle_logout(n_clicks):
+    """Gère la déconnexion"""
+    if n_clicks:
+        print("🔐 Déconnexion utilisateur")
+        return {"authenticated": False, "username": None}
+    raise dash.exceptions.PreventUpdate
+
+
+# ============================================================
+# 🔐 FIN CALLBACKS AUTHENTIFICATION
+# ============================================================
+
+
 @app.callback(
     Output('action-feedback', 'children'),
     Input('some-input', 'value'),
@@ -9531,7 +10162,6 @@ def update_product_name(value):
     if value:
         return f"Produit modifié: {value}"
     return no_update
-
 
 # Callback pour stocker les données locales
 @app.callback(
@@ -9606,6 +10236,7 @@ def capture_qac_edits(table_data, stored_edits):
     print(f"💾 [localStorage] {len(stored_edits)} QAC sauvegardés")
     return stored_edits
 '''
+
 
 
 # ==================== CALLBACK 2 : RESTAURER LES QAC AU CHARGEMENT ====================
@@ -9873,10 +10504,9 @@ def load_qac_from_csv_on_startup(pathname):
         return {}
 '''
 
-
 # Callback pour mettre à jour le Store 'selected-product-for-notes'
 @app.callback(
-    Output('selected-product-for-notes', 'data', allow_duplicate=True),
+    Output('selected-product-for-notes', 'data', allow_duplicate = True),
     Input('main-table', 'active_cell'),
     State('main-table', 'data'),
     prevent_initial_call=True
@@ -9890,11 +10520,11 @@ def update_selected_product(active_cell, table_data):
 
 
 # Validation layout
-# app.validation_layout = html.Div([
+#app.validation_layout = html.Div([
 #   dcc.Location(id="url"),
 #  dcc.Store(id="master-data"),
 # dcc.Store(id="filtered-data"),
-# dcc.Dropdown(id="filter-supplier"),
+#dcc.Dropdown(id="filter-supplier"),
 #   dcc.Dropdown(id="filter-category"),
 #  dcc.Dropdown(id="filter-need"),  # ✅ IMPORTANT
 # dcc.Dropdown(
@@ -9902,51 +10532,51 @@ def update_selected_product(active_cell, table_data):
 #   options=[
 #      {'label': 'Status 1', 'value': 'status1'},
 #     {'label': 'Status 2', 'value': 'status2'}
-# ],
+#],
 #       value='status1'
 #  ),
 
 # dcc.Input(id="search-input"),
-# dbc.Checklist(id="toggle-options"),
-# dcc.Store(id="uploaded-csv"),
+#dbc.Checklist(id="toggle-options"),
+#dcc.Store(id="uploaded-csv"),
 #   dcc.Store(id="chat-store"),
 #  dcc.Store(id="chat-open"),
 # make_sidebar(),
-# page_overview(initial_df),
+#page_overview(initial_df),
 #  page_analytics(),
 #  page_predictive(),
 # page_about(),
-# html.Div(id="page-container"),
+#html.Div(id="page-container"),
 #  html.Button(id="chat-fab"),
 # html.Div(id="chat-window"),
-# html.Div(id="chat-messages"),
+#html.Div(id="chat-messages"),
 #  dbc.Textarea(id="chat-input"),
 # dcc.Upload(id="chat-upload"),
 #  html.Small(id="upload-status"),
 # dbc.Button(id="chat-send"),
 #  dbc.Button(id="chat-close"),
 # dcc.Download(id="download-data"),
-# dcc.Download(id="download-po"),
+#dcc.Download(id="download-po"),
 # dbc.Button(id="btn-add-row"),
-# dbc.Modal(id="edit-modal"),
+#dbc.Modal(id="edit-modal"),
 # dbc.Input(id="edit-product"),
-# dbc.Input(id="edit-supplier"),
+#dbc.Input(id="edit-supplier"),
 #  dbc.Input(id="edit-category"),
 # dbc.Input(id="edit-stock"),
-# dbc.Modal(id="notes-modal"),
+#dbc.Modal(id="notes-modal"),
 # html.Div(id="notes-modal-title"),
 # ✅ Ajouter les nouveaux composants
 # html.Button(id="notes-fab"),
 #   dcc.Dropdown(id="note-product-selector"),
 #  dbc.Modal(id="notes-modal-new"),
 # html.Div(id="notes-display-list"),
-# dbc.Textarea(id="note-text-input"),
+#dbc.Textarea(id="note-text-input"),
 #  dbc.Input(id="note-author-input"),
 # html.Div(id="note-feedback-new"),
-# dbc.Button(id="note-modal-send"),
+#dbc.Button(id="note-modal-send"),
 #  dbc.Button(id="note-modal-close"),
 # dcc.Store(id="selected-product-for-notes"),
-# ])
+#])
 # Validation layout
 # Validation layout
 app.validation_layout = html.Div([
@@ -9960,22 +10590,22 @@ app.validation_layout = html.Div([
     dcc.Store(id={'type': 'selected-product-for-notes', 'index': '2'}),
     dcc.Store(id="edit-mode"),
     dcc.Store(id="edit-original-product"),
-    # dcc.Store(id="qac-edits"),
+    #dcc.Store(id="qac-edits"),
     dcc.Store(id="qac-edits-store"),
 
     # ==================== SIDEBAR COMPONENTS ====================
-    # html.Div(id="risk-banner"),
+    #html.Div(id="risk-banner"),
     html.Div(id="action-feedback"),  # ✅ AJOUTER
     html.Div(id="selection-counter"),  # ✅ AJOUTER
     dcc.Input(id="search-input"),
     dcc.Dropdown(id="filter-supplier"),
     dcc.Dropdown(id="filter-category"),
     dcc.Dropdown(id="filter-need"),
-    # dcc.Dropdown(id="filter-status", options=[
+    #dcc.Dropdown(id="filter-status", options=[
     #   {'label': 'Tous', 'value': 'all'},
     #  {'label': 'Stock OK', 'value': 'ok'},
     # {'label': 'Rupture', 'value': 'oos'}
-    # ], value='all'),
+    #], value='all'),
     dbc.Checklist(id="toggle-options"),
     dbc.Button(id="btn-refresh"),
     dbc.Button(id="btn-add-row"),
@@ -9984,9 +10614,9 @@ app.validation_layout = html.Div([
     dcc.Download(id="download-data"),
     dcc.Download(id="download-po"),
     html.Div(id="debug-info"),
-    # html.Div(id="action-feedback"),
-    # html.Div(id="selection-counter"),
-    # dbc.Button("✅ Tout sélectionner (vue filtrée)", id="btn-select-all", size="sm", color="secondary", className="me-2"),
+    #html.Div(id="action-feedback"),
+    #html.Div(id="selection-counter"),
+    #dbc.Button("✅ Tout sélectionner (vue filtrée)", id="btn-select-all", size="sm", color="secondary", className="me-2"),
     ## Remplacez votre section boutons par celle-ci :
     html.Div([
         dbc.Button("🤖 Lancer Agent IA", id="btn-run-agent-ia", color="success", size="sm", className="me-2"),
@@ -10140,31 +10770,30 @@ app.validation_layout = html.Div([
     html.Div(id="conflict-alert"),
     dcc.ConfirmDialog(id="confirm-dialog"),
 ])
-
-
 # ------------------------------ Routing ------------------------------------------
-@app.callback(
-    Output("page-container", "children"),
-    Input("url", "pathname"),
-    State("master-data", "data"),
-    prevent_initial_call=False
-)
-def render_page(path, master_json):
-    """Route vers les différentes pages selon l'URL"""
-    base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
-
-    print(f"🔀 Routing vers : {path}")  # Debug
-
-    if path == "/analytics":
-        return page_analytics()
-    elif path == "/predictions":
-        return page_predictive()
-    elif path == "/promotions":  # ✅ AJOUTER CETTE CONDITION
-        return page_promotions()
-    elif path == "/about":
-        return page_about()
-    else:  # "/" ou autre
-        return page_overview(base)
+# ⚠️ ANCIEN CALLBACK DÉSACTIVÉ - Remplacé par render_page_content (avec authentification)
+# @app.callback(
+#     Output("page-container", "children"),
+#     Input("url", "pathname"),
+#     State("master-data", "data"),
+#     prevent_initial_call=False
+# )
+# def render_page(path, master_json):
+#     """Route vers les différentes pages selon l'URL"""
+#     base = pd.DataFrame(json.loads(master_json)) if master_json else get_df_cached()
+#
+#     print(f"🔀 Routing vers : {path}")  # Debug
+#
+#     if path == "/analytics":
+#         return page_analytics()
+#     elif path == "/predictions":
+#         return page_predictive()
+#     elif path == "/promotions":  # ✅ AJOUTER CETTE CONDITION
+#         return page_promotions()
+#     elif path == "/about":
+#         return page_about()
+#     else:  # "/" ou autre
+#         return page_overview(base)
 
 
 # ------------------------------ Filtering logic ----------------------------------
@@ -10218,7 +10847,6 @@ def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: li
 
     print(f"[filter_dataframe] ✅ Résultat final: {len(out)} lignes")
     return out
-
 
 def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Garantit que les colonnes critiques existent et sont valides"""
@@ -10355,7 +10983,6 @@ def initialize_table(master_json):
         # Retourner données vides en cas d'erreur
         return "[]", [], []
 
-
 '''@app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
@@ -10387,8 +11014,6 @@ def initial_load_table(pathname, master_json):
 
     return df.to_json(orient="records"), df.to_dict("records"), []
 '''
-
-
 # ------------------------------ Notes System Callbacks ----------------------------
 
 # ------------------------------ Export CSV ---------------------------------------
@@ -10537,8 +11162,6 @@ def get_packaging_map_cached():
     except Exception as e:
         print(f"❌ Erreur packaging : {e}")
         return {}
-
-
 # ====== IMPORTS NÉCESSAIRES ======
 
 # ===== Helpers packaging (ROBUSTES) =====
@@ -10547,27 +11170,23 @@ from datetime import datetime
 
 PACKAGING_URL = "https://data.heroku.com/dataclips/cnmhrqqjneeunkbqibxklyxwcsrl.csv"
 
-
 def load_packaging_map():
     """Map: product_name_lower -> packaging (ex: '1/2 carton')."""
     try:
         dfp = pd.read_csv(PACKAGING_URL)
         name_col = next((c for c in dfp.columns if c.lower() in ("name", "product_name", "designation")), None)
-        pack_col = next(
-            (c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
+        pack_col = next((c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
         if not name_col or not pack_col:
             print("⚠️ Dataclip: colonnes name/packaging non trouvées.")
             return {}
-        dfp["__key__"] = dfp[name_col].astype(str).str.lower().str.strip()
+        dfp["__key__"]  = dfp[name_col].astype(str).str.lower().str.strip()
         dfp["__pack__"] = dfp[pack_col].astype(str).str.lower().str.strip()
         return dict(zip(dfp["__key__"], dfp["__pack__"]))
     except Exception as e:
         print(f"❌ load_packaging_map: {e}")
         return {}
 
-
 FRACTION_FINDER = re.compile(r"(\d+)\s*/\s*(\d+)", re.IGNORECASE)
-
 
 def detect_fraction_from_text(txt: str) -> float:
     """Retourne la fraction trouvée (ex: '1/2' -> 0.5) ou 1.0 si rien."""
@@ -10577,14 +11196,12 @@ def detect_fraction_from_text(txt: str) -> float:
     m = FRACTION_FINDER.search(s)
     if m:
         try:
-            num = int(m.group(1));
-            den = int(m.group(2))
+            num = int(m.group(1)); den = int(m.group(2))
             if den > 0:
                 return num / den
         except (ValueError, TypeError):
             pass
     return 1.0
-
 
 def consolidate_to_major(qty_units: float, packaging_text: str, product_name: str) -> int:
     """Convertit la QAC (éventuellement en sous-unité) → unités majeures entières (ceil)."""
@@ -10595,7 +11212,6 @@ def consolidate_to_major(qty_units: float, packaging_text: str, product_name: st
         frac = 1.0
     maj = float(qty_units) * float(frac)
     return max(0, int(math.ceil(maj)))
-
 
 def safe_float(v, default=0.0):
     try:
@@ -10860,8 +11476,6 @@ def run_agent_ia_calcul(n_clicks, table_data):
 
     return updated_data, sorted(indices_selection), button_disabled
 '''
-
-
 # ============================================
 # FONCTION 2 : VALIDATION QAC
 # ============================================
@@ -11349,7 +11963,6 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
 
     return buf, po_number
 
-
 # ===== CALLBACK : GÉNÉRATION BON DE COMMANDE EXCEL AVEC VALIDATION =====
 @app.callback(
     [Output("download-po", "data"),
@@ -11529,7 +12142,6 @@ def preselect_qac_rows(table_data, ia_clicks, ia_clicks_state):
 
     return no_update
 
-
 # ===== CALLBACK 3 : REMPLIR QAC =====
 # ===== CALLBACK : REMPLIR QAC DEPUIS TARGET (CORRIGÉ) =====
 @app.callback(
@@ -11559,7 +12171,6 @@ def fill_qac_from_target(n_clicks, selected_rows, master_json):
     print(f"✅ {count} QAC remplies depuis target_quantity")
 
     return master_df.to_json(orient="records")
-
 
 # ====== EXPORT BON DE COMMANDE WORD ======
 '''
@@ -11787,6 +12398,7 @@ def export_po_word_optimized(n_clicks, selected_rows, table_data):
 
     return dcc.send_bytes(buf.read(), filename=fname), False  # ✅ Fermer overlay
 '''
+
 
 '''
 @app.callback(
@@ -12160,8 +12772,6 @@ def toggle_po_button(selected_rows, data):
     # Sinon, désactiver
     return True
 '''
-
-
 # ==================== CALLBACK 4 : COMPTEUR DE SÉLECTION ====================
 @app.callback(
     Output("selection-counter", "children"),
@@ -12215,7 +12825,6 @@ def clear_selection(n_clicks):
         return no_update
     return []
 
-
 # ------------------------------ Edit/Add/Delete rows -----------------------------
 '''@app.callback(
    # Output("edit-modal", "is_open"),
@@ -12229,8 +12838,6 @@ def clear_selection(n_clicks):
     State("main-table", "data"),
     prevent_initial_call=True
 )'''
-
-
 def open_edit_modal(n_add, active_cell, data):
     ctx = dash.callback_context
     if not ctx.triggered:
@@ -12249,7 +12856,6 @@ def open_edit_modal(n_add, active_cell, data):
 
 
 import json
-
 
 @app.callback(
     [Output("master-data", "data", allow_duplicate=True),
@@ -12338,7 +12944,6 @@ def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, f
     # Retour des résultats sous forme de JSON (4 outputs = 4 valeurs)
     return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), []
 
-
 '''
 @app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
@@ -12376,8 +12981,6 @@ def delete_row(master_json):
     # filtered-data, main-table, selected_rows (empty list), and risk-banner
     return df.to_json(orient="records"), df.to_dict("records"), [], banner
 '''
-
-
 # ------------------------------ Floating Chat callbacks ---------------------------
 @app.callback(
     Output("chat-open", "data"),

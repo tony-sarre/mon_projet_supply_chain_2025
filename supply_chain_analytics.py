@@ -14,12 +14,13 @@ from dash.exceptions import PreventUpdate
 # ✅ NOUVEAU: Import Supabase pour tracking utilisateurs
 try:
     from supabase import create_client, Client
+
     SUPABASE_AVAILABLE = True
 except ImportError:
     SUPABASE_AVAILABLE = False
     print("⚠️ Supabase non installé. Exécuter: pip install supabase")
 
-#import MATCH
+# import MATCH
 
 print("CWD:", os.getcwd())
 print("Dir files:", os.listdir("."))
@@ -33,7 +34,8 @@ import orjson
 
 ORJSON_OPTS = orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY
 
-app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP], prevent_initial_callbacks='initial_duplicate')
+app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP],
+           prevent_initial_callbacks='initial_duplicate')
 
 # ⚠️ Très important pour Render/Gunicorn
 server = app.server
@@ -74,6 +76,7 @@ from reportlab.platypus import Image
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
 # --- Word / python-docx (import paresseux & sûr) ---
 DOCX_AVAILABLE = False
 DOCX_IMPORT_ERROR = None
@@ -83,12 +86,13 @@ try:
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml.ns import qn
     from docx.oxml import OxmlElement
+
     DOCX_AVAILABLE = True
 except Exception as _e:
     DOCX_AVAILABLE = False
     DOCX_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
 # Imports existants + ces nouveaux
-#import anthropic
+# import anthropic
 import json
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -99,6 +103,7 @@ import requests
 import threading
 import plotly.graph_objects as go
 import time
+
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
 # Cache setup
@@ -109,6 +114,7 @@ cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TI
 def get_df_cached():
     return load_supply_data()  # Fonction pour charger vos données
 
+
 RENDER_ENV = os.getenv("RENDER", False)
 DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
 
@@ -116,7 +122,8 @@ DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
 # 🗄️ CONFIGURATION SUPABASE
 # ============================================================
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://tvaxxzkilrsgfqjswtkt.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR2YXh4emtpbHJzZ2ZxanN3dGt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ3Mzc1NzksImV4cCI6MjA4MDMxMzU3OX0.uIbLmOm2z9YlD5bxh8nXMY2JjqJr8Qj12hmBc7hBPy0")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY",
+                         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR2YXh4emtpbHJzZ2ZxanN3dGt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ3Mzc1NzksImV4cCI6MjA4MDMxMzU3OX0.uIbLmOm2z9YlD5bxh8nXMY2JjqJr8Qj12hmBc7hBPy0")
 
 # Initialiser le client Supabase
 supabase_client = None
@@ -225,7 +232,8 @@ def track_activity(user_id: str, session_id: str, action_type: str, page: str = 
         print(f"⚠️ Erreur track_activity: {e}")
 
 
-def track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: int, new_value: int, supplier: str = None):
+def track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: int, new_value: int,
+                   supplier: str = None):
     """Enregistre une modification QAC"""
     if not supabase_client:
         return
@@ -289,15 +297,14 @@ def get_product_notes(product_name: str) -> list:
 # Variable globale pour stocker la session active
 ACTIVE_SESSIONS = {}  # {username: {"user_id": ..., "session_id": ...}}
 
-
 if RENDER_ENV:
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🚀 DÉMARRAGE SUR RENDER")
-    print("="*60)
+    print("=" * 60)
     print(f"Python version: {sys.version}")
     print(f"Working directory: {os.getcwd()}")
     print(f"Files: {os.listdir('.')[:10]}")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
 # ==========================================
@@ -349,6 +356,8 @@ def run_with_timeout(func, args=(), kwargs=None, timeout_seconds=30):
         raise exception[0]
 
     return result[0]
+
+
 # ------------- OpenAI client (clé hardcodée à ta demande) ----------------
 # OPENAI_API_KEY_HARDCODED = "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"
 # Ligne ~45 dans votre code
@@ -738,6 +747,7 @@ Cet email a été envoyé automatiquement.
         traceback.print_exc()
         return False
 
+
 # ==================== VÉRIFIER LA CONFIGURATION EMAIL ====================
 # Vers ligne 200-250, vérifie que ces variables existent :
 
@@ -758,20 +768,19 @@ TEAM_MEMBERS = {
     "Insa": {"name": "Insa Niang", "email": "insa.niang@maad.io"},
 }
 
-
 # ============================================================
 # 🔐 SYSTÈME D'AUTHENTIFICATION
 # ============================================================
 
-# Mot de passe par défaut: "maad2024" (à changer en production via variables d'environnement)
-DEFAULT_PASSWORD_HASH = hashlib.sha256("maad2024".encode()).hexdigest()
+# Mot de passe par défaut: "maad2025" (à changer en production via variables d'environnement)
+DEFAULT_PASSWORD_HASH = hashlib.sha256("maad2025".encode()).hexdigest()
 
 # Utilisateurs autorisés avec leurs mots de passe hashés
 AUTH_USERS = {
     "tony": {
         "name": "Tony SARRE",
         "email": "tony.sarre@maad.io",
-        "password_hash": hashlib.sha256(os.getenv("TONY_PASSWORD", "maad2024").encode()).hexdigest(),
+        "password_hash": hashlib.sha256(os.getenv("TONY_PASSWORD", "maad2025").encode()).hexdigest(),
         "role": "admin"
     },
     "samuel": {
@@ -1489,14 +1498,15 @@ def get_next_po_number() -> str:
         return f"PO-{today}-{st['seq']:03d}"
 
 
-#import pandas as pd
-#import numpy as np
+# import pandas as pd
+# import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
-#import warnings
+
+# import warnings
 
 warnings.filterwarnings('ignore')
 
@@ -2053,6 +2063,7 @@ def calculate_ads_by_period(period_days: int = 7) -> pd.DataFrame:
         import traceback
         traceback.print_exc()
         return pd.DataFrame(columns=['product_name', f'Average Daily Sales ({period_days}d)'])
+
 
 def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     import numpy as np
@@ -2943,7 +2954,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                 final_stock_sales_df['days_since_reception'] = (
                         pd.Timestamp.now() - final_stock_sales_df['last_reception_date']
                 ).dt.days
-                final_stock_sales_df['last_reception_date'] = final_stock_sales_df['last_reception_date'].dt.strftime('%d/%m/%Y')
+                final_stock_sales_df['last_reception_date'] = final_stock_sales_df['last_reception_date'].dt.strftime(
+                    '%d/%m/%Y')
             except Exception as e:
                 print(f"   ⚠️ Erreur formatage date: {e}")
 
@@ -2953,7 +2965,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                 final_stock_sales_df['last_reception_qty'], 0
             ).astype(int)
 
-        matched = final_stock_sales_df['last_reception_qty'].notna().sum() if 'last_reception_qty' in final_stock_sales_df.columns else 0
+        matched = final_stock_sales_df[
+            'last_reception_qty'].notna().sum() if 'last_reception_qty' in final_stock_sales_df.columns else 0
         print(f"   ✅ {matched}/{before_merge} produits avec données de réception")
     else:
         print("⚠️ Pas de données de réception à fusionner")
@@ -3514,6 +3527,8 @@ def get_preloaded_data(period_days="7d"):
         return DATA_30D.copy()
     else:
         return DATA_7D.copy()
+
+
 # ==================== CALLBACK ROTATION ADS ====================
 '''
 @app.callback(
@@ -3735,6 +3750,8 @@ def update_rotation_period(period_value):
         # ✅ RETOUR EN CAS D'ERREUR (4 valeurs)
         return no_update, no_update, no_update, error_indicator
 '''
+
+
 # Utility: add Actions columns
 def add_action_cols(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
@@ -3757,12 +3774,11 @@ def recalculate_product_metrics(row: pd.Series) -> pd.Series:
         pd.Series avec toutes les métriques recalculées
     """
 
-
     row = row.copy()
 
     # === VALIDATION & NETTOYAGE ===
     numeric_cols = {
-        #'total_stock': 0,
+        # 'total_stock': 0,
         'Average Daily Sales': 0.1,
         'Max Daily Sales (Pikine)': 0,
         'QAC': 0,
@@ -3771,8 +3787,8 @@ def recalculate_product_metrics(row: pd.Series) -> pd.Series:
         'credit_days': 0,
         'ADJUSTED_LEADTIME': 7,
         'AJUSTER_BUFFER': 0,
-        #'target_quantity': 0,
-        #'optimal stock': 0,
+        # 'target_quantity': 0,
+        # 'optimal stock': 0,
         'Max Coverage Day': 0
     }
 
@@ -4040,9 +4056,9 @@ def train_optimal_order_quantity_model(df: pd.DataFrame) -> tuple:
 
 
 # ----------------------------- App & Cache ---------------------------------------
-#app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
-#server = app.server
-#cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
+# app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
+# server = app.server
+# cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
 
 # ------------------------------ Custom CSS & JS ----------------------------------
 app.index_string = """
@@ -4805,10 +4821,12 @@ def get_df_cached():
     return load_supply_data()
 '''
 
+
 @lru_cache(maxsize=10)
 def get_df_cached(period: str = "7d"):
     """Cache avec support période rotation"""
     return load_supply_data(period_days=period)
+
 
 # ------------------------------ Sidebar ------------------------------------------
 def make_sidebar():
@@ -4820,6 +4838,23 @@ def make_sidebar():
     cats = sorted([c for c in df['Product Category'].dropna().unique().tolist() if
                    c != '']) if 'Product Category' in df.columns else []
 
+    # Charger la liste des agents
+    agents_list = []
+    try:
+        agents_df = load_agents_suppliers()
+        if not agents_df.empty:
+            owner_col = 'Owner' if 'Owner' in agents_df.columns else None
+            if not owner_col:
+                for col in agents_df.columns:
+                    if 'owner' in col.lower() or 'agent' in col.lower():
+                        owner_col = col
+                        break
+            if owner_col:
+                agents_list = sorted([a for a in agents_df[owner_col].dropna().unique().tolist()
+                                      if a and str(a).strip() != '' and str(a) != 'nan'])
+    except Exception as e:
+        print(f"⚠️ Erreur chargement agents pour sidebar: {e}")
+
     return html.Div(className="sidebar", children=[
         html.Div([
             html.Div([
@@ -4830,7 +4865,7 @@ def make_sidebar():
             html.Div("Supply Chain Command Center", className="muted")
         ]),
         html.Hr(),
-        #html.Div(className="banner-risk", id="risk-banner", children="Chargement..."),
+        # html.Div(className="banner-risk", id="risk-banner", children="Chargement..."),
         html.Div(className="section-title", children="Recherche"),
         dbc.InputGroup(className="search-input", children=[
             dbc.Input(id="search-input", placeholder="Rechercher un produit...", type="text", debounce=True)
@@ -4869,6 +4904,15 @@ def make_sidebar():
                 persistence=True
             ),
             html.Br(),
+            html.Small("👤 Agent"),
+            dcc.Dropdown(
+                id="filter-agent",
+                options=[{"label": "Tous", "value": "all"}] + [{"label": a, "value": a} for a in agents_list],
+                value="all",
+                placeholder="Tous les agents",
+                persistence=True
+            ),
+            html.Br(),
             dbc.Checklist(
                 options=[
                     {"label": "Regrouper par produit (dé-dup)", "value": "by_product"},
@@ -4882,7 +4926,8 @@ def make_sidebar():
         html.Br(),
         html.Div([
             html.Span(" "),
-            dbc.Button("📄 Bon de commande", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True), # Le bouton est désactivé par défaut
+            dbc.Button("📄 Bon de commande", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True),
+            # Le bouton est désactivé par défaut
             # ✅ AJOUTER : Modal de chargement
             dbc.Modal(
                 [
@@ -5057,8 +5102,6 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
             # Optionnel : garder aussi Suppliers (all) pour référence
 
     return grouped
-
-
 
 
 # ------------------------------ Pages --------------------------------------------
@@ -5441,6 +5484,8 @@ def make_kpis(df: pd.DataFrame):
     )
 
     return cards, bell
+
+
 '''
 def make_kpis(df: pd.DataFrame):
     """Calcule les KPIs (SKUs, ruptures, fournisseurs) + alerte dropdown produits à risque (ML)."""
@@ -5674,6 +5719,8 @@ def make_kpis(df: pd.DataFrame):
 
     return cards, bell
 '''
+
+
 @app.callback(
     Output("risk-alert-collapse", "is_open"),
     Input("risk-alert-toggle", "n_clicks"),
@@ -5740,8 +5787,6 @@ def page_overview(master_df: pd.DataFrame = None):
     df = master_df if master_df is not None else get_df_cached()
     df = df.copy()
 
-
-
     # === UI HARDENING (garantir présence + valeurs non vides) ===
     def _ui_harden(df):
         # Supplier non vide
@@ -5789,7 +5834,7 @@ def page_overview(master_df: pd.DataFrame = None):
     # ✅ 1. DÉFINIR colonnes prioritaires overview
     cols_priority_overview = [
 
-        #"delete",
+        # "delete",
         "product_id",
         "product_name",
         "Supplier",
@@ -5895,9 +5940,9 @@ def page_overview(master_df: pd.DataFrame = None):
 
     # Insérer les colonnes "edit" et "delete" dans le DataFrame avec un message d'action ou une valeur par défaut
     # df_with_actions.insert(0, "delete", "delete")  # Colonne Delete
-    #df_with_actions.insert(0, "edit", "edit")  # Colonne Edit
+    # df_with_actions.insert(0, "edit", "edit")  # Colonne Edit
     # Appliquer la fonction pour ajouter les colonnes "edit" et "delete"
-    #df_with_actions = add_action_cols(df)
+    # df_with_actions = add_action_cols(df)
 
     # Mettre à jour la liste des colonnes disponibles
     available_cols_with_actions = ["edit", "delete"] + available_cols
@@ -5945,7 +5990,7 @@ def page_overview(master_df: pd.DataFrame = None):
     })
 
     # Ajouter la nouvelle colonne 'QAC edited' dans available_cols
-    available_cols = available_cols #+ ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
+    available_cols = available_cols  # + ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
 
     # Générer dynamiquement les colonnes et rendre 'QAC edited' editable
     columns = [
@@ -6421,24 +6466,24 @@ def page_overview(master_df: pd.DataFrame = None):
     action_buttons = dbc.ButtonGroup([
         dbc.Button("🔄 Actualiser", id="btn-refresh", className="btn-outline-secondary", size="sm"),
         dbc.Button("➕ Ajouter produit", id="btn-add-row", className="btn-primary", size="sm"),
-        dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, className="btn-success", size="sm"), # ✅ nouveau
+        dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, className="btn-success",
+                   size="sm"),  # ✅ nouveau
     ], style={"marginBottom": "15px"})
 
-
     # Dropdown filter-status
-    #dcc.Dropdown(
+    # dcc.Dropdown(
     #   id="filter-status",
     #  options=[
     #     {"label": "Tous", "value": "all"},
     #    {"label": "Stock OK", "value": "ok"},
     #   {"label": "Rupture", "value": "oos"}
-    #],
-    #value="all",
-    #className="filter-dropdown"
-    #)
+    # ],
+    # value="all",
+    # className="filter-dropdown"
+    # )
 
     # Modal édition
-    #edit_modal = dbc.Modal(
+    # edit_modal = dbc.Modal(
     #   [
     #      dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
     #     dbc.ModalBody([
@@ -6447,11 +6492,11 @@ def page_overview(master_df: pd.DataFrame = None):
     #  ]),
     # dbc.ModalFooter(
     #    dbc.Button("Fermer", id="close-edit", className="ms-auto", n_clicks=0)
-    #),
-    #],
-    #id="edit-modal",
-    #is_open=False,
-    #)
+    # ),
+    # ],
+    # id="edit-modal",
+    # is_open=False,
+    # )
 
     # ✅ NOUVEAU : Bouton flottant + Modal amélioré
     notes_fab_button = html.Button(
@@ -6806,6 +6851,7 @@ def apply_filters(search, sup, cat, need, options, master_json):
         []
     )
 
+
 @app.callback(
     Output("master-data", "data", allow_duplicate=True),
     Input("rotation-period", "value"),
@@ -6865,6 +6911,7 @@ def update_rotation_simple(period_value):
         import traceback
         traceback.print_exc()
         return no_update
+
 
 '''
 # Callback 2 : Filtrage (avec allow_duplicate)
@@ -7059,6 +7106,8 @@ def update_rotation(period_value):
         print(f"❌ Erreur : {e}\n")
         return no_update
 '''
+
+
 @app.callback(
     Output("master-data", "data", allow_duplicate=True),
     Input("btn-refresh", "n_clicks"),
@@ -7071,6 +7120,8 @@ def force_refresh_master(n_clicks):
         print(f"🔄 Données rechargées : {len(df)} produits")
         return df.to_json(orient="records")
     return no_update
+
+
 '''@app.callback(
     Output("main-table", "selected_rows", allow_duplicate=True),
     [Input("search-input", "value"),
@@ -7384,6 +7435,7 @@ def send_note_with_notifications(n_clicks, message, author, product_name):
 
     return notes_display, "", author, feedback
 
+
 @app.callback(
     Output('main-table', 'data', allow_duplicate=True),  # Cela dépend de ce que tu veux actualiser
     Input('btn-refresh', 'n_clicks'),
@@ -7395,6 +7447,8 @@ def refresh_data(n_clicks):
         updated_data = load_supply_data()  # Assure-toi d'avoir une fonction load_data() qui recharge les données
         return updated_data
     return no_update
+
+
 @app.callback(
     Output('main-table', 'data', allow_duplicate=True),
     Input('btn-add-row', 'n_clicks'),
@@ -7412,6 +7466,8 @@ def add_new_product(n_clicks, current_data):
         current_data.append(new_product)
         return current_data
     return no_update
+
+
 '''
 
 def page_analytics(master_df: pd.DataFrame = None):
@@ -8704,6 +8760,8 @@ def update_predictive_table(supplier_value, category_value):
 
     return df.to_dict("records")
 '''
+
+
 # ==========================================
 # 🔧 HELPER : PLACEHOLDER POUR ÉVITER ERREURS
 # ==========================================
@@ -8719,6 +8777,7 @@ def create_hidden_table_placeholder():
         columns=[],
         style_table={"display": "none"}
     )
+
 
 def page_analytics(master_df: pd.DataFrame = None):
     """Page Analytics avec filtres sidebar et graphiques dynamiques"""
@@ -9459,6 +9518,8 @@ def update_predictive_all_charts(supplier_filter, category_filter, need_filter, 
         fig_risk,
         df.to_dict("records")
     )
+
+
 def page_about():
     return html.Div(className="content", children=[
         html.H2("À propos", className="page-title"),
@@ -9779,30 +9840,42 @@ def calculate_agent_performance(master_df: pd.DataFrame, agents_df: pd.DataFrame
         risk_count = 0
         avg_rotation = 0
 
-        if not master_df.empty and 'supplier_name' in master_df.columns:
+        # Chercher la bonne colonne supplier dans master_df
+        supplier_col_master = None
+        for col in ['Supplier', 'supplier_name', 'supplier']:
+            if col in master_df.columns:
+                supplier_col_master = col
+                break
+
+        if not master_df.empty and supplier_col_master:
             # Normaliser pour la comparaison
             suppliers_normalized = [s.lower().strip() for s in suppliers]
 
             # Filtrer les produits de cet agent
             agent_products = master_df[
-                master_df['supplier_name'].astype(str).str.lower().str.strip().isin(suppliers_normalized)
+                master_df[supplier_col_master].astype(str).str.lower().str.strip().isin(suppliers_normalized)
             ].copy()
 
             total_skus = len(agent_products)
 
             if 'total_stock' in agent_products.columns:
+                agent_products['total_stock'] = pd.to_numeric(agent_products['total_stock'], errors='coerce').fillna(0)
                 total_stock = int(agent_products['total_stock'].sum())
                 rupture_count = int((agent_products['total_stock'] <= 0).sum())
 
             # Produits à risque (couverture < 7 jours)
             if 'rotation_days' in agent_products.columns:
+                agent_products['rotation_days'] = pd.to_numeric(agent_products['rotation_days'],
+                                                                errors='coerce').fillna(999)
                 risk_count = int(((agent_products['rotation_days'] < 7) & (agent_products['rotation_days'] > 0)).sum())
-                avg_rotation = agent_products['rotation_days'].mean()
+                valid_rotations = agent_products[agent_products['rotation_days'] < 999]['rotation_days']
+                avg_rotation = valid_rotations.mean() if len(valid_rotations) > 0 else 0
             elif 'Average Daily Sales' in agent_products.columns and 'total_stock' in agent_products.columns:
-                ads = agent_products['Average Daily Sales'].replace(0, 0.1)
-                rotations = agent_products['total_stock'] / ads
+                ads = pd.to_numeric(agent_products['Average Daily Sales'], errors='coerce').fillna(0.1).replace(0, 0.1)
+                stock = pd.to_numeric(agent_products['total_stock'], errors='coerce').fillna(0)
+                rotations = stock / ads
                 risk_count = int(((rotations < 7) & (rotations > 0)).sum())
-                avg_rotation = rotations.mean()
+                avg_rotation = rotations.mean() if len(rotations) > 0 else 0
 
         # Taux de rupture
         rupture_rate = (rupture_count / total_skus * 100) if total_skus > 0 else 0
@@ -9915,300 +9988,261 @@ def get_agent_for_product(product_supplier, mapping=None):
 
 
 def page_agents(master_df: pd.DataFrame = None):
-    """Page de suivi de performance des agents - Version compacte avec filtres"""
+    """Page de suivi de performance des agents - Compacte et adaptée au layout"""
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("👤 CHARGEMENT PAGE AGENTS")
-    print("="*60)
+    print("=" * 60)
 
-    # Charger les données agents-fournisseurs
+    # Charger les données
     agents_df = load_agents_suppliers()
 
-    # Calculer les performances
     if master_df is None:
         master_df = initial_df if 'initial_df' in globals() else pd.DataFrame()
 
     performance_df = calculate_agent_performance(master_df, agents_df)
-
-    # Créer le mapping supplier → agent
     supplier_agent_map = get_supplier_agent_mapping()
-
-    # Liste des agents pour le filtre
-    agents_list = performance_df['agent_name'].tolist() if not performance_df.empty else []
 
     print(f"   📊 {len(performance_df)} agents avec performances calculées")
 
     # ==========================================
-    # HEADER COMPACT
+    # CALCULS KPIs RIGOUREUX
     # ==========================================
-    header = html.Div([
-        html.Div([
-            html.H3("👤 Performance Agents", style={
-                "margin": "0", "fontSize": "20px", "fontWeight": "700", "color": "#f0f4f8"
-            }),
-            html.Span("Évaluation pour rémunération variable", style={
-                "color": "#64748b", "fontSize": "12px", "marginLeft": "12px"
-            })
-        ], style={"display": "flex", "alignItems": "center"}),
-        dbc.Button("📊 Export", id="export-agents-report", size="sm", color="info",
-                   style={"borderRadius": "8px"})
-    ], style={
-        "display": "flex", "justifyContent": "space-between", "alignItems": "center",
-        "marginBottom": "16px", "paddingBottom": "12px", "borderBottom": "1px solid #334155"
-    })
+    total_agents = len(performance_df) if not performance_df.empty else 0
+
+    # Score moyen pondéré
+    avg_score = 0
+    if not performance_df.empty and 'score_global' in performance_df.columns:
+        scores = performance_df['score_global'].dropna()
+        avg_score = scores.mean() if len(scores) > 0 else 0
+
+    # Valeur totale commandes (depuis agents_df, pas performance_df)
+    total_order_value = 0
+    if not performance_df.empty and 'total_order_value' in performance_df.columns:
+        total_order_value = performance_df['total_order_value'].sum()
+
+    # Taux traitement moyen
+    avg_taux_traitement = 0
+    if not performance_df.empty and 'taux_traitement' in performance_df.columns:
+        taux = performance_df['taux_traitement'].dropna()
+        avg_taux_traitement = taux.mean() if len(taux) > 0 else 0
+
+    # Total refs OOS (depuis performance_df)
+    total_refs_oos = 0
+    if not performance_df.empty and 'refs_oos' in performance_df.columns:
+        total_refs_oos = int(performance_df['refs_oos'].fillna(0).sum())
+
+    # Total ruptures (produits avec stock <= 0 dans master_df)
+    total_ruptures = 0
+    if not master_df.empty and 'total_stock' in master_df.columns:
+        stock = pd.to_numeric(master_df['total_stock'], errors='coerce').fillna(0)
+        total_ruptures = int((stock <= 0).sum())
+
+    print(
+        f"   📈 KPIs: agents={total_agents}, score={avg_score:.1f}, cmd={total_order_value / 1e6:.1f}M, oos={total_refs_oos}, rupt={total_ruptures}")
 
     # ==========================================
-    # FILTRE PAR AGENT (nouveau)
+    # KPIs EN LIGNE (style compact)
     # ==========================================
-    agent_filter = html.Div([
-        html.Label("👤 Filtrer par Agent", style={
-            "fontSize": "11px", "color": "#94a3b8", "marginBottom": "4px", "display": "block"
-        }),
-        dcc.Dropdown(
-            id="filter-agent",
-            options=[{"label": "Tous les agents", "value": "all"}] +
-                    [{"label": a, "value": a} for a in agents_list],
-            value="all",
-            placeholder="Sélectionner un agent",
-            style={"fontSize": "12px"},
-            className="dark-dropdown"
-        )
-    ], style={
-        "background": "rgba(30, 41, 59, 0.5)", "borderRadius": "10px",
-        "padding": "12px", "marginBottom": "16px"
-    })
+    kpi_style = {
+        "display": "inline-flex", "alignItems": "center", "gap": "4px",
+        "background": "rgba(30, 41, 59, 0.6)", "borderRadius": "6px",
+        "padding": "5px 10px", "fontSize": "12px"
+    }
+
+    kpis_row = html.Div([
+        html.Div([html.Span("👥"), html.B(f"{total_agents}", style={"color": "#22d3ee"}),
+                  html.Span("agents", style={"color": "#64748b", "fontSize": "10px"})], style=kpi_style),
+        html.Div(
+            [html.Span("🎯"), html.B(f"{avg_score:.0f}", style={"color": "#34d399" if avg_score >= 60 else "#f87171"}),
+             html.Span("score", style={"color": "#64748b", "fontSize": "10px"})], style=kpi_style),
+        html.Div([html.Span("💰"), html.B(f"{total_order_value / 1e6:.0f}M", style={"color": "#a78bfa"}),
+                  html.Span("cmd", style={"color": "#64748b", "fontSize": "10px"})], style=kpi_style),
+        html.Div([html.Span("✅"), html.B(f"{avg_taux_traitement:.0f}%", style={"color": "#34d399"}),
+                  html.Span("trait", style={"color": "#64748b", "fontSize": "10px"})], style=kpi_style),
+        html.Div([html.Span("⚠️"), html.B(f"{total_refs_oos}", style={"color": "#fbbf24"}),
+                  html.Span("oos", style={"color": "#64748b", "fontSize": "10px"})], style=kpi_style),
+        html.Div([html.Span("🚨"), html.B(f"{total_ruptures}", style={"color": "#f87171"}),
+                  html.Span("rupt", style={"color": "#64748b", "fontSize": "10px"})], style=kpi_style),
+    ], style={"display": "flex", "flexWrap": "wrap", "gap": "6px", "marginBottom": "10px"})
 
     # ==========================================
-    # KPI CARDS COMPACTES (2 lignes de 3)
+    # PODIUM TOP 3 (inline)
     # ==========================================
-    total_agents = len(performance_df)
-    avg_score = performance_df['score_global'].mean() if not performance_df.empty else 0
-    total_order_value = performance_df['total_order_value'].sum() if not performance_df.empty else 0
-    total_ruptures = performance_df['rupture_count'].sum() if not performance_df.empty else 0
-    total_refs_oos = performance_df['refs_oos'].sum() if not performance_df.empty else 0
-    avg_taux_traitement = performance_df['taux_traitement'].mean() if not performance_df.empty else 0
-
-    def mini_kpi(icon, value, label, color):
-        return html.Div([
-            html.Span(icon, style={"fontSize": "18px", "marginRight": "8px"}),
-            html.Span(value, style={"fontSize": "20px", "fontWeight": "700", "color": color}),
-            html.Span(f" {label}", style={"fontSize": "11px", "color": "#64748b"})
-        ], style={
-            "background": "rgba(30, 41, 59, 0.5)", "borderRadius": "8px",
-            "padding": "10px 14px", "display": "flex", "alignItems": "center"
+    podium = html.Div()
+    if not performance_df.empty and len(performance_df) >= 1:
+        medals = ["🥇", "🥈", "🥉"]
+        colors = ["#fbbf24", "#94a3b8", "#b45309"]
+        items = []
+        for i in range(min(3, len(performance_df))):
+            a = performance_df.iloc[i]
+            items.append(html.Span([
+                medals[i], " ", html.B(a['agent_name'], style={"color": colors[i]}),
+                html.Span(f" ({a['score_global']:.0f})", style={"color": "#64748b"})
+            ], style={"marginRight": "10px"}))
+        podium = html.Div(["🏆 ", *items], style={
+            "background": "rgba(30, 41, 59, 0.4)", "borderRadius": "6px",
+            "padding": "6px 10px", "marginBottom": "10px", "fontSize": "11px"
         })
 
-    kpi_row = html.Div([
-        mini_kpi("👥", str(total_agents), "Agents", "#22d3ee"),
-        mini_kpi("🎯", f"{avg_score:.0f}", "Score moy", "#34d399" if avg_score >= 60 else "#f87171"),
-        mini_kpi("💰", f"{total_order_value/1e6:.0f}M", "Commandes", "#a78bfa"),
-        mini_kpi("✅", f"{avg_taux_traitement:.0f}%", "Traitement", "#34d399"),
-        mini_kpi("⚠️", str(int(total_refs_oos)), "Refs OOS", "#fbbf24"),
-        mini_kpi("🚨", str(int(total_ruptures)), "Ruptures", "#f87171"),
-    ], style={
-        "display": "grid", "gridTemplateColumns": "repeat(6, 1fr)", "gap": "8px", "marginBottom": "16px"
-    })
-
     # ==========================================
-    # PODIUM COMPACT (horizontal)
+    # TABLE AGENTS (compacte)
     # ==========================================
-    podium_items = []
-    medals = ["🥇", "🥈", "🥉"]
-    colors = ["#fbbf24", "#94a3b8", "#b45309"]
-
-    for i in range(min(3, len(performance_df))):
-        agent = performance_df.iloc[i]
-        podium_items.append(
-            html.Div([
-                html.Span(medals[i], style={"fontSize": "24px", "marginRight": "8px"}),
-                html.Div([
-                    html.Div(agent['agent_name'], style={"fontWeight": "700", "color": colors[i], "fontSize": "14px"}),
-                    html.Div(f"Score: {agent['score_global']:.1f} • {agent['total_order_value']/1e6:.1f}M",
-                             style={"fontSize": "11px", "color": "#94a3b8"})
-                ])
-            ], style={
-                "display": "flex", "alignItems": "center", "padding": "8px 16px",
-                "background": f"rgba({253 if i==0 else 148 if i==1 else 180}, {191 if i==0 else 163 if i==1 else 83}, {36 if i==0 else 184 if i==1 else 9}, 0.15)",
-                "borderRadius": "8px", "borderLeft": f"3px solid {colors[i]}"
-            })
-        )
-
-    podium = html.Div([
-        html.Span("🏆 Classement", style={"fontSize": "13px", "fontWeight": "600", "color": "#f0f4f8", "marginRight": "16px"}),
-        html.Div(podium_items, style={"display": "flex", "gap": "12px", "flexWrap": "wrap"})
-    ], style={
-        "background": "rgba(30, 41, 59, 0.3)", "borderRadius": "10px",
-        "padding": "12px 16px", "marginBottom": "16px", "display": "flex", "alignItems": "center"
-    })
-
-    # ==========================================
-    # TABLE AGENTS COMPACTE
-    # ==========================================
-    table_columns = [
-        {"name": "#", "id": "rank"},
-        {"name": "Agent", "id": "agent_name"},
-        {"name": "Fourn.", "id": "total_suppliers"},
-        {"name": "Valeur", "id": "total_order_value_fmt"},
-        {"name": "Traitées", "id": "commandes_traitees"},
-        {"name": "Pending", "id": "commandes_pending"},
-        {"name": "Taux", "id": "taux_traitement_fmt"},
-        {"name": "OOS", "id": "refs_oos"},
-        {"name": "Score", "id": "score_global"},
-    ]
-
     table_data = []
     if not performance_df.empty:
         for idx, row in performance_df.iterrows():
             table_data.append({
                 'rank': idx + 1,
-                'agent_name': row['agent_name'],
-                'total_suppliers': row['total_suppliers'],
-                'total_order_value_fmt': f"{row['total_order_value']/1e6:.1f}M",
-                'commandes_traitees': row['commandes_traitees'],
-                'commandes_pending': row['commandes_pending'],
-                'taux_traitement_fmt': f"{row['taux_traitement']:.0f}%",
-                'refs_oos': int(row['refs_oos']),
-                'score_global': round(row['score_global'], 1)
+                'agent': row['agent_name'],
+                'frs': int(row['total_suppliers']),
+                'val': f"{row['total_order_value'] / 1e6:.1f}M",
+                'ok': int(row['commandes_traitees']),
+                'pend': int(row['commandes_pending']),
+                'pct': f"{row['taux_traitement']:.0f}%",
+                'sku': int(row['total_skus']),
+                'rupt': int(row['rupture_count']),
+                'sc': round(row['score_global'], 1)
             })
 
     agents_table = dash_table.DataTable(
         id='agents-performance-table',
-        columns=table_columns,
+        columns=[
+            {"name": "#", "id": "rank"},
+            {"name": "Agent", "id": "agent"},
+            {"name": "Frs", "id": "frs"},
+            {"name": "Val", "id": "val"},
+            {"name": "OK", "id": "ok"},
+            {"name": "⏳", "id": "pend"},
+            {"name": "%", "id": "pct"},
+            {"name": "SKU", "id": "sku"},
+            {"name": "🚨", "id": "rupt"},
+            {"name": "Sc", "id": "sc"},
+        ],
         data=table_data,
-        style_table={'overflowX': 'auto', 'borderRadius': '8px', 'maxHeight': '280px'},
+        style_table={'overflowX': 'auto'},
         style_header={
-            'backgroundColor': '#1e293b', 'color': '#94a3b8', 'fontWeight': '600',
-            'fontSize': '10px', 'textTransform': 'uppercase', 'border': 'none',
-            'padding': '8px 6px', 'textAlign': 'center'
+            'backgroundColor': '#1e293b', 'color': '#64748b', 'fontWeight': '600',
+            'fontSize': '9px', 'border': 'none', 'padding': '4px 2px', 'textAlign': 'center'
         },
         style_cell={
             'backgroundColor': '#0f172a', 'color': '#e2e8f0', 'border': 'none',
-            'padding': '8px 6px', 'fontSize': '12px', 'textAlign': 'center'
+            'padding': '4px 2px', 'fontSize': '10px', 'textAlign': 'center', 'minWidth': '30px'
         },
         style_data_conditional=[
-            {'if': {'filter_query': '{score_global} >= 70'}, 'backgroundColor': 'rgba(34, 197, 94, 0.15)'},
-            {'if': {'filter_query': '{score_global} < 50'}, 'backgroundColor': 'rgba(239, 68, 68, 0.15)'},
-            {'if': {'filter_query': '{rank} = 1'}, 'borderLeft': '3px solid #fbbf24'},
-            {'if': {'column_id': 'score_global'}, 'fontWeight': '700'},
-            {'if': {'filter_query': '{commandes_pending} > 0', 'column_id': 'commandes_pending'}, 'color': '#fbbf24'},
+            {'if': {'filter_query': '{rank} = 1'}, 'borderLeft': '2px solid #fbbf24'},
+            {'if': {'column_id': 'sc'}, 'fontWeight': '700', 'color': '#22d3ee'},
+            {'if': {'filter_query': '{pend} > 0', 'column_id': 'pend'}, 'color': '#fbbf24'},
+            {'if': {'filter_query': '{rupt} > 0', 'column_id': 'rupt'}, 'color': '#f87171'},
         ],
-        row_selectable='single',
-        selected_rows=[],
-        page_size=5,
-        sort_action='native'
+        row_selectable='single', selected_rows=[], page_size=5, sort_action='native'
     )
 
-    table_section = html.Div([
-        html.Div([
-            html.Span("📋 Performance par Agent", style={"fontSize": "13px", "fontWeight": "600", "color": "#f0f4f8"}),
-            html.Span(" • Cliquez pour voir les fournisseurs", style={"fontSize": "11px", "color": "#64748b"})
-        ], style={"marginBottom": "10px"}),
-        agents_table
-    ], style={
-        "background": "rgba(30, 41, 59, 0.5)", "borderRadius": "12px", "padding": "14px", "marginBottom": "16px"
-    })
-
     # ==========================================
-    # PRODUITS À RISQUE PAR AGENT
+    # PRODUITS À RISQUE (compacte)
     # ==========================================
-    # Identifier les produits à risque et leur agent
     risk_products = []
     if not master_df.empty and supplier_agent_map:
-        # Produits en rupture ou à risque (rotation < 7j)
         risk_df = master_df.copy()
         if 'rotation_days' in risk_df.columns:
-            risk_df['rotation_days'] = pd.to_numeric(risk_df['rotation_days'], errors='coerce').fillna(999)
+            risk_df['_rot'] = pd.to_numeric(risk_df['rotation_days'], errors='coerce').fillna(999)
         else:
-            risk_df['rotation_days'] = 999
-        risk_df['total_stock'] = pd.to_numeric(risk_df.get('total_stock', 0), errors='coerce').fillna(0)
+            risk_df['_rot'] = 999
+        if 'total_stock' in risk_df.columns:
+            risk_df['_stk'] = pd.to_numeric(risk_df['total_stock'], errors='coerce').fillna(0)
+        else:
+            risk_df['_stk'] = 0
 
-        # Filtrer : stock <= 0 ou rotation < 7 jours
-        risk_mask = (risk_df['total_stock'] <= 0) | (risk_df['rotation_days'] < 7)
-        risk_df = risk_df[risk_mask].head(50)  # Limiter à 50 pour la perf
-
-        for _, row in risk_df.iterrows():
-            supplier = str(row.get('Supplier', '')).strip()
-            agent = get_agent_for_product(supplier, supplier_agent_map)
+        risk_mask = (risk_df['_stk'] <= 0) | (risk_df['_rot'] < 7)
+        for _, row in risk_df[risk_mask].head(20).iterrows():
+            sup = str(row.get('Supplier', '')).strip()
             risk_products.append({
-                'product': str(row.get('product_name', 'N/A'))[:40],
-                'supplier': supplier[:20] if supplier else 'N/A',
-                'agent': agent,
-                'stock': int(row.get('total_stock', 0)),
-                'rotation': round(row.get('rotation_days', 0), 1) if row.get('rotation_days', 0) < 100 else 'N/A',
-                'status': '🔴 Rupture' if row.get('total_stock', 0) <= 0 else '🟡 Risque'
+                'st': '🔴' if row['_stk'] <= 0 else '🟡',
+                'prod': str(row.get('product_name', ''))[:25],
+                'sup': sup[:10],
+                'agt': get_agent_for_product(sup, supplier_agent_map)[:10],
+                'stk': int(row['_stk']),
             })
 
     risk_table = dash_table.DataTable(
         id='agents-risk-products-table',
         columns=[
-            {"name": "Statut", "id": "status"},
-            {"name": "Produit", "id": "product"},
-            {"name": "Fournisseur", "id": "supplier"},
-            {"name": "👤 Agent", "id": "agent"},
-            {"name": "Stock", "id": "stock"},
-            {"name": "Rotation", "id": "rotation"},
+            {"name": "", "id": "st"},
+            {"name": "Produit", "id": "prod"},
+            {"name": "Frs", "id": "sup"},
+            {"name": "Agent", "id": "agt"},
+            {"name": "Stk", "id": "stk"},
         ],
         data=risk_products,
-        style_table={'overflowX': 'auto', 'borderRadius': '8px', 'maxHeight': '300px'},
+        style_table={'overflowX': 'auto'},
         style_header={
-            'backgroundColor': '#1e293b', 'color': '#94a3b8', 'fontWeight': '600',
-            'fontSize': '10px', 'textTransform': 'uppercase', 'border': 'none',
-            'padding': '8px 6px', 'textAlign': 'left'
+            'backgroundColor': '#1e293b', 'color': '#64748b', 'fontWeight': '600',
+            'fontSize': '9px', 'border': 'none', 'padding': '3px 2px', 'textAlign': 'left'
         },
         style_cell={
             'backgroundColor': '#0f172a', 'color': '#e2e8f0', 'border': 'none',
-            'padding': '6px 8px', 'fontSize': '11px', 'textAlign': 'left',
-            'maxWidth': '150px', 'overflow': 'hidden', 'textOverflow': 'ellipsis'
+            'padding': '3px 2px', 'fontSize': '9px', 'textAlign': 'left',
+            'maxWidth': '80px', 'overflow': 'hidden', 'textOverflow': 'ellipsis'
         },
         style_data_conditional=[
-            {'if': {'filter_query': '{status} contains "Rupture"'}, 'backgroundColor': 'rgba(239, 68, 68, 0.15)'},
-            {'if': {'filter_query': '{status} contains "Risque"'}, 'backgroundColor': 'rgba(251, 191, 36, 0.1)'},
-            {'if': {'column_id': 'agent'}, 'fontWeight': '600', 'color': '#22d3ee'},
+            {'if': {'filter_query': '{st} = "🔴"'}, 'backgroundColor': 'rgba(239, 68, 68, 0.08)'},
+            {'if': {'column_id': 'agt'}, 'fontWeight': '600', 'color': '#22d3ee'},
         ],
-        page_size=10,
-        sort_action='native',
-        filter_action='native'
+        page_size=5, sort_action='native'
     )
 
-    risk_section = html.Div([
-        html.Div([
-            html.Span("🚨 Produits à Risque par Agent", style={"fontSize": "13px", "fontWeight": "600", "color": "#f0f4f8"}),
-            html.Span(f" • {len(risk_products)} produits", style={"fontSize": "11px", "color": "#64748b"})
-        ], style={"marginBottom": "10px"}),
-        risk_table
-    ], style={
-        "background": "rgba(30, 41, 59, 0.5)", "borderRadius": "12px", "padding": "14px", "marginBottom": "16px"
-    })
+    # ==========================================
+    # LAYOUT 2 COLONNES
+    # ==========================================
+    tables_row = dbc.Row([
+        dbc.Col([
+            html.Div("📋 Performance",
+                     style={"fontSize": "11px", "fontWeight": "600", "marginBottom": "4px", "color": "#94a3b8"}),
+            agents_table
+        ], width=6, style={"paddingRight": "4px"}),
+        dbc.Col([
+            html.Div(f"🚨 Risques ({len(risk_products)})",
+                     style={"fontSize": "11px", "fontWeight": "600", "marginBottom": "4px", "color": "#94a3b8"}),
+            risk_table
+        ], width=6, style={"paddingLeft": "4px"})
+    ], style={"marginBottom": "8px"})
 
     # ==========================================
-    # DÉTAIL FOURNISSEURS (placeholder)
+    # DÉTAIL FOURNISSEURS
     # ==========================================
-    detail_section = html.Div([
-        html.Div([
-            html.Span("🔍 Détail Fournisseurs", style={"fontSize": "13px", "fontWeight": "600", "color": "#f0f4f8"})
-        ], style={"marginBottom": "10px"}),
+    detail = html.Div([
+        html.Span("🔍 ", style={"marginRight": "4px"}),
         html.Div(id="agent-suppliers-detail", children=[
-            html.P("Sélectionnez un agent dans le tableau pour voir ses fournisseurs",
-                   style={"color": "#64748b", "textAlign": "center", "padding": "20px", "fontSize": "12px"})
-        ])
+            html.Span("Cliquez un agent pour voir ses fournisseurs", style={"color": "#64748b", "fontSize": "10px"})
+        ], style={"display": "inline"})
     ], style={
-        "background": "rgba(30, 41, 59, 0.5)", "borderRadius": "12px", "padding": "14px"
+        "background": "rgba(30, 41, 59, 0.3)", "borderRadius": "6px",
+        "padding": "5px 8px", "fontSize": "10px"
     })
 
     # ==========================================
-    # LAYOUT FINAL COMPACT
+    # RETURN AVEC className="content" OBLIGATOIRE
     # ==========================================
-    return html.Div([
-        header,
-        agent_filter,
-        kpi_row,
+    return html.Div(className="content", children=[
+        # Header
+        html.Div([
+            html.H4("👤 Performance Agents",
+                    style={"margin": "0", "fontSize": "16px", "fontWeight": "700", "color": "#22d3ee"}),
+            html.P("Utilisez le filtre Agent dans le sidebar",
+                   style={"margin": "2px 0 0 0", "color": "#64748b", "fontSize": "10px"})
+        ], style={"marginBottom": "8px"}),
+
+        # KPIs
+        kpis_row,
+
+        # Podium
         podium,
-        dbc.Row([
-            dbc.Col([table_section], width=6),
-            dbc.Col([risk_section], width=6)
-        ]),
-        detail_section
-    ], style={"padding": "12px"})
+
+        # Tables
+        tables_row,
+
+        # Détail
+        detail
+    ])
 
 
 # ==========================================
@@ -10224,24 +10258,24 @@ def page_agents(master_df: pd.DataFrame = None):
 def show_agent_suppliers_detail(selected_rows, table_data):
     """Affiche les fournisseurs détaillés quand un agent est sélectionné"""
     if not selected_rows or not table_data:
-        return html.P("Sélectionnez un agent dans le tableau pour voir ses fournisseurs",
-                      style={"color": "#64748b", "textAlign": "center", "padding": "20px", "fontSize": "12px"})
+        return html.Span("Cliquez sur un agent pour voir ses fournisseurs",
+                         style={"color": "#64748b", "fontSize": "10px"})
 
-    # Récupérer l'agent sélectionné
-    agent_name = table_data[selected_rows[0]]['agent_name']
+    # Récupérer l'agent sélectionné (colonne renommée en 'agent')
+    agent_name = table_data[selected_rows[0]].get('agent', table_data[selected_rows[0]].get('agent_name', ''))
+
+    if not agent_name:
+        return html.Span("Agent non trouvé", style={"color": "#f87171", "fontSize": "10px"})
 
     # Charger les données agents
     agents_df = load_agents_suppliers()
 
     if agents_df.empty:
-        return html.P("Données non disponibles", style={"color": "#f87171", "textAlign": "center"})
+        return html.Span("Données non disponibles", style={"color": "#f87171", "fontSize": "10px"})
 
     # Identifier les colonnes
     owner_col = 'Owner' if 'Owner' in agents_df.columns else None
     supplier_col = 'Liste des Fournisseurs' if 'Liste des Fournisseurs' in agents_df.columns else None
-    order_value_col = 'Total Order Value' if 'Total Order Value' in agents_df.columns else None
-    refs_oos_col = '# Refs OOS' if '# Refs OOS' in agents_df.columns else None
-    traitement_col = 'Traitement' if 'Traitement' in agents_df.columns else None
 
     if not owner_col:
         for col in agents_df.columns:
@@ -10256,56 +10290,24 @@ def show_agent_suppliers_detail(selected_rows, table_data):
                 break
 
     if not owner_col or not supplier_col:
-        return html.P("Colonnes non trouvées", style={"color": "#f87171", "textAlign": "center"})
+        return html.Span("Colonnes non trouvées", style={"color": "#f87171", "fontSize": "10px"})
 
     # Filtrer par agent
     agent_data = agents_df[agents_df[owner_col].astype(str).str.strip() == agent_name]
 
     if agent_data.empty:
-        return html.P(f"Aucune donnée pour {agent_name}", style={"color": "#fbbf24", "textAlign": "center"})
+        return html.Span(f"Aucun fournisseur pour {agent_name}", style={"color": "#fbbf24", "fontSize": "10px"})
 
-    # Préparer les données des fournisseurs
-    suppliers_data = []
-    for _, row in agent_data.iterrows():
-        suppliers_data.append({
-            'supplier': str(row.get(supplier_col, 'N/A'))[:30],
-            'order_value': f"{float(str(row.get(order_value_col, 0)).replace(',', '').replace(' ', '') or 0)/1e6:.2f}M" if order_value_col else 'N/A',
-            'refs_oos': int(row.get(refs_oos_col, 0)) if refs_oos_col else 'N/A',
-            'status': str(row.get(traitement_col, 'N/A'))[:15] if traitement_col else 'N/A'
-        })
+    # Liste des fournisseurs
+    suppliers_list = agent_data[supplier_col].dropna().unique().tolist()
+    suppliers_str = ", ".join([s[:15] for s in suppliers_list[:8]])
+    if len(suppliers_list) > 8:
+        suppliers_str += f"... (+{len(suppliers_list) - 8})"
 
-    # Table des fournisseurs
-    suppliers_table = dash_table.DataTable(
-        columns=[
-            {"name": "Fournisseur", "id": "supplier"},
-            {"name": "Valeur Cmd", "id": "order_value"},
-            {"name": "Refs OOS", "id": "refs_oos"},
-            {"name": "Statut", "id": "status"},
-        ],
-        data=suppliers_data,
-        style_table={'borderRadius': '8px', 'maxHeight': '200px', 'overflowY': 'auto'},
-        style_header={
-            'backgroundColor': '#1e293b', 'color': '#94a3b8', 'fontWeight': '600',
-            'fontSize': '10px', 'textTransform': 'uppercase', 'border': 'none', 'padding': '6px'
-        },
-        style_cell={
-            'backgroundColor': '#0f172a', 'color': '#e2e8f0', 'border': 'none',
-            'padding': '6px', 'fontSize': '11px', 'textAlign': 'left'
-        },
-        style_data_conditional=[
-            {'if': {'filter_query': '{status} contains "Pending"'}, 'backgroundColor': 'rgba(251, 191, 36, 0.1)'},
-            {'if': {'filter_query': '{status} contains "Traitee"'}, 'backgroundColor': 'rgba(34, 197, 94, 0.1)'},
-        ],
-        page_size=8
-    )
-
-    return html.Div([
-        html.Div([
-            html.Span(f"👤 {agent_name}", style={"fontWeight": "700", "color": "#22d3ee", "fontSize": "14px"}),
-            html.Span(f" • {len(suppliers_data)} fournisseurs", style={"color": "#64748b", "fontSize": "11px"})
-        ], style={"marginBottom": "10px"}),
-        suppliers_table
-    ])
+    return html.Span([
+        html.B(agent_name, style={"color": "#22d3ee"}),
+        f" : {suppliers_str}"
+    ], style={"fontSize": "10px"})
 
 
 @app.callback(
@@ -10338,17 +10340,27 @@ def filter_risk_products_by_agent(agent_filter, supplier_filter, category_filter
             filtered_df = filtered_df[filtered_df['Supplier'] == supplier_filter]
 
     # Appliquer filtre catégorie
-    if category_filter and category_filter != "Toutes":
-        filtered_df = filtered_df[filtered_df['Product Category'] == category_filter]
+    if category_filter and category_filter not in [[], None, "Toutes"]:
+        if isinstance(category_filter, list):
+            filtered_df = filtered_df[filtered_df['Product Category'].isin(category_filter)]
+        else:
+            filtered_df = filtered_df[filtered_df['Product Category'] == category_filter]
 
-    # Identifier produits à risque
-    filtered_df['rotation_days'] = pd.to_numeric(filtered_df.get('rotation_days', 0), errors='coerce').fillna(999)
-    filtered_df['total_stock'] = pd.to_numeric(filtered_df.get('total_stock', 0), errors='coerce').fillna(0)
+    # Identifier produits à risque - Correction: utiliser la colonne si elle existe
+    if 'rotation_days' in filtered_df.columns:
+        filtered_df['rotation_days'] = pd.to_numeric(filtered_df['rotation_days'], errors='coerce').fillna(999)
+    else:
+        filtered_df['rotation_days'] = 999
+
+    if 'total_stock' in filtered_df.columns:
+        filtered_df['total_stock'] = pd.to_numeric(filtered_df['total_stock'], errors='coerce').fillna(0)
+    else:
+        filtered_df['total_stock'] = 0
 
     risk_mask = (filtered_df['total_stock'] <= 0) | (filtered_df['rotation_days'] < 7)
     risk_df = filtered_df[risk_mask]
 
-    # Ajouter l'agent
+    # Ajouter l'agent - colonnes: st, prod, sup, agt, stk
     risk_products = []
     for _, row in risk_df.iterrows():
         supplier = str(row.get('Supplier', '')).strip()
@@ -10358,16 +10370,16 @@ def filter_risk_products_by_agent(agent_filter, supplier_filter, category_filter
         if agent_filter and agent_filter != "all" and agent != agent_filter:
             continue
 
+        stock_val = row.get('total_stock', 0)
         risk_products.append({
-            'product': str(row.get('product_name', 'N/A'))[:40],
-            'supplier': supplier[:20] if supplier else 'N/A',
-            'agent': agent,
-            'stock': int(row.get('total_stock', 0)),
-            'rotation': round(row.get('rotation_days', 0), 1) if row.get('rotation_days', 0) < 100 else 'N/A',
-            'status': '🔴 Rupture' if row.get('total_stock', 0) <= 0 else '🟡 Risque'
+            'st': '🔴' if stock_val <= 0 else '🟡',
+            'prod': str(row.get('product_name', 'N/A'))[:25],
+            'sup': supplier[:10] if supplier else 'N/A',
+            'agt': agent[:10],
+            'stk': int(stock_val),
         })
 
-    return risk_products[:100]  # Limiter à 100 pour la performance
+    return risk_products[:100]
 
 
 # =========================
@@ -10397,6 +10409,8 @@ def display_page(pathname):
         ], className="error-message")
 
 '''
+
+
 # ------------------------------ Chatbot helpers ----------------------------------
 
 # =============================== Chatbot helpers ================================
@@ -10738,8 +10752,8 @@ except Exception as e:
     initial_df = pd.DataFrame(columns=['product_name', 'Supplier', 'total_stock'])
 
 initial_df = get_df_cached()
-initial_df['QAC edited']=' '
-#initial_df['delete']='delete'
+initial_df['QAC edited'] = ' '
+# initial_df['delete']='delete'
 # ==================== LAYOUT CORRIGÉ AVEC AUTHENTIFICATION ====================
 
 app.layout = html.Div([
@@ -10767,7 +10781,6 @@ app.layout = html.Div([
 
     # ========== COMPOSANTS CACHÉS (pour callbacks) ==========
     html.Div(id='edit-product-output', style={"display": "none"}),
-
 
     # ========== EDIT MODAL (VISIBLE AU NIVEAU RACINE) ==========
     dbc.Modal(
@@ -10880,7 +10893,7 @@ app.layout = html.Div([
 
     # ========== FEEDBACKS & COMPTEURS ==========
     # html.Div(id="action-feedback", style={"position": "fixed", "top": "80px", "right": "20px", "zIndex": 10000}),
-    #html.Div(id="selection-counter"),
+    # html.Div(id="selection-counter"),
 
     # ========== CHATBOT FLOTTANT ==========
     html.Button(id="chat-fab", className="chat-fab", children=[html.Span("Assistant"), html.Span("💬")]),
@@ -10993,7 +11006,7 @@ def render_page_content(auth_state, pathname):
         sidebar,
         html.Div(
             id="page-container",
-            className="main-content",
+            className="content",  # Utiliser la classe CSS existante
             children=page_content
         )
     ])
@@ -11169,6 +11182,7 @@ def update_product_name(value):
         return f"Produit modifié: {value}"
     return no_update
 
+
 # Callback pour stocker les données locales
 @app.callback(
     Output({'type': 'storage', 'index': MATCH}, 'data'),
@@ -11242,7 +11256,6 @@ def capture_qac_edits(table_data, stored_edits):
     print(f"💾 [localStorage] {len(stored_edits)} QAC sauvegardés")
     return stored_edits
 '''
-
 
 
 # ==================== CALLBACK 2 : RESTAURER LES QAC AU CHARGEMENT ====================
@@ -11510,9 +11523,10 @@ def load_qac_from_csv_on_startup(pathname):
         return {}
 '''
 
+
 # Callback pour mettre à jour le Store 'selected-product-for-notes'
 @app.callback(
-    Output('selected-product-for-notes', 'data', allow_duplicate = True),
+    Output('selected-product-for-notes', 'data', allow_duplicate=True),
     Input('main-table', 'active_cell'),
     State('main-table', 'data'),
     prevent_initial_call=True
@@ -11526,11 +11540,11 @@ def update_selected_product(active_cell, table_data):
 
 
 # Validation layout
-#app.validation_layout = html.Div([
+# app.validation_layout = html.Div([
 #   dcc.Location(id="url"),
 #  dcc.Store(id="master-data"),
 # dcc.Store(id="filtered-data"),
-#dcc.Dropdown(id="filter-supplier"),
+# dcc.Dropdown(id="filter-supplier"),
 #   dcc.Dropdown(id="filter-category"),
 #  dcc.Dropdown(id="filter-need"),  # ✅ IMPORTANT
 # dcc.Dropdown(
@@ -11538,51 +11552,51 @@ def update_selected_product(active_cell, table_data):
 #   options=[
 #      {'label': 'Status 1', 'value': 'status1'},
 #     {'label': 'Status 2', 'value': 'status2'}
-#],
+# ],
 #       value='status1'
 #  ),
 
 # dcc.Input(id="search-input"),
-#dbc.Checklist(id="toggle-options"),
-#dcc.Store(id="uploaded-csv"),
+# dbc.Checklist(id="toggle-options"),
+# dcc.Store(id="uploaded-csv"),
 #   dcc.Store(id="chat-store"),
 #  dcc.Store(id="chat-open"),
 # make_sidebar(),
-#page_overview(initial_df),
+# page_overview(initial_df),
 #  page_analytics(),
 #  page_predictive(),
 # page_about(),
-#html.Div(id="page-container"),
+# html.Div(id="page-container"),
 #  html.Button(id="chat-fab"),
 # html.Div(id="chat-window"),
-#html.Div(id="chat-messages"),
+# html.Div(id="chat-messages"),
 #  dbc.Textarea(id="chat-input"),
 # dcc.Upload(id="chat-upload"),
 #  html.Small(id="upload-status"),
 # dbc.Button(id="chat-send"),
 #  dbc.Button(id="chat-close"),
 # dcc.Download(id="download-data"),
-#dcc.Download(id="download-po"),
+# dcc.Download(id="download-po"),
 # dbc.Button(id="btn-add-row"),
-#dbc.Modal(id="edit-modal"),
+# dbc.Modal(id="edit-modal"),
 # dbc.Input(id="edit-product"),
-#dbc.Input(id="edit-supplier"),
+# dbc.Input(id="edit-supplier"),
 #  dbc.Input(id="edit-category"),
 # dbc.Input(id="edit-stock"),
-#dbc.Modal(id="notes-modal"),
+# dbc.Modal(id="notes-modal"),
 # html.Div(id="notes-modal-title"),
 # ✅ Ajouter les nouveaux composants
 # html.Button(id="notes-fab"),
 #   dcc.Dropdown(id="note-product-selector"),
 #  dbc.Modal(id="notes-modal-new"),
 # html.Div(id="notes-display-list"),
-#dbc.Textarea(id="note-text-input"),
+# dbc.Textarea(id="note-text-input"),
 #  dbc.Input(id="note-author-input"),
 # html.Div(id="note-feedback-new"),
-#dbc.Button(id="note-modal-send"),
+# dbc.Button(id="note-modal-send"),
 #  dbc.Button(id="note-modal-close"),
 # dcc.Store(id="selected-product-for-notes"),
-#])
+# ])
 # Validation layout
 # Validation layout
 app.validation_layout = html.Div([
@@ -11596,22 +11610,22 @@ app.validation_layout = html.Div([
     dcc.Store(id={'type': 'selected-product-for-notes', 'index': '2'}),
     dcc.Store(id="edit-mode"),
     dcc.Store(id="edit-original-product"),
-    #dcc.Store(id="qac-edits"),
+    # dcc.Store(id="qac-edits"),
     dcc.Store(id="qac-edits-store"),
 
     # ==================== SIDEBAR COMPONENTS ====================
-    #html.Div(id="risk-banner"),
+    # html.Div(id="risk-banner"),
     html.Div(id="action-feedback"),  # ✅ AJOUTER
     html.Div(id="selection-counter"),  # ✅ AJOUTER
     dcc.Input(id="search-input"),
     dcc.Dropdown(id="filter-supplier"),
     dcc.Dropdown(id="filter-category"),
     dcc.Dropdown(id="filter-need"),
-    #dcc.Dropdown(id="filter-status", options=[
+    # dcc.Dropdown(id="filter-status", options=[
     #   {'label': 'Tous', 'value': 'all'},
     #  {'label': 'Stock OK', 'value': 'ok'},
     # {'label': 'Rupture', 'value': 'oos'}
-    #], value='all'),
+    # ], value='all'),
     dbc.Checklist(id="toggle-options"),
     dbc.Button(id="btn-refresh"),
     dbc.Button(id="btn-add-row"),
@@ -11620,9 +11634,9 @@ app.validation_layout = html.Div([
     dcc.Download(id="download-data"),
     dcc.Download(id="download-po"),
     html.Div(id="debug-info"),
-    #html.Div(id="action-feedback"),
-    #html.Div(id="selection-counter"),
-    #dbc.Button("✅ Tout sélectionner (vue filtrée)", id="btn-select-all", size="sm", color="secondary", className="me-2"),
+    # html.Div(id="action-feedback"),
+    # html.Div(id="selection-counter"),
+    # dbc.Button("✅ Tout sélectionner (vue filtrée)", id="btn-select-all", size="sm", color="secondary", className="me-2"),
     ## Remplacez votre section boutons par celle-ci :
     html.Div([
         dbc.Button("🤖 Lancer Agent IA", id="btn-run-agent-ia", color="success", size="sm", className="me-2"),
@@ -11776,6 +11790,8 @@ app.validation_layout = html.Div([
     html.Div(id="conflict-alert"),
     dcc.ConfirmDialog(id="confirm-dialog"),
 ])
+
+
 # ------------------------------ Routing ------------------------------------------
 # ⚠️ ANCIEN CALLBACK DÉSACTIVÉ - Remplacé par render_page_content (avec authentification)
 # @app.callback(
@@ -11853,6 +11869,7 @@ def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: li
 
     print(f"[filter_dataframe] ✅ Résultat final: {len(out)} lignes")
     return out
+
 
 def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Garantit que les colonnes critiques existent et sont valides"""
@@ -11989,6 +12006,7 @@ def initialize_table(master_json):
         # Retourner données vides en cas d'erreur
         return "[]", [], []
 
+
 '''@app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
      Output("main-table", "data", allow_duplicate=True),
@@ -12020,6 +12038,8 @@ def initial_load_table(pathname, master_json):
 
     return df.to_json(orient="records"), df.to_dict("records"), []
 '''
+
+
 # ------------------------------ Notes System Callbacks ----------------------------
 
 # ------------------------------ Export CSV ---------------------------------------
@@ -12168,6 +12188,8 @@ def get_packaging_map_cached():
     except Exception as e:
         print(f"❌ Erreur packaging : {e}")
         return {}
+
+
 # ====== IMPORTS NÉCESSAIRES ======
 
 # ===== Helpers packaging (ROBUSTES) =====
@@ -12176,23 +12198,27 @@ from datetime import datetime
 
 PACKAGING_URL = "https://data.heroku.com/dataclips/cnmhrqqjneeunkbqibxklyxwcsrl.csv"
 
+
 def load_packaging_map():
     """Map: product_name_lower -> packaging (ex: '1/2 carton')."""
     try:
         dfp = pd.read_csv(PACKAGING_URL)
         name_col = next((c for c in dfp.columns if c.lower() in ("name", "product_name", "designation")), None)
-        pack_col = next((c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
+        pack_col = next(
+            (c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
         if not name_col or not pack_col:
             print("⚠️ Dataclip: colonnes name/packaging non trouvées.")
             return {}
-        dfp["__key__"]  = dfp[name_col].astype(str).str.lower().str.strip()
+        dfp["__key__"] = dfp[name_col].astype(str).str.lower().str.strip()
         dfp["__pack__"] = dfp[pack_col].astype(str).str.lower().str.strip()
         return dict(zip(dfp["__key__"], dfp["__pack__"]))
     except Exception as e:
         print(f"❌ load_packaging_map: {e}")
         return {}
 
+
 FRACTION_FINDER = re.compile(r"(\d+)\s*/\s*(\d+)", re.IGNORECASE)
+
 
 def detect_fraction_from_text(txt: str) -> float:
     """Retourne la fraction trouvée (ex: '1/2' -> 0.5) ou 1.0 si rien."""
@@ -12202,12 +12228,14 @@ def detect_fraction_from_text(txt: str) -> float:
     m = FRACTION_FINDER.search(s)
     if m:
         try:
-            num = int(m.group(1)); den = int(m.group(2))
+            num = int(m.group(1));
+            den = int(m.group(2))
             if den > 0:
                 return num / den
         except (ValueError, TypeError):
             pass
     return 1.0
+
 
 def consolidate_to_major(qty_units: float, packaging_text: str, product_name: str) -> int:
     """Convertit la QAC (éventuellement en sous-unité) → unités majeures entières (ceil)."""
@@ -12218,6 +12246,7 @@ def consolidate_to_major(qty_units: float, packaging_text: str, product_name: st
         frac = 1.0
     maj = float(qty_units) * float(frac)
     return max(0, int(math.ceil(maj)))
+
 
 def safe_float(v, default=0.0):
     try:
@@ -12482,6 +12511,8 @@ def run_agent_ia_calcul(n_clicks, table_data):
 
     return updated_data, sorted(indices_selection), button_disabled
 '''
+
+
 # ============================================
 # FONCTION 2 : VALIDATION QAC
 # ============================================
@@ -12969,6 +13000,7 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
 
     return buf, po_number
 
+
 # ===== CALLBACK : GÉNÉRATION BON DE COMMANDE EXCEL AVEC VALIDATION =====
 @app.callback(
     [Output("download-po", "data"),
@@ -13148,6 +13180,7 @@ def preselect_qac_rows(table_data, ia_clicks, ia_clicks_state):
 
     return no_update
 
+
 # ===== CALLBACK 3 : REMPLIR QAC =====
 # ===== CALLBACK : REMPLIR QAC DEPUIS TARGET (CORRIGÉ) =====
 @app.callback(
@@ -13177,6 +13210,7 @@ def fill_qac_from_target(n_clicks, selected_rows, master_json):
     print(f"✅ {count} QAC remplies depuis target_quantity")
 
     return master_df.to_json(orient="records")
+
 
 # ====== EXPORT BON DE COMMANDE WORD ======
 '''
@@ -13404,7 +13438,6 @@ def export_po_word_optimized(n_clicks, selected_rows, table_data):
 
     return dcc.send_bytes(buf.read(), filename=fname), False  # ✅ Fermer overlay
 '''
-
 
 '''
 @app.callback(
@@ -13778,6 +13811,8 @@ def toggle_po_button(selected_rows, data):
     # Sinon, désactiver
     return True
 '''
+
+
 # ==================== CALLBACK 4 : COMPTEUR DE SÉLECTION ====================
 @app.callback(
     Output("selection-counter", "children"),
@@ -13831,6 +13866,7 @@ def clear_selection(n_clicks):
         return no_update
     return []
 
+
 # ------------------------------ Edit/Add/Delete rows -----------------------------
 '''@app.callback(
    # Output("edit-modal", "is_open"),
@@ -13844,6 +13880,8 @@ def clear_selection(n_clicks):
     State("main-table", "data"),
     prevent_initial_call=True
 )'''
+
+
 def open_edit_modal(n_add, active_cell, data):
     ctx = dash.callback_context
     if not ctx.triggered:
@@ -13862,6 +13900,7 @@ def open_edit_modal(n_add, active_cell, data):
 
 
 import json
+
 
 @app.callback(
     [Output("master-data", "data", allow_duplicate=True),
@@ -13950,6 +13989,7 @@ def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, f
     # Retour des résultats sous forme de JSON (4 outputs = 4 valeurs)
     return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), []
 
+
 '''
 @app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
@@ -13987,6 +14027,8 @@ def delete_row(master_json):
     # filtered-data, main-table, selected_rows (empty list), and risk-banner
     return df.to_json(orient="records"), df.to_dict("records"), [], banner
 '''
+
+
 # ------------------------------ Floating Chat callbacks ---------------------------
 @app.callback(
     Output("chat-open", "data"),

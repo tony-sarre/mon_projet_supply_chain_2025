@@ -9974,7 +9974,7 @@ def page_agents(master_df: pd.DataFrame = None):
     print(f"   📊 {len(performance_df)} agents avec performances calculées")
 
     # ==========================================
-    # CALCULS KPIs RIGOUREUX
+    # CALCULS KPIs RIGOUREUX - HARMONISÉS AVEC OVERVIEW
     # ==========================================
     total_agents = len(performance_df) if not performance_df.empty else 0
 
@@ -9995,18 +9995,46 @@ def page_agents(master_df: pd.DataFrame = None):
         taux = performance_df['taux_traitement'].dropna()
         avg_taux_traitement = taux.mean() if len(taux) > 0 else 0
 
-    # Total refs OOS (depuis performance_df)
+    # Total refs OOS (depuis performance_df - somme des ruptures par agent)
     total_refs_oos = 0
-    if not performance_df.empty and 'refs_oos' in performance_df.columns:
-        total_refs_oos = int(performance_df['refs_oos'].fillna(0).sum())
+    if not performance_df.empty and 'rupture_count' in performance_df.columns:
+        total_refs_oos = int(performance_df['rupture_count'].fillna(0).sum())
 
-    # Total ruptures (produits avec stock <= 0 dans master_df)
+    # ==========================================
+    # RUPTURES - MÊME MÉTHODE QUE PAGE OVERVIEW
+    # ==========================================
+    # Méthode 1: Via Stock Status (prioritaire - même que Overview)
     total_ruptures = 0
-    if not master_df.empty and 'total_stock' in master_df.columns:
-        stock = pd.to_numeric(master_df['total_stock'], errors='coerce').fillna(0)
-        total_ruptures = int((stock <= 0).sum())
+    if not master_df.empty:
+        if 'Stock Status' in master_df.columns:
+            total_ruptures = int((master_df['Stock Status'] == 'Out of Stock').sum())
+            print(f"   📊 Ruptures via Stock Status: {total_ruptures}")
+        elif 'total_stock' in master_df.columns:
+            # Fallback: stock <= 0
+            stock = pd.to_numeric(master_df['total_stock'], errors='coerce').fillna(0)
+            total_ruptures = int((stock <= 0).sum())
+            print(f"   📊 Ruptures via total_stock <= 0: {total_ruptures}")
 
-    print(f"   📈 KPIs: agents={total_agents}, score={avg_score:.1f}, cmd={total_order_value/1e6:.1f}M, oos={total_refs_oos}, rupt={total_ruptures}")
+    # ==========================================
+    # PRÉDICTIONS RUPTURE - MÊME MÉTHODE QUE OVERVIEW
+    # ==========================================
+    total_predicted_stockout = 0
+    if not master_df.empty:
+        # Priorité 1: Stockout Probability ML (>0.3 = à risque)
+        if 'Stockout Probability' in master_df.columns:
+            probs = pd.to_numeric(master_df['Stockout Probability'], errors='coerce').fillna(0)
+            total_predicted_stockout = int((probs > 0.3).sum())
+            print(f"   📊 Prédictions ML (prob > 0.3): {total_predicted_stockout}")
+        # Priorité 2: Predicted Stockout booléen
+        elif 'Predicted Stockout' in master_df.columns:
+            total_predicted_stockout = int((master_df['Predicted Stockout'] == True).sum())
+            print(f"   📊 Prédictions (Predicted Stockout): {total_predicted_stockout}")
+        # Priorité 3: Stock Status = Predicted Stockout Soon
+        elif 'Stock Status' in master_df.columns:
+            total_predicted_stockout = int((master_df['Stock Status'] == 'Predicted Stockout Soon').sum())
+            print(f"   📊 Prédictions (Stock Status): {total_predicted_stockout}")
+
+    print(f"   📈 KPIs: agents={total_agents}, score={avg_score:.1f}, cmd={total_order_value/1e6:.1f}M, rupt={total_ruptures}, pred={total_predicted_stockout}")
 
     # ==========================================
     # KPIs EN LIGNE (style AGRANDI)
@@ -10023,27 +10051,27 @@ def page_agents(master_df: pd.DataFrame = None):
     kpis_row = html.Div([
         html.Div([
             html.Div(f"{total_agents}", style={**kpi_value_style, "color": "#22d3ee"}),
-            html.Div("👥 Agents", style=kpi_label_style)
+            html.Div(" Agents", style=kpi_label_style)
         ], style=kpi_style),
         html.Div([
             html.Div(f"{avg_score:.0f}", style={**kpi_value_style, "color": "#34d399" if avg_score >= 60 else "#f87171"}),
-            html.Div("🎯 Score Moyen", style=kpi_label_style)
+            html.Div(" Score Moyen", style=kpi_label_style)
         ], style=kpi_style),
         html.Div([
             html.Div(f"{total_order_value/1e6:.1f}M", style={**kpi_value_style, "color": "#a78bfa"}),
-            html.Div("💰 Valeur Cmd", style=kpi_label_style)
+            html.Div(" Valeur Cmd", style=kpi_label_style)
         ], style=kpi_style),
         html.Div([
             html.Div(f"{avg_taux_traitement:.0f}%", style={**kpi_value_style, "color": "#34d399"}),
-            html.Div("✅ Traitement", style=kpi_label_style)
-        ], style=kpi_style),
-        html.Div([
-            html.Div(f"{total_refs_oos}", style={**kpi_value_style, "color": "#fbbf24"}),
-            html.Div("⚠️ Réfs OOS", style=kpi_label_style)
+            html.Div(" Traitement", style=kpi_label_style)
         ], style=kpi_style),
         html.Div([
             html.Div(f"{total_ruptures}", style={**kpi_value_style, "color": "#f87171"}),
-            html.Div("🚨 Ruptures", style=kpi_label_style)
+            html.Div(" Ruptures", style=kpi_label_style)
+        ], style=kpi_style),
+        html.Div([
+            html.Div(f"{total_predicted_stockout}", style={**kpi_value_style, "color": "#fbbf24"}),
+            html.Div(" Prédictions", style=kpi_label_style)
         ], style=kpi_style),
     ], style={"display": "flex", "flexWrap": "wrap", "gap": "12px", "marginBottom": "20px"})
 
@@ -10226,7 +10254,7 @@ def page_agents(master_df: pd.DataFrame = None):
     return html.Div(className="content", children=[
         # Header
         html.Div([
-            html.H4("👥 Performance Agents", style={"margin": "0", "fontSize": "24px", "fontWeight": "700", "color": "#22d3ee"}),
+            html.H4(" Performance Agents", style={"margin": "0", "fontSize": "24px", "fontWeight": "700", "color": "#22d3ee"}),
             html.P("Suivi des performances par agent commercial", style={"margin": "4px 0 0 0", "color": "#94a3b8", "fontSize": "14px"})
         ], style={"marginBottom": "20px"}),
 

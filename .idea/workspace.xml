@@ -4,9 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="auth">
+    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="agent page">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/supply_chain_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/supply_chain_analytics.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -78,22 +77,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00145" summary="callback load from csv for QAC edit">
-      <option name="closed" value="true" />
-      <created>1761667396850</created>
-      <option name="number" value="00145" />
-      <option name="presentableId" value="LOCAL-00145" />
-      <option name="project" value="LOCAL" />
-      <updated>1761667396850</updated>
-    </task>
-    <task id="LOCAL-00146" summary="callback load from csv for QAC edit">
-      <option name="closed" value="true" />
-      <created>1761667523171</created>
-      <option name="number" value="00146" />
-      <option name="presentableId" value="LOCAL-00146" />
-      <option name="project" value="LOCAL" />
-      <updated>1761667523171</updated>
     </task>
     <task id="LOCAL-00147" summary="refresh_data">
       <option name="closed" value="true" />
@@ -471,7 +454,23 @@
       <option name="project" value="LOCAL" />
       <updated>1764755419568</updated>
     </task>
-    <option name="localTasksCounter" value="194" />
+    <task id="LOCAL-00194" summary="auth">
+      <option name="closed" value="true" />
+      <created>1764762900294</created>
+      <option name="number" value="00194" />
+      <option name="presentableId" value="LOCAL-00194" />
+      <option name="project" value="LOCAL" />
+      <updated>1764762900294</updated>
+    </task>
+    <task id="LOCAL-00195" summary="agent page">
+      <option name="closed" value="true" />
+      <created>1764765074519</created>
+      <option name="number" value="00195" />
+      <option name="presentableId" value="LOCAL-00195" />
+      <option name="project" value="LOCAL" />
+      <updated>1764765074520</updated>
+    </task>
+    <option name="localTasksCounter" value="196" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -516,7 +515,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="supply chain" />
     <MESSAGE value="pythondash" />
     <MESSAGE value="Fix: rename procfile to Procfile" />
     <MESSAGE value="Merge remote-tracking branch 'origin/main'" />
@@ -541,6 +539,7 @@
     <MESSAGE value="css" />
     <MESSAGE value="debug return overview" />
     <MESSAGE value="auth" />
-    <option name="LAST_COMMIT_MESSAGE" value="auth" />
+    <MESSAGE value="agent page" />
+    <option name="LAST_COMMIT_MESSAGE" value="agent page" />
   </component>
 </project>

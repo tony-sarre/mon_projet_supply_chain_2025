@@ -4208,19 +4208,22 @@ app.index_string = """
                 top: 0; 
                 bottom: 0; 
                 left: 0; 
-                width: 270px;
-                padding: 14px 12px; 
-                background: #0b1220; 
+                width: 260px;
+                padding: 16px 14px; 
+                background: linear-gradient(180deg, #0b1220 0%, #0a0f18 100%);
                 border-right: 1px solid var(--border-color); 
-                overflow-y: auto; 
+                overflow-y: auto;
+                overflow-x: hidden;
+                z-index: 100;
             }
 
             .content { 
-                margin-left: 170px; 
-                padding: 16px 20px 100px 20px; 
+                margin-left: 260px; 
+                padding: 20px 24px 100px 24px; 
                 background: var(--bg-primary) !important; 
                 color: var(--text-primary) !important; 
                 min-height: 100vh;
+                transition: margin-left 0.3s ease;
             }
 
             .brand { 
@@ -4887,7 +4890,7 @@ def make_sidebar():
                 persistence=True
             ),
             html.Br(),
-            html.Small("👤 Agent"),
+            html.Small(" Agent"),
             dcc.Dropdown(
                 id="filter-agent",
                 options=[{"label": "Tous", "value": "all"}] + [{"label": a, "value": a} for a in agents_list],
@@ -4936,7 +4939,7 @@ def make_sidebar():
                 dbc.NavLink("Overview", href="/", id="nav-overview", active="exact"),
                 dbc.NavLink("Analyses", href="/analytics", id="nav-analytics", active="exact"),
                 dbc.NavLink("Prédictions", href="/predictions", id="nav-pred", active="exact"),
-                dbc.NavLink("👤 Agents", href="/agents", id="nav-agents", active="exact"),
+                dbc.NavLink(" Agents", href="/agents", id="nav-agents", active="exact"),
                 dbc.NavLink(" Promotions", href="/promotions", active="exact"),
                 dbc.NavLink("About", href="/about", id="nav-about", active="exact"),
             ], vertical=True, pills=True)
@@ -10006,25 +10009,46 @@ def page_agents(master_df: pd.DataFrame = None):
     print(f"   📈 KPIs: agents={total_agents}, score={avg_score:.1f}, cmd={total_order_value/1e6:.1f}M, oos={total_refs_oos}, rupt={total_ruptures}")
 
     # ==========================================
-    # KPIs EN LIGNE (style compact)
+    # KPIs EN LIGNE (style AGRANDI)
     # ==========================================
     kpi_style = {
-        "display": "inline-flex", "alignItems": "center", "gap": "4px",
-        "background": "rgba(30, 41, 59, 0.6)", "borderRadius": "6px",
-        "padding": "5px 10px", "fontSize": "12px"
+        "display": "flex", "flexDirection": "column", "alignItems": "center", "justifyContent": "center",
+        "background": "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", "borderRadius": "12px",
+        "padding": "16px 20px", "minWidth": "120px", "border": "1px solid #334155",
+        "boxShadow": "0 4px 12px rgba(0,0,0,0.3)"
     }
+    kpi_value_style = {"fontSize": "28px", "fontWeight": "700", "lineHeight": "1"}
+    kpi_label_style = {"color": "#94a3b8", "fontSize": "12px", "marginTop": "6px", "textTransform": "uppercase", "letterSpacing": "0.5px"}
 
     kpis_row = html.Div([
-        html.Div([html.Span("👥"), html.B(f"{total_agents}", style={"color": "#22d3ee"}), html.Span("agents", style={"color": "#64748b", "fontSize": "10px"})], style=kpi_style),
-        html.Div([html.Span("🎯"), html.B(f"{avg_score:.0f}", style={"color": "#34d399" if avg_score >= 60 else "#f87171"}), html.Span("score", style={"color": "#64748b", "fontSize": "10px"})], style=kpi_style),
-        html.Div([html.Span("💰"), html.B(f"{total_order_value/1e6:.0f}M", style={"color": "#a78bfa"}), html.Span("cmd", style={"color": "#64748b", "fontSize": "10px"})], style=kpi_style),
-        html.Div([html.Span("✅"), html.B(f"{avg_taux_traitement:.0f}%", style={"color": "#34d399"}), html.Span("trait", style={"color": "#64748b", "fontSize": "10px"})], style=kpi_style),
-        html.Div([html.Span("⚠️"), html.B(f"{total_refs_oos}", style={"color": "#fbbf24"}), html.Span("oos", style={"color": "#64748b", "fontSize": "10px"})], style=kpi_style),
-        html.Div([html.Span("🚨"), html.B(f"{total_ruptures}", style={"color": "#f87171"}), html.Span("rupt", style={"color": "#64748b", "fontSize": "10px"})], style=kpi_style),
-    ], style={"display": "flex", "flexWrap": "wrap", "gap": "6px", "marginBottom": "10px"})
+        html.Div([
+            html.Div(f"{total_agents}", style={**kpi_value_style, "color": "#22d3ee"}),
+            html.Div("👥 Agents", style=kpi_label_style)
+        ], style=kpi_style),
+        html.Div([
+            html.Div(f"{avg_score:.0f}", style={**kpi_value_style, "color": "#34d399" if avg_score >= 60 else "#f87171"}),
+            html.Div("🎯 Score Moyen", style=kpi_label_style)
+        ], style=kpi_style),
+        html.Div([
+            html.Div(f"{total_order_value/1e6:.1f}M", style={**kpi_value_style, "color": "#a78bfa"}),
+            html.Div("💰 Valeur Cmd", style=kpi_label_style)
+        ], style=kpi_style),
+        html.Div([
+            html.Div(f"{avg_taux_traitement:.0f}%", style={**kpi_value_style, "color": "#34d399"}),
+            html.Div("✅ Traitement", style=kpi_label_style)
+        ], style=kpi_style),
+        html.Div([
+            html.Div(f"{total_refs_oos}", style={**kpi_value_style, "color": "#fbbf24"}),
+            html.Div("⚠️ Réfs OOS", style=kpi_label_style)
+        ], style=kpi_style),
+        html.Div([
+            html.Div(f"{total_ruptures}", style={**kpi_value_style, "color": "#f87171"}),
+            html.Div("🚨 Ruptures", style=kpi_label_style)
+        ], style=kpi_style),
+    ], style={"display": "flex", "flexWrap": "wrap", "gap": "12px", "marginBottom": "20px"})
 
     # ==========================================
-    # PODIUM TOP 3 (inline)
+    # PODIUM TOP 3 (AGRANDI)
     # ==========================================
     podium = html.Div()
     if not performance_df.empty and len(performance_df) >= 1:
@@ -10034,16 +10058,18 @@ def page_agents(master_df: pd.DataFrame = None):
         for i in range(min(3, len(performance_df))):
             a = performance_df.iloc[i]
             items.append(html.Span([
-                medals[i], " ", html.B(a['agent_name'], style={"color": colors[i]}),
-                html.Span(f" ({a['score_global']:.0f})", style={"color": "#64748b"})
-            ], style={"marginRight": "10px"}))
-        podium = html.Div(["🏆 ", *items], style={
-            "background": "rgba(30, 41, 59, 0.4)", "borderRadius": "6px",
-            "padding": "6px 10px", "marginBottom": "10px", "fontSize": "11px"
+                html.Span(medals[i], style={"fontSize": "18px"}), " ",
+                html.B(a['agent_name'], style={"color": colors[i], "fontSize": "14px"}),
+                html.Span(f" ({a['score_global']:.0f})", style={"color": "#64748b", "fontSize": "13px"})
+            ], style={"marginRight": "20px"}))
+        podium = html.Div(["🏆 TOP 3 : ", *items], style={
+            "background": "linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%)",
+            "borderRadius": "10px", "border": "1px solid #334155",
+            "padding": "12px 16px", "marginBottom": "20px", "fontSize": "14px"
         })
 
     # ==========================================
-    # TABLE AGENTS (compacte)
+    # TABLE AGENTS (AGRANDIE)
     # ==========================================
     table_data = []
     if not performance_df.empty:
@@ -10066,36 +10092,39 @@ def page_agents(master_df: pd.DataFrame = None):
         columns=[
             {"name": "#", "id": "rank"},
             {"name": "Agent", "id": "agent"},
-            {"name": "Frs", "id": "frs"},
-            {"name": "Val", "id": "val"},
-            {"name": "OK", "id": "ok"},
-            {"name": "⏳", "id": "pend"},
-            {"name": "%", "id": "pct"},
-            {"name": "SKU", "id": "sku"},
-            {"name": "🚨", "id": "rupt"},
-            {"name": "Sc", "id": "sc"},
+            {"name": "Fournisseurs", "id": "frs"},
+            {"name": "Valeur", "id": "val"},
+            {"name": "Traitées", "id": "ok"},
+            {"name": "En attente", "id": "pend"},
+            {"name": "Taux %", "id": "pct"},
+            {"name": "SKUs", "id": "sku"},
+            {"name": "Ruptures", "id": "rupt"},
+            {"name": "Score", "id": "sc"},
         ],
         data=table_data,
-        style_table={'overflowX': 'auto'},
+        style_table={'overflowX': 'auto', 'borderRadius': '10px', 'border': '1px solid #334155'},
         style_header={
-            'backgroundColor': '#1e293b', 'color': '#64748b', 'fontWeight': '600',
-            'fontSize': '9px', 'border': 'none', 'padding': '4px 2px', 'textAlign': 'center'
+            'backgroundColor': '#1e293b', 'color': '#94a3b8', 'fontWeight': '600',
+            'fontSize': '12px', 'border': 'none', 'padding': '12px 8px', 'textAlign': 'center'
         },
         style_cell={
             'backgroundColor': '#0f172a', 'color': '#e2e8f0', 'border': 'none',
-            'padding': '4px 2px', 'fontSize': '10px', 'textAlign': 'center', 'minWidth': '30px'
+            'padding': '10px 8px', 'fontSize': '13px', 'textAlign': 'center', 'minWidth': '60px'
         },
         style_data_conditional=[
-            {'if': {'filter_query': '{rank} = 1'}, 'borderLeft': '2px solid #fbbf24'},
-            {'if': {'column_id': 'sc'}, 'fontWeight': '700', 'color': '#22d3ee'},
-            {'if': {'filter_query': '{pend} > 0', 'column_id': 'pend'}, 'color': '#fbbf24'},
-            {'if': {'filter_query': '{rupt} > 0', 'column_id': 'rupt'}, 'color': '#f87171'},
+            {'if': {'filter_query': '{rank} = 1'}, 'borderLeft': '3px solid #fbbf24'},
+            {'if': {'filter_query': '{rank} = 2'}, 'borderLeft': '3px solid #94a3b8'},
+            {'if': {'filter_query': '{rank} = 3'}, 'borderLeft': '3px solid #b45309'},
+            {'if': {'column_id': 'sc'}, 'fontWeight': '700', 'color': '#22d3ee', 'fontSize': '14px'},
+            {'if': {'column_id': 'agent'}, 'fontWeight': '600', 'textAlign': 'left'},
+            {'if': {'filter_query': '{pend} > 0', 'column_id': 'pend'}, 'color': '#fbbf24', 'fontWeight': '600'},
+            {'if': {'filter_query': '{rupt} > 0', 'column_id': 'rupt'}, 'color': '#f87171', 'fontWeight': '600'},
         ],
-        row_selectable='single', selected_rows=[], page_size=5, sort_action='native'
+        row_selectable='single', selected_rows=[], page_size=8, sort_action='native'
     )
 
     # ==========================================
-    # PRODUITS À RISQUE (compacte)
+    # PRODUITS À RISQUE (AGRANDIE)
     # ==========================================
     risk_products = []
     if not master_df.empty and supplier_agent_map:
@@ -10110,68 +10139,85 @@ def page_agents(master_df: pd.DataFrame = None):
             risk_df['_stk'] = 0
 
         risk_mask = (risk_df['_stk'] <= 0) | (risk_df['_rot'] < 7)
-        for _, row in risk_df[risk_mask].head(20).iterrows():
+        for _, row in risk_df[risk_mask].head(30).iterrows():
             sup = str(row.get('Supplier', '')).strip()
             risk_products.append({
                 'st': '🔴' if row['_stk'] <= 0 else '🟡',
-                'prod': str(row.get('product_name', ''))[:25],
-                'sup': sup[:10],
-                'agt': get_agent_for_product(sup, supplier_agent_map)[:10],
+                'prod': str(row.get('product_name', ''))[:35],
+                'sup': sup[:15],
+                'agt': get_agent_for_product(sup, supplier_agent_map)[:12],
                 'stk': int(row['_stk']),
             })
 
     risk_table = dash_table.DataTable(
         id='agents-risk-products-table',
         columns=[
-            {"name": "", "id": "st"},
+            {"name": "Status", "id": "st"},
             {"name": "Produit", "id": "prod"},
-            {"name": "Frs", "id": "sup"},
+            {"name": "Fournisseur", "id": "sup"},
             {"name": "Agent", "id": "agt"},
-            {"name": "Stk", "id": "stk"},
+            {"name": "Stock", "id": "stk"},
         ],
         data=risk_products,
-        style_table={'overflowX': 'auto'},
+        style_table={'overflowX': 'auto', 'borderRadius': '10px', 'border': '1px solid #334155'},
         style_header={
-            'backgroundColor': '#1e293b', 'color': '#64748b', 'fontWeight': '600',
-            'fontSize': '9px', 'border': 'none', 'padding': '3px 2px', 'textAlign': 'left'
+            'backgroundColor': '#1e293b', 'color': '#94a3b8', 'fontWeight': '600',
+            'fontSize': '12px', 'border': 'none', 'padding': '12px 8px', 'textAlign': 'left'
         },
         style_cell={
             'backgroundColor': '#0f172a', 'color': '#e2e8f0', 'border': 'none',
-            'padding': '3px 2px', 'fontSize': '9px', 'textAlign': 'left',
-            'maxWidth': '80px', 'overflow': 'hidden', 'textOverflow': 'ellipsis'
+            'padding': '10px 8px', 'fontSize': '13px', 'textAlign': 'left',
+            'maxWidth': '200px', 'overflow': 'hidden', 'textOverflow': 'ellipsis'
         },
         style_data_conditional=[
-            {'if': {'filter_query': '{st} = "🔴"'}, 'backgroundColor': 'rgba(239, 68, 68, 0.08)'},
+            {'if': {'filter_query': '{st} = "🔴"'}, 'backgroundColor': 'rgba(239, 68, 68, 0.1)'},
+            {'if': {'filter_query': '{st} = "🟡"'}, 'backgroundColor': 'rgba(251, 191, 36, 0.08)'},
             {'if': {'column_id': 'agt'}, 'fontWeight': '600', 'color': '#22d3ee'},
+            {'if': {'column_id': 'stk', 'filter_query': '{stk} <= 0'}, 'color': '#f87171', 'fontWeight': '700'},
         ],
-        page_size=5, sort_action='native'
+        page_size=8, sort_action='native'
     )
 
     # ==========================================
-    # LAYOUT 2 COLONNES
+    # LAYOUT - 2 ROWS SÉPARÉS
     # ==========================================
-    tables_row = dbc.Row([
-        dbc.Col([
-            html.Div("📋 Performance", style={"fontSize": "11px", "fontWeight": "600", "marginBottom": "4px", "color": "#94a3b8"}),
-            agents_table
-        ], width=6, style={"paddingRight": "4px"}),
-        dbc.Col([
-            html.Div(f"🚨 Risques ({len(risk_products)})", style={"fontSize": "11px", "fontWeight": "600", "marginBottom": "4px", "color": "#94a3b8"}),
-            risk_table
-        ], width=6, style={"paddingLeft": "4px"})
-    ], style={"marginBottom": "8px"})
+    # Row 1: Table Performance (pleine largeur)
+    performance_row = html.Div([
+        html.Div([
+            html.Span("📋", style={"marginRight": "8px", "fontSize": "18px"}),
+            html.Span("Performance des Agents", style={"fontSize": "16px", "fontWeight": "600", "color": "#e2e8f0"})
+        ], style={"marginBottom": "12px"}),
+        agents_table
+    ], style={
+        "background": "linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%)",
+        "borderRadius": "12px", "padding": "16px", "marginBottom": "20px",
+        "border": "1px solid #334155"
+    })
+
+    # Row 2: Table Risques (pleine largeur)
+    risk_row = html.Div([
+        html.Div([
+            html.Span("🚨", style={"marginRight": "8px", "fontSize": "18px"}),
+            html.Span(f"Produits à Risque ({len(risk_products)})", style={"fontSize": "16px", "fontWeight": "600", "color": "#e2e8f0"})
+        ], style={"marginBottom": "12px"}),
+        risk_table
+    ], style={
+        "background": "linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, rgba(15, 23, 42, 0.6) 100%)",
+        "borderRadius": "12px", "padding": "16px", "marginBottom": "20px",
+        "border": "1px solid #334155"
+    })
 
     # ==========================================
-    # DÉTAIL FOURNISSEURS
+    # DÉTAIL FOURNISSEURS (AGRANDI)
     # ==========================================
     detail = html.Div([
-        html.Span("🔍 ", style={"marginRight": "4px"}),
+        html.Span("🔍 ", style={"marginRight": "8px", "fontSize": "16px"}),
         html.Div(id="agent-suppliers-detail", children=[
-            html.Span("Cliquez un agent pour voir ses fournisseurs", style={"color": "#64748b", "fontSize": "10px"})
+            html.Span("Cliquez sur un agent dans la table pour voir ses fournisseurs", style={"color": "#94a3b8", "fontSize": "13px"})
         ], style={"display": "inline"})
     ], style={
-        "background": "rgba(30, 41, 59, 0.3)", "borderRadius": "6px",
-        "padding": "5px 8px", "fontSize": "10px"
+        "background": "rgba(30, 41, 59, 0.4)", "borderRadius": "10px",
+        "padding": "12px 16px", "fontSize": "13px", "border": "1px solid #334155"
     })
 
     # ==========================================
@@ -10180,9 +10226,9 @@ def page_agents(master_df: pd.DataFrame = None):
     return html.Div(className="content", children=[
         # Header
         html.Div([
-            html.H4("👤 Performance Agents", style={"margin": "0", "fontSize": "16px", "fontWeight": "700", "color": "#22d3ee"}),
-            html.P("Utilisez le filtre Agent dans le sidebar", style={"margin": "2px 0 0 0", "color": "#64748b", "fontSize": "10px"})
-        ], style={"marginBottom": "8px"}),
+            html.H4("👥 Performance Agents", style={"margin": "0", "fontSize": "24px", "fontWeight": "700", "color": "#22d3ee"}),
+            html.P("Suivi des performances par agent commercial", style={"margin": "4px 0 0 0", "color": "#94a3b8", "fontSize": "14px"})
+        ], style={"marginBottom": "20px"}),
 
         # KPIs
         kpis_row,
@@ -10190,8 +10236,11 @@ def page_agents(master_df: pd.DataFrame = None):
         # Podium
         podium,
 
-        # Tables
-        tables_row,
+        # Row 1: Table Performance
+        performance_row,
+
+        # Row 2: Table Risques
+        risk_row,
 
         # Détail
         detail
@@ -10957,7 +11006,6 @@ def render_page_content(auth_state, pathname):
         sidebar,
         html.Div(
             id="page-container",
-            className="content",  # Utiliser la classe CSS existante
             children=page_content
         )
     ])

@@ -4208,7 +4208,7 @@ app.index_string = """
                 top: 0; 
                 bottom: 0; 
                 left: 0; 
-                width: 260px;
+                width: 350px;
                 padding: 14px 12px; 
                 background: #0b1220; 
                 border-right: 1px solid var(--border-color); 
@@ -4216,7 +4216,7 @@ app.index_string = """
             }
 
             .content { 
-                margin-left: 260px; 
+                margin-left: 100px; 
                 padding: 16px 20px 100px 20px; 
                 background: var(--bg-primary) !important; 
                 color: var(--text-primary) !important; 

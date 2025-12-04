@@ -176,9 +176,15 @@ def get_or_create_user(username: str) -> dict:
         return None
 
 
+# Flag global pour désactiver le tracking si RLS bloque
+SUPABASE_TRACKING_ENABLED = True
+
+
 def create_session(user_id: str, ip_address: str = None, user_agent: str = None) -> str:
     """Crée une nouvelle session utilisateur"""
-    if not supabase_client or not user_id:
+    global SUPABASE_TRACKING_ENABLED
+
+    if not supabase_client or not user_id or not SUPABASE_TRACKING_ENABLED:
         return None
 
     try:
@@ -194,13 +200,20 @@ def create_session(user_id: str, ip_address: str = None, user_agent: str = None)
             return result.data[0]["id"]
         return None
     except Exception as e:
-        print(f"⚠️ Erreur create_session: {e}")
+        error_str = str(e)
+        if "row-level security policy" in error_str or "42501" in error_str:
+            print(f"⚠️ RLS bloque create_session - Tracking désactivé (configurer les policies Supabase)")
+            SUPABASE_TRACKING_ENABLED = False
+        else:
+            print(f"⚠️ Erreur create_session: {e}")
         return None
 
 
 def end_session(session_id: str):
     """Termine une session utilisateur"""
-    if not supabase_client or not session_id:
+    global SUPABASE_TRACKING_ENABLED
+
+    if not supabase_client or not session_id or not SUPABASE_TRACKING_ENABLED:
         return
 
     try:
@@ -210,12 +223,18 @@ def end_session(session_id: str):
         }).eq("id", session_id).execute()
         print(f"✅ Session terminée: {session_id}")
     except Exception as e:
-        print(f"⚠️ Erreur end_session: {e}")
+        error_str = str(e)
+        if "row-level security policy" in error_str or "42501" in error_str:
+            SUPABASE_TRACKING_ENABLED = False
+        else:
+            print(f"⚠️ Erreur end_session: {e}")
 
 
 def track_activity(user_id: str, session_id: str, action_type: str, page: str = None, details: dict = None):
     """Enregistre une activité utilisateur"""
-    if not supabase_client:
+    global SUPABASE_TRACKING_ENABLED
+
+    if not supabase_client or not SUPABASE_TRACKING_ENABLED:
         return
 
     try:
@@ -229,13 +248,19 @@ def track_activity(user_id: str, session_id: str, action_type: str, page: str = 
         supabase_client.table("user_activities").insert(activity_data).execute()
         print(f"📊 Activité trackée: {action_type} sur {page}")
     except Exception as e:
-        print(f"⚠️ Erreur track_activity: {e}")
+        error_str = str(e)
+        if "row-level security policy" in error_str or "42501" in error_str:
+            SUPABASE_TRACKING_ENABLED = False
+        else:
+            print(f"⚠️ Erreur track_activity: {e}")
 
 
 def track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: int, new_value: int,
                    supplier: str = None):
     """Enregistre une modification QAC"""
-    if not supabase_client:
+    global SUPABASE_TRACKING_ENABLED
+
+    if not supabase_client or not SUPABASE_TRACKING_ENABLED:
         return
 
     try:
@@ -250,7 +275,11 @@ def track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: 
         supabase_client.table("qac_edits_history").insert(edit_data).execute()
         print(f"📝 QAC edit tracké: {product_name} ({old_value} → {new_value})")
     except Exception as e:
-        print(f"⚠️ Erreur track_qac_edit: {e}")
+        error_str = str(e)
+        if "row-level security policy" in error_str or "42501" in error_str:
+            SUPABASE_TRACKING_ENABLED = False
+        else:
+            print(f"⚠️ Erreur track_qac_edit: {e}")
 
 
 def save_product_note(user_id: str, product_name: str, note_text: str, mentions: list = None, supplier: str = None):

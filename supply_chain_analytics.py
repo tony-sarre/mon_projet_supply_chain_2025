@@ -4224,22 +4224,19 @@ app.index_string = """
                 top: 0; 
                 bottom: 0; 
                 left: 0; 
-                width: 260px;
-                padding: 16px 14px; 
-                background: linear-gradient(180deg, #0b1220 0%, #0a0f18 100%);
+                width: 270px;
+                padding: 14px 12px; 
+                background: #0b1220; 
                 border-right: 1px solid var(--border-color); 
-                overflow-y: auto;
-                overflow-x: hidden;
-                z-index: 100;
+                overflow-y: auto; 
             }
 
             .content { 
-                margin-left: 260px; 
-                padding: 20px 24px 100px 24px; 
+                margin-left: 150px; 
+                padding: 16px 20px 100px 20px; 
                 background: var(--bg-primary) !important; 
                 color: var(--text-primary) !important; 
                 min-height: 100vh;
-                transition: margin-left 0.3s ease;
             }
 
             .brand { 
@@ -5108,10 +5105,114 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
     return grouped
 
 
+# ============================================================
+# FONCTION CENTRALE DE CALCUL DES KPIS - COHÉRENCE GARANTIE
+# ============================================================
+def calculate_stock_kpis(df: pd.DataFrame) -> dict:
+    """
+    Fonction UNIQUE et RIGOUREUSE pour calculer les KPIs de stock.
+    Utilisée par Overview ET Agents pour garantir la cohérence ABSOLUE.
+
+    DÉFINITIONS STRICTES:
+    - Rupture (Out of Stock): stock actuel <= 0
+    - À risque de rupture: produits avec proba ML >= 0.5 OU couverture < 7 jours
+
+    Returns:
+        dict avec: total_skus, out_of_stock, at_risk, suppliers
+    """
+    if df is None or df.empty:
+        return {
+            'total_skus': 0,
+            'out_of_stock': 0,
+            'at_risk': 0,
+            'suppliers': 0,
+            'method_rupture': 'N/A',
+            'method_prediction': 'N/A'
+        }
+
+    # Filtrer les produits delisted
+    if 'delisting_status' in df.columns:
+        delist = df['delisting_status'].astype(str).str.lower()
+        mask_valid = delist != 'delisted'
+        df_clean = df.loc[mask_valid].copy()
+    else:
+        df_clean = df.copy()
+
+    # KPI 1 : SKUs uniques
+    total_skus = df_clean['product_name'].nunique() if 'product_name' in df_clean.columns else len(df_clean)
+
+    # KPI 2 : RUPTURES RÉELLES (Out of Stock) - stock <= 0
+    out_of_stock = 0
+    method_rupture = 'N/A'
+
+    if 'total_stock' in df_clean.columns:
+        stock_values = pd.to_numeric(df_clean['total_stock'], errors='coerce').fillna(0)
+        out_of_stock = int((stock_values <= 0).sum())
+        method_rupture = 'total_stock <= 0'
+    elif 'Stock Status' in df_clean.columns:
+        out_of_stock = int((df_clean['Stock Status'] == 'Out of Stock').sum())
+        method_rupture = 'Stock Status == Out of Stock'
+
+    # KPI 3 : PRODUITS À RISQUE (Prédiction)
+    at_risk = 0
+    method_prediction = 'N/A'
+
+    # Préparer colonnes numériques
+    if 'total_stock' in df_clean.columns:
+        df_clean['_stock'] = pd.to_numeric(df_clean['total_stock'], errors='coerce').fillna(0)
+    else:
+        df_clean['_stock'] = 0
+
+    if 'Average Daily Sales' in df_clean.columns:
+        df_clean['_ads'] = pd.to_numeric(df_clean['Average Daily Sales'], errors='coerce').fillna(0.01).replace(0, 0.01)
+    else:
+        df_clean['_ads'] = 0.01
+
+    if 'optimal stock' in df_clean.columns:
+        df_clean['_optimal'] = pd.to_numeric(df_clean['optimal stock'], errors='coerce').fillna(0)
+    else:
+        df_clean['_optimal'] = 0
+
+    df_clean['_coverage'] = df_clean['_stock'] / df_clean['_ads']
+
+    # MÉTHODE 1: ML Stockout Probability >= 0.5
+    if 'Stockout Probability' in df_clean.columns:
+        probs = pd.to_numeric(df_clean['Stockout Probability'], errors='coerce').fillna(0)
+        non_zero = (probs > 0).sum()
+
+        if non_zero > 10:
+            # Exclure les produits déjà en rupture (stock <= 0)
+            at_risk = int(((probs >= 0.5) & (df_clean['_stock'] > 0)).sum())
+            method_prediction = f'ML Probability >= 0.5'
+
+    # MÉTHODE 2: Règle métier si ML non disponible
+    if at_risk == 0:
+        # Couverture < 7 jours ET stock > 0 (pas déjà en rupture)
+        risk_mask = (df_clean['_stock'] > 0) & (df_clean['_coverage'] < 7) & (df_clean['_coverage'] > 0)
+        at_risk = int(risk_mask.sum())
+        method_prediction = 'Couverture < 7 jours'
+
+    # KPI 4 : Fournisseurs
+    suppliers = df_clean['Supplier'].nunique() if 'Supplier' in df_clean.columns else 0
+
+    print(
+        f"   📊 calculate_stock_kpis: SKUs={total_skus}, Ruptures={out_of_stock}, À risque={at_risk}, Fournisseurs={suppliers}")
+
+    return {
+        'total_skus': total_skus,
+        'out_of_stock': out_of_stock,
+        'at_risk': at_risk,
+        'suppliers': suppliers,
+        'method_rupture': method_rupture,
+        'method_prediction': method_prediction
+    }
+
+
 # ------------------------------ Pages --------------------------------------------
 def make_kpis(df: pd.DataFrame):
     """
-    Calcule les KPIs + utilise VRAIMENT le modèle ML
+    Calcule les KPIs + liste des produits à risque.
+    UTILISE calculate_stock_kpis() pour COHÉRENCE avec page Agents.
     """
 
     # ---------- helpers ----------
@@ -5128,7 +5229,17 @@ def make_kpis(df: pd.DataFrame):
     def as_float(s, default=0.0):
         return pd.to_numeric(s, errors="coerce").fillna(default)
 
-    # ---------- nettoyage : exclure les delisted ----------
+    # ==========================================
+    # UTILISER LA FONCTION COMMUNE - COHÉRENCE GARANTIE
+    # ==========================================
+    stock_kpis = calculate_stock_kpis(df)
+
+    total_skus = stock_kpis['total_skus']
+    out_of_stock = stock_kpis['out_of_stock']
+    suppliers = stock_kpis['suppliers']
+    risk_count = stock_kpis['at_risk']  # Utiliser la même valeur que page Agents
+
+    # Préparer df_valid pour construire la liste des produits à afficher
     if 'delisting_status' in df.columns:
         delist = df['delisting_status'].astype(str).str.lower()
         mask_valid = delist != 'delisted'
@@ -5136,171 +5247,76 @@ def make_kpis(df: pd.DataFrame):
     else:
         df_valid = df.copy()
 
-    # ---------- KPI 1 : SKUs ----------
-    total_skus = df_valid['product_name'].nunique() if 'product_name' in df_valid.columns else len(df_valid)
-
-    # ---------- KPI 2 : Ruptures réelles ----------
-    if 'Stock Status' in df_valid.columns:
-        out_of_stock = int((df_valid['Stock Status'] == 'Out of Stock').sum())
-    elif 'total_stock' in df_valid.columns:
-        out_of_stock = int((as_float(df_valid['total_stock']) <= 0).sum())
-    else:
-        out_of_stock = 0
-
-    # ---------- KPI 3 : Fournisseurs ----------
-    if 'Supplier' in df_valid.columns:
-        suppliers = df_valid['Supplier'].nunique()
-    else:
-        suppliers = 0
-
     # ========================================
-    # ✅ NOUVELLE LOGIQUE : UTILISER LE ML
+    # CONSTRUIRE LA LISTE DES PRODUITS À RISQUE (pour dropdown)
     # ========================================
     print("\n" + "=" * 60)
-    print("🤖 DÉTECTION RISQUES AVEC ML")
+    print("🤖 CONSTRUCTION LISTE PRODUITS À RISQUE")
     print("=" * 60)
 
     risk_products = []
-    total_risk_count = 0  # ✅ VRAI TOTAL (pas limité à 50)
 
-    # ✅ PRIORITÉ 1 : Utiliser Stockout Probability (le vrai ML)
+    # Préparer colonnes
+    if 'total_stock' in df_valid.columns:
+        df_valid['_stock'] = pd.to_numeric(df_valid['total_stock'], errors='coerce').fillna(0)
+    else:
+        df_valid['_stock'] = 0
+
+    if 'Average Daily Sales' in df_valid.columns:
+        df_valid['_ads'] = pd.to_numeric(df_valid['Average Daily Sales'], errors='coerce').fillna(0.01).replace(0, 0.01)
+    else:
+        df_valid['_ads'] = 0.01
+
+    df_valid['_coverage'] = df_valid['_stock'] / df_valid['_ads']
+
+    # MÉTHODE 1 : ML Stockout Probability >= 0.5
     if 'Stockout Probability' in df_valid.columns:
-        ml_probs = as_float(df_valid['Stockout Probability'])
+        probs = as_float(df_valid['Stockout Probability'])
+        non_zero = (probs > 0).sum()
 
-        # Vérifier si le ML a vraiment été entraîné (pas tous à 0)
-        non_zero_probs = (ml_probs > 0).sum()
-
-        if non_zero_probs > 0:
-            print("✅ Utilisation du modèle ML (Stockout Probability)")
-
-            # Risque élevé : proba > 0.7
-            high_risk_mask = ml_probs > 0.7
-            # Risque moyen : proba entre 0.3 et 0.7
-            medium_risk_mask = (ml_probs > 0.3) & (ml_probs <= 0.7)
-
-            high_risk_count = int(high_risk_mask.sum())
-            medium_risk_count = int(medium_risk_mask.sum())
-            total_risk_count = int((ml_probs > 0.3).sum())  # ✅ VRAI TOTAL
-
-            print(f"   📊 Risque élevé (>0.7) : {high_risk_count} produits")
-            print(f"   📊 Risque moyen (0.3-0.7) : {medium_risk_count} produits")
-            print(f"   📊 TOTAL À RISQUE : {total_risk_count} produits")
-
-            # Combiner risques élevés et moyens
-            risk_mask = ml_probs > 0.3
+        if non_zero > 10:
+            print("✅ Utilisation ML (Stockout Probability >= 0.5)")
+            # Même critère que calculate_stock_kpis
+            risk_mask = (probs >= 0.5) & (df_valid['_stock'] > 0)
             risk_df = df_valid.loc[risk_mask].copy()
-
-            # Trier par probabilité décroissante
             risk_df = risk_df.sort_values('Stockout Probability', ascending=False)
-
-            print(f"   ✅ Affichage limité à 50 produits (sur {total_risk_count})")
 
             for _, row in risk_df.head(50).iterrows():
                 prob = float(row.get('Stockout Probability', 0))
-
                 risk_products.append({
                     'product_name': str(row.get('product_name', 'N/A'))[:60],
                     'supplier': str(row.get('Supplier', 'N/A')),
-                    'coverage_days': float(row.get('Max Coverage Day', 0) or 0),
-                    'stock': float(row.get('total_stock', 0) or 0),
-                    'ads': float(row.get('Average Daily Sales', 0) or 0),
+                    'coverage_days': float(row.get('_coverage', 0) or 0),
+                    'stock': float(row.get('_stock', 0) or 0),
+                    'ads': float(row.get('_ads', 0) or 0),
                     'category': str(row.get('Product Category', 'N/A')),
                     'ml_probability': prob,
-                    'risk_level': 'HIGH' if prob > 0.7 else 'MEDIUM'
+                    'risk_level': 'HIGH' if prob >= 0.7 else 'MEDIUM'
                 })
-        else:
-            print("⚠️ ML Stockout Probability = 0 partout, fallback vers Predicted Stockout")
-            # Continuer vers fallback
 
-    # ✅ FALLBACK 1 : Predicted Stockout (règle booléenne) - si ML n'a pas fonctionné
-    if total_risk_count == 0 and 'Predicted Stockout' in df_valid.columns:
-        print("⚠️ Fallback : Predicted Stockout (règle booléenne)")
-
-        risk_mask = (df_valid['Predicted Stockout'] == True)
-        total_risk_count = int(risk_mask.sum())  # ✅ VRAI TOTAL
-
-        print(f"   📊 Predicted Stockout = True : {total_risk_count} produits")
-
-        if 'Credit Adequacy Score' in df_valid.columns:
-            risk_mask_credit = risk_mask & (as_float(df_valid['Credit Adequacy Score']) < 0.5)
-            total_with_credit = int(risk_mask_credit.sum())
-            print(f"   📊 + Credit Score < 0.5 : {total_with_credit} produits")
-
+    # MÉTHODE 2 : Règle métier si ML non disponible
+    if len(risk_products) == 0:
+        print("⚠️ Fallback: Couverture < 7 jours")
+        # Même critère que calculate_stock_kpis
+        risk_mask = (df_valid['_stock'] > 0) & (df_valid['_coverage'] < 7) & (df_valid['_coverage'] > 0)
         risk_df = df_valid.loc[risk_mask].copy()
-
-        if 'Max Coverage Day' in risk_df.columns:
-            risk_df = risk_df.sort_values('Max Coverage Day', ascending=True)
+        risk_df = risk_df.sort_values('_coverage', ascending=True)
 
         for _, row in risk_df.head(50).iterrows():
+            coverage = float(row.get('_coverage', 0) or 0)
+            pseudo_prob = 0.7 if coverage < 3 else 0.5
             risk_products.append({
                 'product_name': str(row.get('product_name', 'N/A'))[:60],
                 'supplier': str(row.get('Supplier', 'N/A')),
-                'coverage_days': float(row.get('Max Coverage Day', 0) or 0),
-                'stock': float(row.get('total_stock', 0) or 0),
-                'ads': float(row.get('Average Daily Sales', 0) or 0),
+                'coverage_days': coverage,
+                'stock': float(row.get('_stock', 0) or 0),
+                'ads': float(row.get('_ads', 0) or 0),
                 'category': str(row.get('Product Category', 'N/A')),
-                'ml_probability': 0.5,  # Valeur par défaut
-                'risk_level': 'MEDIUM'
+                'ml_probability': pseudo_prob,
+                'risk_level': 'HIGH' if coverage < 3 else 'MEDIUM'
             })
 
-    # ✅ FALLBACK 2 : Stock Status = Predicted Stockout Soon
-    if total_risk_count == 0 and 'Stock Status' in df_valid.columns:
-        print("⚠️ Fallback : Stock Status = Predicted Stockout Soon")
-
-        risk_mask = (df_valid['Stock Status'] == 'Predicted Stockout Soon')
-        total_risk_count = int(risk_mask.sum())
-
-        print(f"   📊 Predicted Stockout Soon : {total_risk_count} produits")
-
-        risk_df = df_valid.loc[risk_mask].copy()
-
-        if 'Max Coverage Day' in risk_df.columns:
-            risk_df = risk_df.sort_values('Max Coverage Day', ascending=True)
-
-        for _, row in risk_df.head(50).iterrows():
-            risk_products.append({
-                'product_name': str(row.get('product_name', 'N/A'))[:60],
-                'supplier': str(row.get('Supplier', 'N/A')),
-                'coverage_days': float(row.get('Max Coverage Day', 0) or 0),
-                'stock': float(row.get('total_stock', 0) or 0),
-                'ads': float(row.get('Average Daily Sales', 0) or 0),
-                'category': str(row.get('Product Category', 'N/A')),
-                'ml_probability': 0.4,
-                'risk_level': 'MEDIUM'
-            })
-
-    # ✅ FALLBACK 3 : Calcul couverture < lead time
-    if total_risk_count == 0 and {'Max Coverage Day', 'ADJUSTED_LEADTIME'}.issubset(df_valid.columns):
-        print("⚠️ Fallback : Couverture < Lead Time")
-
-        mcd = as_float(df_valid['Max Coverage Day'])
-        alt = as_float(df_valid['ADJUSTED_LEADTIME'], 7)
-        credit = as_float(df_valid.get('credit_days', pd.Series([14] * len(df_valid))), 14)
-
-        replenishment_days = alt + credit
-        risk_mask = (mcd > 0) & (mcd < replenishment_days)
-        total_risk_count = int(risk_mask.sum())
-
-        print(f"   📊 Couverture < Replenishment : {total_risk_count} produits")
-
-        risk_df = df_valid.loc[risk_mask].sort_values('Max Coverage Day', ascending=True)
-
-        for _, row in risk_df.head(50).iterrows():
-            risk_products.append({
-                'product_name': str(row.get('product_name', 'N/A'))[:60],
-                'supplier': str(row.get('Supplier', 'N/A')),
-                'coverage_days': float(row.get('Max Coverage Day', 0) or 0),
-                'stock': float(row.get('total_stock', 0) or 0),
-                'ads': float(row.get('Average Daily Sales', 0) or 0),
-                'category': str(row.get('Product Category', 'N/A')),
-                'ml_probability': 0.3,
-                'risk_level': 'MEDIUM'
-            })
-
-    # ✅ risk_count = VRAI TOTAL (pas len(risk_products) qui est limité à 50)
-    risk_count = total_risk_count
-    print(f"✅ TOTAL PRODUITS À RISQUE : {risk_count}")
-    print(f"   (Affichés dans dropdown : {len(risk_products)})")
+    print(f"   📋 Produits dans dropdown: {len(risk_products)} (total à risque: {risk_count})")
     print("=" * 60 + "\n")
 
     # ---------- Cartes KPI ----------
@@ -5486,12 +5502,11 @@ def make_kpis(df: pd.DataFrame):
                         html.Hr(style={"borderColor": "#374151", "margin": "12px 0"}),
                         html.Div([
                             html.Small(
-                                f"📊 Affichant {len(risk_products)} sur {risk_count} produit(s) à risque",
-                                style={"color": "#94a3b8", "fontSize": "11px", "marginRight": "10px"}
+                                f" Affichant {min(len(risk_products), 50)} produit(s)",
+                                style={"color": "#6b7280", "fontSize": "10px", "marginRight": "10px"}
                             ),
                             html.Small(
-                                "• 🤖 ML RandomForest" if any(p.get('ml_probability', 0) > 0 for p in
-                                                             risk_products) else "• ⚠️ Règle heuristique",
+                                "• 🤖 Calculé avec ML RandomForest",
                                 style={"color": "#4b5563", "fontSize": "10px"}
                             )
                         ], style={"display": "flex", "alignItems": "center", "justifyContent": "center"})
@@ -6751,7 +6766,7 @@ def page_overview(master_df: pd.DataFrame = None):
     return html.Div(className="content", children=[
         # En-tête avec titre + KPI risque de rupture
         dbc.Row([
-            dbc.Col(html.H2("📊 Overview", style={"color": "#22d3ee", "fontWeight": "800"}), md=8),
+            dbc.Col(html.H2(" Overview", style={"color": "#22d3ee", "fontWeight": "800"}), md=8),
             dbc.Col(html.Div(risk_bell, style={"textAlign": "right"}), md=4),
         ], className="mb-3"),
 
@@ -10034,7 +10049,7 @@ def page_agents(master_df: pd.DataFrame = None):
     print(f"   📊 {len(performance_df)} agents avec performances calculées")
 
     # ==========================================
-    # CALCULS KPIs RIGOUREUX - HARMONISÉS AVEC OVERVIEW
+    # CALCULS KPIs - UTILISER FONCTION COMMUNE
     # ==========================================
     total_agents = len(performance_df) if not performance_df.empty else 0
 
@@ -10055,91 +10070,61 @@ def page_agents(master_df: pd.DataFrame = None):
         taux = performance_df['taux_traitement'].dropna()
         avg_taux_traitement = taux.mean() if len(taux) > 0 else 0
 
-    # Total refs OOS (depuis performance_df - somme des ruptures par agent)
-    total_refs_oos = 0
-    if not performance_df.empty and 'rupture_count' in performance_df.columns:
-        total_refs_oos = int(performance_df['rupture_count'].fillna(0).sum())
+    # ==========================================
+    # ✅ UTILISER LA FONCTION COMMUNE - COHÉRENCE GARANTIE
+    # ==========================================
+    print("   🔄 Page Agents: Utilisation de calculate_stock_kpis()")
+    stock_kpis = calculate_stock_kpis(master_df)
 
-    # ==========================================
-    # RUPTURES - MÊME MÉTHODE QUE PAGE OVERVIEW
-    # ==========================================
-    # Méthode 1: Via Stock Status (prioritaire - même que Overview)
-    total_ruptures = 0
-    if not master_df.empty:
-        if 'Stock Status' in master_df.columns:
-            total_ruptures = int((master_df['Stock Status'] == 'Out of Stock').sum())
-            print(f"   📊 Ruptures via Stock Status: {total_ruptures}")
-        elif 'total_stock' in master_df.columns:
-            # Fallback: stock <= 0
-            stock = pd.to_numeric(master_df['total_stock'], errors='coerce').fillna(0)
-            total_ruptures = int((stock <= 0).sum())
-            print(f"   📊 Ruptures via total_stock <= 0: {total_ruptures}")
-
-    # ==========================================
-    # PRÉDICTIONS RUPTURE - MÊME MÉTHODE QUE OVERVIEW
-    # ==========================================
-    total_predicted_stockout = 0
-    if not master_df.empty:
-        # Priorité 1: Stockout Probability ML (>0.3 = à risque)
-        if 'Stockout Probability' in master_df.columns:
-            probs = pd.to_numeric(master_df['Stockout Probability'], errors='coerce').fillna(0)
-            total_predicted_stockout = int((probs > 0.3).sum())
-            print(f"   📊 Prédictions ML (prob > 0.3): {total_predicted_stockout}")
-        # Priorité 2: Predicted Stockout booléen
-        elif 'Predicted Stockout' in master_df.columns:
-            total_predicted_stockout = int((master_df['Predicted Stockout'] == True).sum())
-            print(f"   📊 Prédictions (Predicted Stockout): {total_predicted_stockout}")
-        # Priorité 3: Stock Status = Predicted Stockout Soon
-        elif 'Stock Status' in master_df.columns:
-            total_predicted_stockout = int((master_df['Stock Status'] == 'Predicted Stockout Soon').sum())
-            print(f"   📊 Prédictions (Stock Status): {total_predicted_stockout}")
+    total_ruptures = stock_kpis['out_of_stock']
+    total_at_risk = stock_kpis['at_risk']
 
     print(
-        f"   📈 KPIs: agents={total_agents}, score={avg_score:.1f}, cmd={total_order_value / 1e6:.1f}M, rupt={total_ruptures}, pred={total_predicted_stockout}")
+        f"   📈 KPIs Agents: agents={total_agents}, score={avg_score:.1f}, rupt={total_ruptures}, risk={total_at_risk}")
 
     # ==========================================
-    # KPIs EN LIGNE (style AGRANDI)
+    # KPIs AGRANDIS (style cards)
     # ==========================================
-    kpi_style = {
+    kpi_card_style = {
         "display": "flex", "flexDirection": "column", "alignItems": "center", "justifyContent": "center",
         "background": "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", "borderRadius": "12px",
-        "padding": "16px 20px", "minWidth": "120px", "border": "1px solid #334155",
+        "padding": "16px 20px", "minWidth": "130px", "border": "1px solid #334155",
         "boxShadow": "0 4px 12px rgba(0,0,0,0.3)"
     }
-    kpi_value_style = {"fontSize": "28px", "fontWeight": "700", "lineHeight": "1"}
-    kpi_label_style = {"color": "#94a3b8", "fontSize": "12px", "marginTop": "6px", "textTransform": "uppercase",
+    kpi_value_style = {"fontSize": "28px", "fontWeight": "700", "lineHeight": "1.2"}
+    kpi_label_style = {"color": "#94a3b8", "fontSize": "11px", "marginTop": "6px", "textTransform": "uppercase",
                        "letterSpacing": "0.5px"}
 
     kpis_row = html.Div([
         html.Div([
             html.Div(f"{total_agents}", style={**kpi_value_style, "color": "#22d3ee"}),
-            html.Div("👥 Agents", style=kpi_label_style)
-        ], style=kpi_style),
+            html.Div(" Agents", style=kpi_label_style)
+        ], style=kpi_card_style),
         html.Div([
             html.Div(f"{avg_score:.0f}",
                      style={**kpi_value_style, "color": "#34d399" if avg_score >= 60 else "#f87171"}),
             html.Div(" Score Moyen", style=kpi_label_style)
-        ], style=kpi_style),
+        ], style=kpi_card_style),
         html.Div([
             html.Div(f"{total_order_value / 1e6:.1f}M", style={**kpi_value_style, "color": "#a78bfa"}),
             html.Div(" Valeur Cmd", style=kpi_label_style)
-        ], style=kpi_style),
+        ], style=kpi_card_style),
         html.Div([
             html.Div(f"{avg_taux_traitement:.0f}%", style={**kpi_value_style, "color": "#34d399"}),
             html.Div(" Traitement", style=kpi_label_style)
-        ], style=kpi_style),
+        ], style=kpi_card_style),
         html.Div([
             html.Div(f"{total_ruptures}", style={**kpi_value_style, "color": "#f87171"}),
             html.Div(" Ruptures", style=kpi_label_style)
-        ], style=kpi_style),
+        ], style=kpi_card_style),
         html.Div([
-            html.Div(f"{total_predicted_stockout}", style={**kpi_value_style, "color": "#fbbf24"}),
-            html.Div(" Prédictions", style=kpi_label_style)
-        ], style=kpi_style),
+            html.Div(f"{total_at_risk}", style={**kpi_value_style, "color": "#fbbf24"}),
+            html.Div(" À Risque", style=kpi_label_style)
+        ], style=kpi_card_style),
     ], style={"display": "flex", "flexWrap": "wrap", "gap": "12px", "marginBottom": "20px"})
 
     # ==========================================
-    # PODIUM TOP 3 (AGRANDI)
+    # PODIUM TOP 3 (agrandi)
     # ==========================================
     podium = html.Div()
     if not performance_df.empty and len(performance_df) >= 1:
@@ -10149,18 +10134,18 @@ def page_agents(master_df: pd.DataFrame = None):
         for i in range(min(3, len(performance_df))):
             a = performance_df.iloc[i]
             items.append(html.Span([
-                html.Span(medals[i], style={"fontSize": "18px"}), " ",
-                html.B(a['agent_name'], style={"color": colors[i], "fontSize": "14px"}),
-                html.Span(f" ({a['score_global']:.0f})", style={"color": "#64748b", "fontSize": "13px"})
-            ], style={"marginRight": "20px"}))
+                html.Span(medals[i], style={"fontSize": "20px"}), " ",
+                html.B(a['agent_name'], style={"color": colors[i], "fontSize": "15px"}),
+                html.Span(f" ({a['score_global']:.0f})", style={"color": "#64748b", "fontSize": "14px"})
+            ], style={"marginRight": "24px"}))
         podium = html.Div(["🏆 TOP 3 : ", *items], style={
             "background": "linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%)",
             "borderRadius": "10px", "border": "1px solid #334155",
-            "padding": "12px 16px", "marginBottom": "20px", "fontSize": "14px"
+            "padding": "14px 18px", "marginBottom": "20px", "fontSize": "15px"
         })
 
     # ==========================================
-    # TABLE AGENTS (AGRANDIE)
+    # TABLE PERFORMANCE AGENTS (ROW 1 - PLEINE LARGEUR)
     # ==========================================
     table_data = []
     if not performance_df.empty:
@@ -10184,7 +10169,7 @@ def page_agents(master_df: pd.DataFrame = None):
             {"name": "#", "id": "rank"},
             {"name": "Agent", "id": "agent"},
             {"name": "Fournisseurs", "id": "frs"},
-            {"name": "Valeur", "id": "val"},
+            {"name": "Valeur Cmd", "id": "val"},
             {"name": "Traitées", "id": "ok"},
             {"name": "En attente", "id": "pend"},
             {"name": "Taux %", "id": "pct"},
@@ -10193,17 +10178,18 @@ def page_agents(master_df: pd.DataFrame = None):
             {"name": "Score", "id": "sc"},
         ],
         data=table_data,
-        style_table={'overflowX': 'auto', 'borderRadius': '10px', 'border': '1px solid #334155'},
+        style_table={'overflowX': 'auto'},
         style_header={
             'backgroundColor': '#1e293b', 'color': '#94a3b8', 'fontWeight': '600',
             'fontSize': '12px', 'border': 'none', 'padding': '12px 8px', 'textAlign': 'center'
         },
         style_cell={
             'backgroundColor': '#0f172a', 'color': '#e2e8f0', 'border': 'none',
-            'padding': '10px 8px', 'fontSize': '13px', 'textAlign': 'center', 'minWidth': '60px'
+            'padding': '10px 8px', 'fontSize': '13px', 'textAlign': 'center', 'minWidth': '70px'
         },
         style_data_conditional=[
-            {'if': {'filter_query': '{rank} = 1'}, 'borderLeft': '3px solid #fbbf24'},
+            {'if': {'filter_query': '{rank} = 1'}, 'borderLeft': '3px solid #fbbf24',
+             'backgroundColor': 'rgba(251, 191, 36, 0.05)'},
             {'if': {'filter_query': '{rank} = 2'}, 'borderLeft': '3px solid #94a3b8'},
             {'if': {'filter_query': '{rank} = 3'}, 'borderLeft': '3px solid #b45309'},
             {'if': {'column_id': 'sc'}, 'fontWeight': '700', 'color': '#22d3ee', 'fontSize': '14px'},
@@ -10214,43 +10200,78 @@ def page_agents(master_df: pd.DataFrame = None):
         row_selectable='single', selected_rows=[], page_size=8, sort_action='native'
     )
 
+    # ROW 1 : Table Performance
+    performance_row = dbc.Row([
+        dbc.Col([
+            html.Div([
+                html.Span("📋", style={"fontSize": "18px", "marginRight": "8px"}),
+                html.Span("Performance des Agents", style={"fontSize": "16px", "fontWeight": "600", "color": "#e2e8f0"})
+            ], style={"marginBottom": "12px"}),
+            agents_table
+        ], width=12)
+    ], style={"marginBottom": "24px"})
+
     # ==========================================
-    # PRODUITS À RISQUE (AGRANDIE)
+    # TABLE PRODUITS À RISQUE (ROW 2 - PLEINE LARGEUR)
     # ==========================================
     risk_products = []
     if not master_df.empty and supplier_agent_map:
         risk_df = master_df.copy()
-        if 'rotation_days' in risk_df.columns:
-            risk_df['_rot'] = pd.to_numeric(risk_df['rotation_days'], errors='coerce').fillna(999)
-        else:
-            risk_df['_rot'] = 999
+
+        # Colonnes de calcul
         if 'total_stock' in risk_df.columns:
             risk_df['_stk'] = pd.to_numeric(risk_df['total_stock'], errors='coerce').fillna(0)
         else:
             risk_df['_stk'] = 0
 
-        risk_mask = (risk_df['_stk'] <= 0) | (risk_df['_rot'] < 7)
-        for _, row in risk_df[risk_mask].head(30).iterrows():
+        if 'Average Daily Sales' in risk_df.columns:
+            risk_df['_ads'] = pd.to_numeric(risk_df['Average Daily Sales'], errors='coerce').fillna(0.01).replace(0,
+                                                                                                                  0.01)
+        else:
+            risk_df['_ads'] = 0.01
+
+        risk_df['_coverage'] = risk_df['_stk'] / risk_df['_ads']
+
+        # Filtrer : stock <= 0 OU couverture < 7 jours
+        risk_mask = (risk_df['_stk'] <= 0) | ((risk_df['_coverage'] < 7) & (risk_df['_coverage'] > 0))
+        risk_filtered = risk_df[risk_mask].sort_values('_coverage', ascending=True)
+
+        for _, row in risk_filtered.head(30).iterrows():
             sup = str(row.get('Supplier', '')).strip()
+            stk = row['_stk']
+            cov = row['_coverage']
+
+            if stk <= 0:
+                status = '🔴 Rupture'
+                status_color = '#f87171'
+            elif cov < 3:
+                status = '🟠 Critique'
+                status_color = '#fb923c'
+            else:
+                status = '🟡 Risque'
+                status_color = '#fbbf24'
+
             risk_products.append({
-                'st': '🔴' if row['_stk'] <= 0 else '🟡',
-                'prod': str(row.get('product_name', ''))[:35],
-                'sup': sup[:15],
-                'agt': get_agent_for_product(sup, supplier_agent_map)[:12],
-                'stk': int(row['_stk']),
+                'status': status,
+                'prod': str(row.get('product_name', ''))[:40],
+                'sup': sup[:20],
+                'agt': get_agent_for_product(sup, supplier_agent_map)[:15],
+                'stk': int(stk),
+                'cov': f"{cov:.0f}j" if cov < 999 else "-"
             })
 
     risk_table = dash_table.DataTable(
         id='agents-risk-products-table',
         columns=[
-            {"name": "Status", "id": "st"},
+            {"name": "Status", "id": "status"},
             {"name": "Produit", "id": "prod"},
             {"name": "Fournisseur", "id": "sup"},
             {"name": "Agent", "id": "agt"},
             {"name": "Stock", "id": "stk"},
+            {"name": "Couv.", "id": "cov"},
         ],
         data=risk_products,
-        style_table={'overflowX': 'auto', 'borderRadius': '10px', 'border': '1px solid #334155'},
+        style_table={'overflowX': 'auto'},
         style_header={
             'backgroundColor': '#1e293b', 'color': '#94a3b8', 'fontWeight': '600',
             'fontSize': '12px', 'border': 'none', 'padding': '12px 8px', 'textAlign': 'left'
@@ -10261,68 +10282,52 @@ def page_agents(master_df: pd.DataFrame = None):
             'maxWidth': '200px', 'overflow': 'hidden', 'textOverflow': 'ellipsis'
         },
         style_data_conditional=[
-            {'if': {'filter_query': '{st} = "🔴"'}, 'backgroundColor': 'rgba(239, 68, 68, 0.1)'},
-            {'if': {'filter_query': '{st} = "🟡"'}, 'backgroundColor': 'rgba(251, 191, 36, 0.08)'},
+            {'if': {'filter_query': '{status} contains "Rupture"'}, 'backgroundColor': 'rgba(239, 68, 68, 0.1)'},
+            {'if': {'filter_query': '{status} contains "Critique"'}, 'backgroundColor': 'rgba(251, 146, 60, 0.08)'},
             {'if': {'column_id': 'agt'}, 'fontWeight': '600', 'color': '#22d3ee'},
-            {'if': {'column_id': 'stk', 'filter_query': '{stk} <= 0'}, 'color': '#f87171', 'fontWeight': '700'},
+            {'if': {'column_id': 'status'}, 'fontWeight': '600'},
+            {'if': {'filter_query': '{stk} = 0', 'column_id': 'stk'}, 'color': '#f87171', 'fontWeight': '700'},
         ],
-        page_size=8, sort_action='native'
+        page_size=10, sort_action='native'
     )
 
-    # ==========================================
-    # LAYOUT - 2 ROWS SÉPARÉS
-    # ==========================================
-    # Row 1: Table Performance (pleine largeur)
-    performance_row = html.Div([
-        html.Div([
-            html.Span("📋", style={"marginRight": "8px", "fontSize": "18px"}),
-            html.Span("Performance des Agents", style={"fontSize": "16px", "fontWeight": "600", "color": "#e2e8f0"})
-        ], style={"marginBottom": "12px"}),
-        agents_table
-    ], style={
-        "background": "linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%)",
-        "borderRadius": "12px", "padding": "16px", "marginBottom": "20px",
-        "border": "1px solid #334155"
-    })
-
-    # Row 2: Table Risques (pleine largeur)
-    risk_row = html.Div([
-        html.Div([
-            html.Span("🚨", style={"marginRight": "8px", "fontSize": "18px"}),
-            html.Span(f"Produits à Risque ({len(risk_products)})",
-                      style={"fontSize": "16px", "fontWeight": "600", "color": "#e2e8f0"})
-        ], style={"marginBottom": "12px"}),
-        risk_table
-    ], style={
-        "background": "linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, rgba(15, 23, 42, 0.6) 100%)",
-        "borderRadius": "12px", "padding": "16px", "marginBottom": "20px",
-        "border": "1px solid #334155"
-    })
+    # ROW 2 : Table Risques
+    risk_row = dbc.Row([
+        dbc.Col([
+            html.Div([
+                html.Span("🚨", style={"fontSize": "18px", "marginRight": "8px"}),
+                html.Span(f"Produits à Risque ({len(risk_products)})",
+                          style={"fontSize": "16px", "fontWeight": "600", "color": "#e2e8f0"})
+            ], style={"marginBottom": "12px"}),
+            risk_table
+        ], width=12)
+    ], style={"marginBottom": "20px"})
 
     # ==========================================
-    # DÉTAIL FOURNISSEURS (AGRANDI)
+    # DÉTAIL FOURNISSEURS (agrandi)
     # ==========================================
     detail = html.Div([
         html.Span("🔍 ", style={"marginRight": "8px", "fontSize": "16px"}),
         html.Div(id="agent-suppliers-detail", children=[
             html.Span("Cliquez sur un agent dans la table pour voir ses fournisseurs",
-                      style={"color": "#94a3b8", "fontSize": "13px"})
+                      style={"color": "#64748b", "fontSize": "13px"})
         ], style={"display": "inline"})
     ], style={
-        "background": "rgba(30, 41, 59, 0.4)", "borderRadius": "10px",
-        "padding": "12px 16px", "fontSize": "13px", "border": "1px solid #334155"
+        "background": "linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%)",
+        "borderRadius": "10px", "border": "1px solid #334155",
+        "padding": "12px 16px", "fontSize": "13px"
     })
 
     # ==========================================
-    # RETURN AVEC className="content" OBLIGATOIRE
+    # RETURN LAYOUT FINAL
     # ==========================================
     return html.Div(className="content", children=[
         # Header
         html.Div([
             html.H4(" Performance Agents",
-                    style={"margin": "0", "fontSize": "24px", "fontWeight": "700", "color": "#22d3ee"}),
-            html.P("Suivi des performances par agent commercial",
-                   style={"margin": "4px 0 0 0", "color": "#94a3b8", "fontSize": "14px"})
+                    style={"margin": "0", "fontSize": "20px", "fontWeight": "700", "color": "#22d3ee"}),
+            html.P("Suivi des performances et gestion des risques par agent",
+                   style={"margin": "4px 0 0 0", "color": "#64748b", "fontSize": "13px"})
         ], style={"marginBottom": "20px"}),
 
         # KPIs
@@ -10331,13 +10336,13 @@ def page_agents(master_df: pd.DataFrame = None):
         # Podium
         podium,
 
-        # Row 1: Table Performance
+        # ROW 1 : Table Performance (pleine largeur)
         performance_row,
 
-        # Row 2: Table Risques
+        # ROW 2 : Table Risques (pleine largeur)
         risk_row,
 
-        # Détail
+        # Détail fournisseurs
         detail
     ])
 
@@ -11103,6 +11108,7 @@ def render_page_content(auth_state, pathname):
         sidebar,
         html.Div(
             id="page-container",
+            className="content",  # Utiliser la classe CSS existante
             children=page_content
         )
     ])

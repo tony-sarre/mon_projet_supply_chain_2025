@@ -1142,9 +1142,14 @@ def create_login_layout():
                 "border": "1px solid rgba(255, 255, 255, 0.1)"
             }, children=[
 
-                # Logo et titre
+                # Logo MAAD et titre
                 html.Div(className="login-logo", style={"textAlign": "center", "marginBottom": "32px"}, children=[
-                    html.Div("📦", style={"fontSize": "64px", "marginBottom": "16px"}),
+                    # Logo MAAD (image)
+                    html.Img(src="/assets/logo_maad.png", style={
+                        "width": "160px",
+                        "height": "auto",
+                        "marginBottom": "20px"
+                    }),
                     html.H1("Supply Chain Analytics", style={
                         "fontSize": "28px",
                         "fontWeight": "800",
@@ -1268,28 +1273,33 @@ def create_user_navbar(username: str):
     initials = "".join([n[0].upper() for n in user["name"].split()[:2]])
 
     role_colors = {"admin": "#ef4444", "manager": "#f59e0b", "user": "#22d3ee"}
-    role_labels = {"admin": "Administrateur", "manager": "Manager", "user": "Utilisateur"}
+    role_labels = {"admin": "Admin", "manager": "Manager", "user": "User"}
+
+    # Prénom seulement pour gagner de la place
+    first_name = user["name"].split()[0] if user["name"] else username
 
     return html.Div([
         html.Div(style={
             "position": "fixed",
-            "top": "16px",
-            "right": "16px",
+            "top": "8px",
+            "right": "12px",
             "zIndex": "9999",
             "display": "flex",
             "alignItems": "center",
-            "gap": "12px",
-            "padding": "10px 16px",
+            "gap": "8px",
+            "padding": "6px 12px",
             "background": "rgba(30, 41, 59, 0.95)",
             "backdropFilter": "blur(10px)",
             "borderRadius": "50px",
             "border": "1px solid #334155",
-            "boxShadow": "0 4px 20px rgba(0, 0, 0, 0.3)"
+            "boxShadow": "0 4px 20px rgba(0, 0, 0, 0.3)",
+            "maxWidth": "180px"
         }, children=[
-            # Avatar
+            # Avatar (plus petit)
             html.Div(initials, style={
-                "width": "36px",
-                "height": "36px",
+                "width": "30px",
+                "height": "30px",
+                "minWidth": "30px",
                 "background": f"linear-gradient(135deg, {role_colors.get(user['role'], '#22d3ee')}, #a78bfa)",
                 "borderRadius": "50%",
                 "display": "flex",
@@ -1297,32 +1307,36 @@ def create_user_navbar(username: str):
                 "justifyContent": "center",
                 "fontWeight": "700",
                 "color": "#0f172a",
-                "fontSize": "14px"
+                "fontSize": "12px"
             }),
 
-            # Infos
+            # Infos (prénom seulement + rôle court)
             html.Div([
-                html.Div(user["name"], style={
+                html.Div(first_name, style={
                     "color": "#f0f4f8",
                     "fontWeight": "600",
-                    "fontSize": "14px"
+                    "fontSize": "12px",
+                    "whiteSpace": "nowrap",
+                    "overflow": "hidden",
+                    "textOverflow": "ellipsis",
+                    "maxWidth": "80px"
                 }),
-                html.Div(role_labels.get(user["role"], "Utilisateur"), style={
+                html.Div(role_labels.get(user["role"], "User"), style={
                     "color": role_colors.get(user["role"], "#64748b"),
-                    "fontSize": "11px",
+                    "fontSize": "9px",
                     "textTransform": "uppercase",
                     "letterSpacing": "0.5px"
                 })
             ]),
 
-            # Bouton déconnexion
+            # Bouton déconnexion (plus petit)
             html.Button("🚪", id="logout-button", n_clicks=0, style={
                 "background": "rgba(239, 68, 68, 0.2)",
                 "border": "1px solid rgba(239, 68, 68, 0.4)",
-                "borderRadius": "8px",
-                "padding": "8px 12px",
+                "borderRadius": "6px",
+                "padding": "5px 8px",
                 "cursor": "pointer",
-                "fontSize": "16px",
+                "fontSize": "14px",
                 "color": "#f87171"
             }, title="Se déconnecter")
         ])
@@ -6795,7 +6809,7 @@ def page_overview(master_df: pd.DataFrame = None):
     return html.Div(className="content", children=[
         # En-tête avec titre + KPI risque de rupture
         dbc.Row([
-            dbc.Col(html.H2(" Overview", style={"color": "#22d3ee", "fontWeight": "800"}), md=8),
+            dbc.Col(html.H2("📊 Overview", style={"color": "#22d3ee", "fontWeight": "800"}), md=8),
             dbc.Col(html.Div(risk_bell, style={"textAlign": "right"}), md=4),
         ], className="mb-3"),
 
@@ -10127,28 +10141,28 @@ def page_agents(master_df: pd.DataFrame = None):
     kpis_row = html.Div([
         html.Div([
             html.Div(f"{total_agents}", style={**kpi_value_style, "color": "#22d3ee"}),
-            html.Div(" Agents", style=kpi_label_style)
+            html.Div("👥 Agents", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
             html.Div(f"{avg_score:.0f}",
                      style={**kpi_value_style, "color": "#34d399" if avg_score >= 60 else "#f87171"}),
-            html.Div(" Score Moyen", style=kpi_label_style)
+            html.Div("🎯 Score Moyen", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
             html.Div(f"{total_order_value / 1e6:.1f}M", style={**kpi_value_style, "color": "#a78bfa"}),
-            html.Div(" Valeur Cmd", style=kpi_label_style)
+            html.Div("💰 Valeur Cmd", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
             html.Div(f"{avg_taux_traitement:.0f}%", style={**kpi_value_style, "color": "#34d399"}),
-            html.Div(" Traitement", style=kpi_label_style)
+            html.Div("✅ Traitement", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
             html.Div(f"{total_ruptures}", style={**kpi_value_style, "color": "#f87171"}),
-            html.Div(" Ruptures", style=kpi_label_style)
+            html.Div("🚨 Ruptures", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
             html.Div(f"{total_at_risk}", style={**kpi_value_style, "color": "#fbbf24"}),
-            html.Div(" À Risque", style=kpi_label_style)
+            html.Div("⚠️ À Risque", style=kpi_label_style)
         ], style=kpi_card_style),
     ], style={"display": "flex", "flexWrap": "wrap", "gap": "12px", "marginBottom": "20px"})
 
@@ -10353,7 +10367,7 @@ def page_agents(master_df: pd.DataFrame = None):
     return html.Div(className="content", children=[
         # Header
         html.Div([
-            html.H4(" Performance Agents",
+            html.H4("👤 Performance Agents",
                     style={"margin": "0", "fontSize": "20px", "fontWeight": "700", "color": "#22d3ee"}),
             html.P("Suivi des performances et gestion des risques par agent",
                    style={"margin": "4px 0 0 0", "color": "#64748b", "fontSize": "13px"})
@@ -12718,7 +12732,7 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
     )
 
     # ========================================
-    # 🎨 LOGO EN HAUT
+    # 🎨 LOGO MAAD EN HAUT
     # ========================================
     current_row = 1
 
@@ -12726,10 +12740,13 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
         import os
         from openpyxl.drawing.image import Image as XLImage
 
-        # Chercher le logo
+        # Chercher le logo MAAD
         logo_paths = [
+            "assets/logo_maad.png",
+            "assets/logo_maad.jpg",
             "assets/logo.png",
             "assets/logo.jpg",
+            "logo_maad.png",
             "logo.png",
             "logo.jpg"
         ]
@@ -12744,24 +12761,39 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             # Ajouter le logo
             img = XLImage(logo_path)
 
-            # Redimensionner (largeur environ 200px)
-            img.width = 200
-            img.height = int(200 / img.width * img.height) if img.width > 0 else 60
+            # Redimensionner (largeur environ 180px, hauteur proportionnelle)
+            original_width = img.width
+            original_height = img.height
+            img.width = 180
+            img.height = int(180 * original_height / original_width) if original_width > 0 else 60
 
             # Positionner en A1
             ws.add_image(img, 'A1')
 
-            print(f"   ✅ Logo ajouté dans Excel : {logo_path}")
+            print(f"   ✅ Logo MAAD ajouté : {logo_path}")
+
+            # Ajuster hauteur des lignes pour le logo
+            ws.row_dimensions[1].height = 25
+            ws.row_dimensions[2].height = 25
+            ws.row_dimensions[3].height = 25
 
             # Laisser de l'espace pour le logo
-            current_row = 6
+            current_row = 5
         else:
-            print("   ⚠️ Logo non trouvé - continuez sans logo")
-            current_row = 1
+            # Si pas de logo, créer un en-tête texte stylé
+            ws['A1'] = "MAAD"
+            ws['A1'].font = Font(size=28, bold=True, color="1E40AF")
+            ws['A2'] = "Marketplace Africain de Distribution"
+            ws['A2'].font = Font(size=11, italic=True, color="64748B")
+            ws.row_dimensions[1].height = 40
+            print("   ⚠️ Logo non trouvé - En-tête texte créé")
+            current_row = 4
 
     except Exception as e:
         print(f"   ⚠️ Erreur ajout logo Excel : {e}")
-        current_row = 1
+        ws['A1'] = "MAAD"
+        ws['A1'].font = Font(size=28, bold=True, color="1E40AF")
+        current_row = 3
 
     # ========================================
     # 📋 EN-TÊTE DU BON DE COMMANDE
@@ -12769,32 +12801,35 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
 
     po_number = get_next_po_number()
 
-    # Titre
-    ws[f'A{current_row}'] = f'BON DE COMMANDE N° {po_number}'
-    ws[f'A{current_row}'].font = Font(size=18, bold=True, color="003366")
-    ws.merge_cells(f'A{current_row}:J{current_row}')
-    ws[f'A{current_row}'].alignment = Alignment(horizontal='center')
+    # Ligne séparatrice
     current_row += 1
 
-    # Informations entreprise
+    # Titre du bon de commande
+    ws[f'A{current_row}'] = f'BON DE COMMANDE N° {po_number}'
+    ws[f'A{current_row}'].font = Font(size=18, bold=True, color="003366")
+    ws.merge_cells(f'A{current_row}:I{current_row}')
+    ws[f'A{current_row}'].alignment = Alignment(horizontal='center', vertical='center')
+    ws.row_dimensions[current_row].height = 30
+    current_row += 1
+
+    # Ligne vide
+    current_row += 1
+
+    # Informations entreprise (à gauche)
     ws[f'A{current_row}'] = COMPANY_NAME
     ws[f'A{current_row}'].font = Font(bold=True, size=12, color="1E40AF")
+    # Date (à droite)
+    ws[f'G{current_row}'] = f"Date : {datetime.now().strftime('%d/%m/%Y')}"
+    ws[f'G{current_row}'].font = Font(bold=True, size=11)
+    ws[f'G{current_row}'].alignment = Alignment(horizontal='right')
     current_row += 1
 
     ws[f'A{current_row}'] = COMPANY_ADDRESS
-    ws[f'A{current_row}'].font = Font(size=10)
+    ws[f'A{current_row}'].font = Font(size=10, color="64748B")
     current_row += 1
 
-    ws[f'A{current_row}'] = f"Tél : {COMPANY_PHONE}"
-    ws[f'A{current_row}'].font = Font(size=10)
-    current_row += 1
-
-    ws[f'A{current_row}'] = f"Email : {COMPANY_EMAIL}"
-    ws[f'A{current_row}'].font = Font(size=10)
-    current_row += 1
-
-    ws[f'A{current_row}'] = f"Date : {datetime.now().strftime('%d/%m/%Y')}"
-    ws[f'A{current_row}'].font = Font(bold=True, size=11)
+    ws[f'A{current_row}'] = f"Tél : {COMPANY_PHONE} | Email : {COMPANY_EMAIL}"
+    ws[f'A{current_row}'].font = Font(size=10, color="64748B")
     current_row += 2
 
     TVA_RATE = 0.18
@@ -12804,13 +12839,16 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
     # ========================================
 
     for supplier, products in suppliers.items():
-        # Titre fournisseur
-        ws[f'A{current_row}'] = f'📦 Fournisseur : {supplier}'
+        # Titre fournisseur EN MAJUSCULES
+        supplier_upper = supplier.upper()
+        ws[f'A{current_row}'] = f'📦 FOURNISSEUR : {supplier_upper}'
         ws[f'A{current_row}'].font = Font(size=14, bold=True, color="228B22")
-        ws.merge_cells(f'A{current_row}:J{current_row}')
+        ws[f'A{current_row}'].fill = PatternFill(start_color="F0FFF0", end_color="F0FFF0", fill_type="solid")
+        ws.merge_cells(f'A{current_row}:I{current_row}')
+        ws.row_dimensions[current_row].height = 25
         current_row += 1
 
-        # En-têtes colonnes
+        # En-têtes colonnes (SANS Escompte par ligne)
         headers = [
             'Réf.',
             'Désignation',
@@ -12818,7 +12856,6 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             'Unité',
             'PU HT',
             'Remise %',
-            'Escompte %',
             'Total HT',
             'TVA 18%',
             'Total TTC'
@@ -12831,9 +12868,8 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = border
 
-        # Colorier colonnes éditables
+        # Colorier colonne Remise éditable
         ws.cell(row=current_row, column=6).fill = remise_fill
-        ws.cell(row=current_row, column=7).fill = escompte_fill
 
         current_row += 1
         first_data_row = current_row
@@ -12902,7 +12938,7 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # Colonne 6 : Remise % (ÉDITABLE)
+            # Colonne 6 : Remise % (ÉDITABLE par produit)
             cell = ws.cell(row=current_row, column=6, value=0)
             cell.number_format = '0.00'
             cell.alignment = Alignment(horizontal='center', vertical='center')
@@ -12910,36 +12946,28 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             cell.border = border
             cell.font = Font(bold=True)
 
-            # Colonne 7 : Escompte % (ÉDITABLE)
-            cell = ws.cell(row=current_row, column=7, value=0)
-            cell.number_format = '0.00'
-            cell.alignment = Alignment(horizontal='center', vertical='center')
-            cell.fill = escompte_fill
-            cell.border = border
-            cell.font = Font(bold=True)
-
             # ========================================
-            # FORMULES AUTOMATIQUES
+            # FORMULES AUTOMATIQUES (sans escompte ligne)
             # ========================================
 
-            # Colonne 8 : Total HT (formule)
-            # Total HT = (PU × Qté) × (1-Remise/100) × (1-Escompte/100)
-            formula_ht = f"=(E{current_row}*C{current_row})*(1-F{current_row}/100)*(1-G{current_row}/100)"
-            cell = ws.cell(row=current_row, column=8, value=formula_ht)
+            # Colonne 7 : Total HT (formule avec remise seulement)
+            # Total HT = (PU × Qté) × (1-Remise/100)
+            formula_ht = f"=(E{current_row}*C{current_row})*(1-F{current_row}/100)"
+            cell = ws.cell(row=current_row, column=7, value=formula_ht)
             cell.number_format = '#,##0'
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # Colonne 9 : TVA 18% (formule)
-            formula_tva = f"=H{current_row}*0.18"
-            cell = ws.cell(row=current_row, column=9, value=formula_tva)
+            # Colonne 8 : TVA 18% (formule)
+            formula_tva = f"=G{current_row}*0.18"
+            cell = ws.cell(row=current_row, column=8, value=formula_tva)
             cell.number_format = '#,##0'
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # Colonne 10 : Total TTC (formule)
-            formula_ttc = f"=H{current_row}+I{current_row}"
-            cell = ws.cell(row=current_row, column=10, value=formula_ttc)
+            # Colonne 9 : Total TTC (formule)
+            formula_ttc = f"=G{current_row}+H{current_row}"
+            cell = ws.cell(row=current_row, column=9, value=formula_ttc)
             cell.number_format = '#,##0'
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.fill = total_fill
@@ -12951,35 +12979,110 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
         last_data_row = current_row - 1
 
         # ========================================
-        # 💰 SOUS-TOTAL PAR FOURNISSEUR
+        # 💰 SOUS-TOTAL PAR FOURNISSEUR + ESCOMPTE
         # ========================================
 
         if last_data_row >= first_data_row:
-            ws.merge_cells(f'A{current_row}:E{current_row}')
-            cell = ws.cell(row=current_row, column=1, value=f"SOUS-TOTAL {supplier.upper()}")
-            cell.font = Font(bold=True, size=11)
+            # Ligne Sous-total brut
+            ws.merge_cells(f'A{current_row}:F{current_row}')
+            cell = ws.cell(row=current_row, column=1, value=f"Sous-total {supplier_upper}")
+            cell.font = Font(bold=True, size=10)
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
-            cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
 
-            # Total HT
+            # Total HT brut
+            cell = ws.cell(row=current_row, column=7, value=f"=SUM(G{first_data_row}:G{last_data_row})")
+            cell.number_format = '#,##0'
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.border = border
+
+            # TVA brute
             cell = ws.cell(row=current_row, column=8, value=f"=SUM(H{first_data_row}:H{last_data_row})")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True)
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
+
+            # TTC brut
+            cell = ws.cell(row=current_row, column=9, value=f"=SUM(I{first_data_row}:I{last_data_row})")
+            cell.number_format = '#,##0'
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.border = border
+
+            subtotal_row = current_row
+            current_row += 1
+
+            # ========================================
+            # 🎯 LIGNE ESCOMPTE FOURNISSEUR (ÉDITABLE)
+            # ========================================
+            ws.merge_cells(f'A{current_row}:E{current_row}')
+            cell = ws.cell(row=current_row, column=1, value=f"🎯 Escompte {supplier_upper}")
+            cell.font = Font(bold=True, size=10, color="E65100")
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.border = border
+
+            # Cellule escompte % (ÉDITABLE - colonne F)
+            escompte_cell = ws.cell(row=current_row, column=6, value=0)
+            escompte_cell.number_format = '0.00"%"'
+            escompte_cell.alignment = Alignment(horizontal='center', vertical='center')
+            escompte_cell.fill = escompte_fill
+            escompte_cell.border = border
+            escompte_cell.font = Font(bold=True, size=11)
+
+            # Montant escompte HT (formule)
+            cell = ws.cell(row=current_row, column=7, value=f"=-G{subtotal_row}*F{current_row}/100")
+            cell.number_format = '#,##0'
+            cell.font = Font(bold=True, color="E65100")
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.border = border
+
+            # Montant escompte TVA
+            cell = ws.cell(row=current_row, column=8, value=f"=-H{subtotal_row}*F{current_row}/100")
+            cell.number_format = '#,##0'
+            cell.font = Font(bold=True, color="E65100")
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.border = border
+
+            # Montant escompte TTC
+            cell = ws.cell(row=current_row, column=9, value=f"=-I{subtotal_row}*F{current_row}/100")
+            cell.number_format = '#,##0'
+            cell.font = Font(bold=True, color="E65100")
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.border = border
+
+            escompte_row = current_row
+            current_row += 1
+
+            # ========================================
+            # 💚 TOTAL NET FOURNISSEUR (après escompte)
+            # ========================================
+            ws.merge_cells(f'A{current_row}:F{current_row}')
+            cell = ws.cell(row=current_row, column=1, value=f"TOTAL NET {supplier.upper()}")
+            cell.font = Font(bold=True, size=11)
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.border = border
             cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
 
-            # TVA
-            cell = ws.cell(row=current_row, column=9, value=f"=SUM(I{first_data_row}:I{last_data_row})")
+            # Total HT net (sous-total + escompte)
+            cell = ws.cell(row=current_row, column=7, value=f"=G{subtotal_row}+G{escompte_row}")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True)
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
             cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
 
-            # TTC
-            cell = ws.cell(row=current_row, column=10, value=f"=SUM(J{first_data_row}:J{last_data_row})")
+            # TVA nette
+            cell = ws.cell(row=current_row, column=8, value=f"=H{subtotal_row}+H{escompte_row}")
+            cell.number_format = '#,##0'
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.border = border
+            cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
+
+            # TTC net
+            cell = ws.cell(row=current_row, column=9, value=f"=I{subtotal_row}+I{escompte_row}")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True, size=11)
             cell.alignment = Alignment(horizontal='right', vertical='center')
@@ -12996,37 +13099,37 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
 
     current_row += 1
 
-    # Total HT
-    ws[f'G{current_row}'] = "TOTAL HT :"
+    # Total HT (colonne G maintenant)
+    ws[f'F{current_row}'] = "TOTAL HT :"
+    ws[f'F{current_row}'].font = Font(bold=True, size=12)
+    ws[f'F{current_row}'].alignment = Alignment(horizontal='right')
+    ws[f'G{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",G:G)'
+    ws[f'G{current_row}'].number_format = '#,##0 "FCFA"'
     ws[f'G{current_row}'].font = Font(bold=True, size=12)
-    ws[f'G{current_row}'].alignment = Alignment(horizontal='right')
-    ws[f'H{current_row}'] = '=SUMIF(A:A,"SOUS-TOTAL*",H:H)'
-    ws[f'H{current_row}'].number_format = '#,##0 "FCFA"'
-    ws[f'H{current_row}'].font = Font(bold=True, size=12)
-    ws[f'H{current_row}'].border = Border(bottom=Side(style='thin'))
+    ws[f'G{current_row}'].border = Border(bottom=Side(style='thin'))
 
     current_row += 1
 
-    # TVA
-    ws[f'G{current_row}'] = "TVA (18%) :"
+    # TVA (colonne H maintenant)
+    ws[f'F{current_row}'] = "TVA (18%) :"
+    ws[f'F{current_row}'].font = Font(bold=True, size=12)
+    ws[f'F{current_row}'].alignment = Alignment(horizontal='right')
+    ws[f'G{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",H:H)'
+    ws[f'G{current_row}'].number_format = '#,##0 "FCFA"'
     ws[f'G{current_row}'].font = Font(bold=True, size=12)
-    ws[f'G{current_row}'].alignment = Alignment(horizontal='right')
-    ws[f'H{current_row}'] = '=SUMIF(A:A,"SOUS-TOTAL*",I:I)'
-    ws[f'H{current_row}'].number_format = '#,##0 "FCFA"'
-    ws[f'H{current_row}'].font = Font(bold=True, size=12)
-    ws[f'H{current_row}'].border = Border(bottom=Side(style='thin'))
+    ws[f'G{current_row}'].border = Border(bottom=Side(style='thin'))
 
     current_row += 1
 
-    # Total TTC
-    ws[f'G{current_row}'] = "TOTAL TTC :"
-    ws[f'G{current_row}'].font = Font(bold=True, size=14, color="006400")
-    ws[f'G{current_row}'].alignment = Alignment(horizontal='right')
-    ws[f'H{current_row}'] = '=SUMIF(A:A,"SOUS-TOTAL*",J:J)'
-    ws[f'H{current_row}'].number_format = '#,##0 "FCFA"'
-    ws[f'H{current_row}'].font = Font(bold=True, size=14, color="FFFFFF")
-    ws[f'H{current_row}'].fill = PatternFill(start_color="27AE60", end_color="27AE60", fill_type="solid")
-    ws[f'H{current_row}'].border = Border(
+    # Total TTC (colonne I maintenant)
+    ws[f'F{current_row}'] = "TOTAL TTC :"
+    ws[f'F{current_row}'].font = Font(bold=True, size=14, color="006400")
+    ws[f'F{current_row}'].alignment = Alignment(horizontal='right')
+    ws[f'G{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",I:I)'
+    ws[f'G{current_row}'].number_format = '#,##0 "FCFA"'
+    ws[f'G{current_row}'].font = Font(bold=True, size=14, color="FFFFFF")
+    ws[f'G{current_row}'].fill = PatternFill(start_color="27AE60", end_color="27AE60", fill_type="solid")
+    ws[f'G{current_row}'].border = Border(
         top=Side(style='double'),
         bottom=Side(style='double')
     )
@@ -13103,17 +13206,16 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
     # 📐 MISE EN PAGE
     # ========================================
 
-    # Largeurs colonnes
+    # Largeurs colonnes (9 colonnes maintenant)
     ws.column_dimensions['A'].width = 10  # Réf
     ws.column_dimensions['B'].width = 40  # Désignation
     ws.column_dimensions['C'].width = 8  # Qté
     ws.column_dimensions['D'].width = 10  # Unité
     ws.column_dimensions['E'].width = 12  # PU HT
-    ws.column_dimensions['F'].width = 12  # Remise %
-    ws.column_dimensions['G'].width = 12  # Escompte %
-    ws.column_dimensions['H'].width = 15  # Total HT
-    ws.column_dimensions['I'].width = 15  # TVA
-    ws.column_dimensions['J'].width = 15  # Total TTC
+    ws.column_dimensions['F'].width = 12  # Remise % (par produit) / Escompte % (par fournisseur)
+    ws.column_dimensions['G'].width = 15  # Total HT
+    ws.column_dimensions['H'].width = 15  # TVA
+    ws.column_dimensions['I'].width = 15  # Total TTC
 
     # Hauteur des premières lignes (pour le logo)
     ws.row_dimensions[1].height = 60

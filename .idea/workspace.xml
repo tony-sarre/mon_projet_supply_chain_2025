@@ -4,11 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="superbase tracking">
-      <change afterPath="$PROJECT_DIR$/assets/logo_maad.png" afterDir="false" />
+    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="bc escompte logo">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notes_database.json" beforeDir="false" afterPath="$PROJECT_DIR$/notes_database.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/po_counter.json" beforeDir="false" afterPath="$PROJECT_DIR$/po_counter.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/supply_chain_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/supply_chain_analytics.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -80,14 +77,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00161" summary="bon de commande">
-      <option name="closed" value="true" />
-      <created>1762513704985</created>
-      <option name="number" value="00161" />
-      <option name="presentableId" value="LOCAL-00161" />
-      <option name="project" value="LOCAL" />
-      <updated>1762513704985</updated>
     </task>
     <task id="LOCAL-00162" summary="bon de commande">
       <option name="closed" value="true" />
@@ -473,7 +462,15 @@
       <option name="project" value="LOCAL" />
       <updated>1764850974181</updated>
     </task>
-    <option name="localTasksCounter" value="210" />
+    <task id="LOCAL-00210" summary="bc escompte logo">
+      <option name="closed" value="true" />
+      <created>1764874021645</created>
+      <option name="number" value="00210" />
+      <option name="presentableId" value="LOCAL-00210" />
+      <option name="project" value="LOCAL" />
+      <updated>1764874021645</updated>
+    </task>
+    <option name="localTasksCounter" value="211" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -518,7 +515,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="reset: callback def reset_selection_on_filter" />
     <MESSAGE value="local storage for QAC edit" />
     <MESSAGE value="restore from storage for QAC edit" />
     <MESSAGE value="callback save to csv for QAC edit" />
@@ -543,6 +539,7 @@
     <MESSAGE value="prediction ml" />
     <MESSAGE value="page agent" />
     <MESSAGE value="superbase tracking" />
-    <option name="LAST_COMMIT_MESSAGE" value="superbase tracking" />
+    <MESSAGE value="bc escompte logo" />
+    <option name="LAST_COMMIT_MESSAGE" value="bc escompte logo" />
   </component>
 </project>

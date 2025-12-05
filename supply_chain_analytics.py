@@ -4561,7 +4561,8 @@ app.index_string = """
                ======================================== */
             #filter-supplier .Select-control,
             #filter-category .Select-control,
-            #filter-need .Select-control {
+            #filter-need .Select-control,
+            #filter-agent .Select-control {
                 background: var(--bg-input) !important;
                 color: var(--text-primary) !important;
                 border: 2px solid var(--border-color) !important;
@@ -4573,27 +4574,31 @@ app.index_string = """
             #filter-need .Select-value-label,
             #filter-supplier .Select-placeholder,
             #filter-category .Select-placeholder,
-            #filter-need .Select-placeholder {
+            #filter-need .Select-placeholder,
+            #filter-agent .Select-placeholder {
                 color: var(--text-primary) !important;
             }
 
             #filter-supplier .Select-menu-outer,
             #filter-category .Select-menu-outer,
-            #filter-need .Select-menu-outer {
+            #filter-need .Select-menu-outer, 
+            #filter-agent .Select-menu-outer {
                 background: var(--bg-tertiary) !important;
                 border: 2px solid var(--border-color) !important;
             }
 
             #filter-supplier .Select-option,
             #filter-category .Select-option,
-            #filter-need .Select-option {
+            #filter-need .Select-option,
+            #filter-agent .Select-option {
                 background: var(--bg-tertiary) !important;
                 color: var(--text-primary) !important;
             }
 
             #filter-supplier .Select-option:hover,
             #filter-category .Select-option:hover,
-            #filter-need .Select-option:hover {
+            #filter-need .Select-option:hover
+            #filter-agent .Select-option:hover {
                 background: rgba(34, 211, 238, 0.15) !important;
                 color: var(--brand-accent) !important;
             }

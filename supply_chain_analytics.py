@@ -7438,7 +7438,8 @@ def update_rotation(period_value):
         return no_update
 '''
 
-
+# NOTE: Ce callback est désactivé car dupliqué avec refresh_data (ligne ~7740)
+'''
 @app.callback(
     Output("master-data", "data", allow_duplicate=True),
     Input("btn-refresh", "n_clicks"),
@@ -7451,7 +7452,7 @@ def force_refresh_master(n_clicks):
         print(f"🔄 Données rechargées : {len(df)} produits")
         return df.to_json(orient="records")
     return no_update
-
+'''
 
 '''@app.callback(
     Output("main-table", "selected_rows", allow_duplicate=True),

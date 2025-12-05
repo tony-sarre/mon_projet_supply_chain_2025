@@ -4,8 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="css et bouton actualiser">
+    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="duplicate callbacks">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supply_chain_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/supply_chain_analytics.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -76,14 +77,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00173" summary="agent ia pour le bon de commande">
-      <option name="closed" value="true" />
-      <created>1763115441147</created>
-      <option name="number" value="00173" />
-      <option name="presentableId" value="LOCAL-00173" />
-      <option name="project" value="LOCAL" />
-      <updated>1763115441147</updated>
     </task>
     <task id="LOCAL-00174" summary="agent ia pour le bon de commande">
       <option name="closed" value="true" />
@@ -469,7 +462,15 @@
       <option name="project" value="LOCAL" />
       <updated>1764947179106</updated>
     </task>
-    <option name="localTasksCounter" value="222" />
+    <task id="LOCAL-00222" summary="duplicate callbacks">
+      <option name="closed" value="true" />
+      <created>1764949171606</created>
+      <option name="number" value="00222" />
+      <option name="presentableId" value="LOCAL-00222" />
+      <option name="project" value="LOCAL" />
+      <updated>1764949171608</updated>
+    </task>
+    <option name="localTasksCounter" value="223" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -514,7 +515,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="callback save to csv for QAC edit" />
     <MESSAGE value="callback load from csv for QAC edit" />
     <MESSAGE value="refresh_data" />
     <MESSAGE value="reset_selection_on_filter" />
@@ -539,6 +539,7 @@
     <MESSAGE value="bc escompte logo" />
     <MESSAGE value="supabase" />
     <MESSAGE value="css et bouton actualiser" />
-    <option name="LAST_COMMIT_MESSAGE" value="css et bouton actualiser" />
+    <MESSAGE value="duplicate callbacks" />
+    <option name="LAST_COMMIT_MESSAGE" value="duplicate callbacks" />
   </component>
 </project>

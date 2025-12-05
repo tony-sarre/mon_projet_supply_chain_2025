@@ -4876,7 +4876,7 @@ app.index_string = """
                 box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06) !important;
                 border: 1px solid var(--border-color) !important;
             }
-
+            
             .dash-header {
                 background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%) !important;
                 color: #ffffff !important;
@@ -4886,23 +4886,31 @@ app.index_string = """
                 font-size: 11px !important;
                 border-bottom: 2px solid var(--brand-accent) !important;
             }
-
+            
             .dash-cell {
                 background: var(--bg-secondary) !important;
-                color: var(--text-primary) !important;
+                color: #1a202c !important;  /* ✅ Texte sombre par défaut */
                 border-color: var(--border-color) !important;
                 font-size: 13px !important;
             }
-
+            
             .dash-table-container tr:nth-child(even) .dash-cell {
                 background: var(--bg-tertiary) !important;
+                color: #1a202c !important;  /* ✅ Texte sombre sur lignes paires */
             }
-
+            
             .dash-table-container tr:hover .dash-cell {
-                background: rgba(14, 165, 233, 0.08) !important;
+                background: rgba(14, 165, 233, 0.12) !important;  /* ✅ Fond bleu clair au survol */
                 border-color: rgba(14, 165, 233, 0.3) !important;
+                color: #0f172a !important;  /* ✅ Texte très sombre au survol */
+                font-weight: 500 !important;  /* ✅ Légèrement plus gras pour meilleure lisibilité */
             }
-
+            
+            /* Force le texte sur tous les éléments enfants */
+            .dash-table-container tr:hover .dash-cell div,
+            .dash-table-container tr:hover .dash-cell span {
+                color: #0f172a !important;
+            }
             /* ========================================
                CHAT (LIGHT THEME PRÉSERVÉ)
                ======================================== */
@@ -11218,6 +11226,10 @@ app.layout = html.Div([
     # ========== CONTENEUR PRINCIPAL (login ou dashboard) ==========
     html.Div(id="app-container"),
 
+    # ========== FEEDBACKS GLOBAUX (niveau racine pour callbacks) ==========
+    html.Div(id="action-feedback", style={"position": "fixed", "top": "80px", "right": "20px", "zIndex": 10000}),
+    html.Div(id="selection-counter", style={"position": "fixed", "bottom": "20px", "right": "20px", "zIndex": 9999}),
+
     # ========== COMPOSANTS CACHÉS (pour callbacks) ==========
     html.Div(id='edit-product-output', style={"display": "none"}),
 
@@ -11330,9 +11342,7 @@ app.layout = html.Div([
         html.Div(id="agent-ia-output")  # Output du callback
     ], style={"display": "none"}),  # Caché par défaut, visible après login
 
-    # ========== FEEDBACKS & COMPTEURS ==========
-    # html.Div(id="action-feedback", style={"position": "fixed", "top": "80px", "right": "20px", "zIndex": 10000}),
-    # html.Div(id="selection-counter"),
+    # NOTE: action-feedback et selection-counter sont maintenant au niveau racine (après app-container)
 
     # ========== CHATBOT FLOTTANT ==========
     html.Button(id="chat-fab", className="chat-fab", children=[html.Span("Assistant"), html.Span("💬")]),

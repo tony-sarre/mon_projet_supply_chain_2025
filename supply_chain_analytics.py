@@ -8580,6 +8580,8 @@ def page_predictive(master_df: pd.DataFrame = None):
 # 🔮 CALLBACKS PRÉDICTIONS DYNAMIQUES
 # ==========================================
 
+# NOTE: Ce callback est désactivé car dupliqué avec update_predictive_all_charts (ligne ~9626)
+'''
 @app.callback(
     [Output("predictive-bar", "figure"),
      Output("predictive-scatter", "figure"),
@@ -8755,6 +8757,7 @@ def update_predictive_charts(supplier_value, category_value, need_value, master_
         df.to_dict("records"),
         indicator
     )
+'''
 
 
 def page_analytics(master_df: pd.DataFrame = None):
@@ -9026,6 +9029,8 @@ def page_predictive(master_df: pd.DataFrame = None):
     ])
 
 
+# NOTE: Ce callback est désactivé car dupliqué avec update_predictive_all_charts
+'''
 # Callback : mettre à jour le bar chart prédictif
 @app.callback(
     Output("predictive-bar", "figure"),
@@ -9121,6 +9126,7 @@ def update_predictive_table(supplier_value, category_value):
         df = df[df["Product Category"] == category_value]
 
     return df.to_dict("records")
+'''
 
 
 # ==========================================

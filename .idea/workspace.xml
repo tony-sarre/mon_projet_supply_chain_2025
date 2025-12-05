@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="supabase">
+    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="css et bouton actualiser">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/supply_chain_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/supply_chain_analytics.py" afterDir="false" />
     </list>
@@ -77,14 +77,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00168" summary="ADS rotation">
-      <option name="closed" value="true" />
-      <created>1763038195988</created>
-      <option name="number" value="00168" />
-      <option name="presentableId" value="LOCAL-00168" />
-      <option name="project" value="LOCAL" />
-      <updated>1763038195988</updated>
     </task>
     <task id="LOCAL-00169" summary="rotation INSTANTANE">
       <option name="closed" value="true" />
@@ -470,7 +462,15 @@
       <option name="project" value="LOCAL" />
       <updated>1764937251982</updated>
     </task>
-    <option name="localTasksCounter" value="217" />
+    <task id="LOCAL-00217" summary="css et bouton actualiser">
+      <option name="closed" value="true" />
+      <created>1764939687512</created>
+      <option name="number" value="00217" />
+      <option name="presentableId" value="LOCAL-00217" />
+      <option name="project" value="LOCAL" />
+      <updated>1764939687512</updated>
+    </task>
+    <option name="localTasksCounter" value="218" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -515,7 +515,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="restore from storage for QAC edit" />
     <MESSAGE value="callback save to csv for QAC edit" />
     <MESSAGE value="callback load from csv for QAC edit" />
     <MESSAGE value="refresh_data" />
@@ -540,6 +539,7 @@
     <MESSAGE value="superbase tracking" />
     <MESSAGE value="bc escompte logo" />
     <MESSAGE value="supabase" />
-    <option name="LAST_COMMIT_MESSAGE" value="supabase" />
+    <MESSAGE value="css et bouton actualiser" />
+    <option name="LAST_COMMIT_MESSAGE" value="css et bouton actualiser" />
   </component>
 </project>

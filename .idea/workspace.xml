@@ -77,14 +77,6 @@
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
     </task>
-    <task id="LOCAL-00170" summary="agent ia pour le bon de commande">
-      <option name="closed" value="true" />
-      <created>1763105697133</created>
-      <option name="number" value="00170" />
-      <option name="presentableId" value="LOCAL-00170" />
-      <option name="project" value="LOCAL" />
-      <updated>1763105697133</updated>
-    </task>
     <task id="LOCAL-00171" summary="agent ia pour le bon de commande">
       <option name="closed" value="true" />
       <created>1763113822708</created>
@@ -469,7 +461,15 @@
       <option name="project" value="LOCAL" />
       <updated>1764941389757</updated>
     </task>
-    <option name="localTasksCounter" value="219" />
+    <task id="LOCAL-00219" summary="css et bouton actualiser">
+      <option name="closed" value="true" />
+      <created>1764942744368</created>
+      <option name="number" value="00219" />
+      <option name="presentableId" value="LOCAL-00219" />
+      <option name="project" value="LOCAL" />
+      <updated>1764942744368</updated>
+    </task>
+    <option name="localTasksCounter" value="220" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">

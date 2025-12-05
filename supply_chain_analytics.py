@@ -14728,7 +14728,7 @@ def on_chat(n_clicks, user_text, history, uploaded_json, master_json):
     return _render_messages(history), history, ""  # ✅ Vider l'input
 
 
-# ------------------------------ Run ----------------------------------------
+# ------------------------------ Run ------------------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(debug=True, host="0.0.0.0", port=port)

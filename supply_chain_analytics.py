@@ -282,6 +282,243 @@ def track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: 
             print(f"⚠️ Erreur track_qac_edit: {e}")
 
 
+# ==========================================
+# 📊 DAILY STATS - Statistiques journalières
+# ==========================================
+
+def save_daily_stats(stats_data: dict):
+    """Sauvegarde les statistiques journalières"""
+    global SUPABASE_TRACKING_ENABLED
+
+    if not supabase_client or not SUPABASE_TRACKING_ENABLED:
+        return None
+
+    try:
+        # Ajouter la date du jour si pas présente
+        if "stat_date" not in stats_data:
+            stats_data["stat_date"] = datetime.now().strftime("%Y-%m-%d")
+
+        result = supabase_client.table("daily_stats").insert(stats_data).execute()
+        if result.data:
+            print(f"📊 Stats journalières sauvegardées: {stats_data.get('stat_date')}")
+            return result.data[0]
+        return None
+    except Exception as e:
+        error_str = str(e)
+        if "row-level security policy" in error_str or "42501" in error_str:
+            SUPABASE_TRACKING_ENABLED = False
+        else:
+            print(f"⚠️ Erreur save_daily_stats: {e}")
+        return None
+
+
+def get_daily_stats(days: int = 30) -> list:
+    """Récupère les statistiques des X derniers jours"""
+    if not supabase_client:
+        return []
+
+    try:
+        from datetime import timedelta
+        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+        result = supabase_client.table("daily_stats") \
+            .select("*") \
+            .gte("stat_date", start_date) \
+            .order("stat_date", desc=True) \
+            .execute()
+        return result.data or []
+    except Exception as e:
+        print(f"⚠️ Erreur get_daily_stats: {e}")
+        return []
+
+
+def update_daily_stats_on_load(master_df):
+    """Met à jour les stats journalières au chargement des données"""
+    if master_df is None or master_df.empty:
+        return
+
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        # Calculer les stats
+        total_skus = len(master_df)
+        out_of_stock = int((master_df.get('total_stock', pd.Series([0])) <= 0).sum())
+        total_suppliers = master_df.get('Supplier', pd.Series()).nunique()
+
+        # Valeur totale stock
+        if 'total_stock' in master_df.columns and 'Prix Achat' in master_df.columns:
+            stock_val = master_df['total_stock'].fillna(0)
+            price_val = pd.to_numeric(master_df['Prix Achat'], errors='coerce').fillna(0)
+            total_stock_value = float((stock_val * price_val).sum())
+        else:
+            total_stock_value = 0
+
+        stats = {
+            "stat_date": today,
+            "total_skus": total_skus,
+            "out_of_stock_count": out_of_stock,
+            "total_suppliers": total_suppliers,
+            "total_stock_value": total_stock_value,
+            "at_risk_count": 0,  # Sera calculé plus tard
+            "orders_generated": 0,
+            "qac_edits_count": 0
+        }
+
+        save_daily_stats(stats)
+
+    except Exception as e:
+        print(f"⚠️ Erreur update_daily_stats_on_load: {e}")
+
+
+# ==========================================
+# 📋 RÉCUPÉRATION DE TOUTES LES DONNÉES
+# ==========================================
+
+def get_all_user_sessions(limit: int = 100) -> list:
+    """Récupère toutes les sessions utilisateur"""
+    if not supabase_client:
+        return []
+
+    try:
+        result = supabase_client.table("user_sessions") \
+            .select("*, users(username, name)") \
+            .order("created_at", desc=True) \
+            .limit(limit) \
+            .execute()
+        return result.data or []
+    except Exception as e:
+        print(f"⚠️ Erreur get_all_user_sessions: {e}")
+        return []
+
+
+def get_all_user_activities(limit: int = 500) -> list:
+    """Récupère toutes les activités utilisateur"""
+    if not supabase_client:
+        return []
+
+    try:
+        result = supabase_client.table("user_activities") \
+            .select("*, users(username, name)") \
+            .order("created_at", desc=True) \
+            .limit(limit) \
+            .execute()
+        return result.data or []
+    except Exception as e:
+        print(f"⚠️ Erreur get_all_user_activities: {e}")
+        return []
+
+
+def get_all_qac_edits(limit: int = 500) -> list:
+    """Récupère tout l'historique des modifications QAC"""
+    if not supabase_client:
+        return []
+
+    try:
+        result = supabase_client.table("qac_edits_history") \
+            .select("*, users(username, name)") \
+            .order("created_at", desc=True) \
+            .limit(limit) \
+            .execute()
+        return result.data or []
+    except Exception as e:
+        print(f"⚠️ Erreur get_all_qac_edits: {e}")
+        return []
+
+
+def get_all_product_notes(limit: int = 500) -> list:
+    """Récupère toutes les notes produits"""
+    if not supabase_client:
+        return []
+
+    try:
+        result = supabase_client.table("product_notes") \
+            .select("*, users(username, name)") \
+            .eq("is_deleted", False) \
+            .order("created_at", desc=True) \
+            .limit(limit) \
+            .execute()
+        return result.data or []
+    except Exception as e:
+        print(f"⚠️ Erreur get_all_product_notes: {e}")
+        return []
+
+
+def get_all_users() -> list:
+    """Récupère tous les utilisateurs"""
+    if not supabase_client:
+        return []
+
+    try:
+        result = supabase_client.table("users") \
+            .select("id, username, name, email, role, is_active, created_at, last_login") \
+            .order("created_at", desc=True) \
+            .execute()
+        return result.data or []
+    except Exception as e:
+        print(f"⚠️ Erreur get_all_users: {e}")
+        return []
+
+
+def get_dashboard_analytics() -> dict:
+    """Récupère un résumé analytique pour le dashboard admin"""
+    if not supabase_client:
+        return {}
+
+    try:
+        analytics = {
+            "total_users": 0,
+            "active_sessions": 0,
+            "total_activities": 0,
+            "total_qac_edits": 0,
+            "total_notes": 0,
+            "recent_stats": []
+        }
+
+        # Compter les utilisateurs
+        users = supabase_client.table("users").select("id", count="exact").execute()
+        analytics["total_users"] = users.count if hasattr(users, 'count') else len(users.data or [])
+
+        # Sessions actives
+        sessions = supabase_client.table("user_sessions") \
+            .select("id", count="exact") \
+            .eq("is_active", True) \
+            .execute()
+        analytics["active_sessions"] = sessions.count if hasattr(sessions, 'count') else len(sessions.data or [])
+
+        # Total activités (dernier mois)
+        from datetime import timedelta
+        month_ago = (datetime.now() - timedelta(days=30)).isoformat()
+        activities = supabase_client.table("user_activities") \
+            .select("id", count="exact") \
+            .gte("created_at", month_ago) \
+            .execute()
+        analytics["total_activities"] = activities.count if hasattr(activities, 'count') else len(activities.data or [])
+
+        # Total modifications QAC
+        qac = supabase_client.table("qac_edits_history") \
+            .select("id", count="exact") \
+            .execute()
+        analytics["total_qac_edits"] = qac.count if hasattr(qac, 'count') else len(qac.data or [])
+
+        # Total notes
+        notes = supabase_client.table("product_notes") \
+            .select("id", count="exact") \
+            .eq("is_deleted", False) \
+            .execute()
+        analytics["total_notes"] = notes.count if hasattr(notes, 'count') else len(notes.data or [])
+
+        # Stats récentes
+        analytics["recent_stats"] = get_daily_stats(7)
+
+        print(
+            f"📊 Analytics dashboard: {analytics['total_users']} users, {analytics['active_sessions']} sessions actives")
+        return analytics
+
+    except Exception as e:
+        print(f"⚠️ Erreur get_dashboard_analytics: {e}")
+        return {}
+
+
 def save_product_note(user_id: str, product_name: str, note_text: str, mentions: list = None, supplier: str = None):
     """Sauvegarde une note produit"""
     if not supabase_client:
@@ -4561,8 +4798,7 @@ app.index_string = """
                ======================================== */
             #filter-supplier .Select-control,
             #filter-category .Select-control,
-            #filter-need .Select-control,
-            #filter-agent .Select-control {
+            #filter-need .Select-control {
                 background: var(--bg-input) !important;
                 color: var(--text-primary) !important;
                 border: 2px solid var(--border-color) !important;
@@ -4574,31 +4810,27 @@ app.index_string = """
             #filter-need .Select-value-label,
             #filter-supplier .Select-placeholder,
             #filter-category .Select-placeholder,
-            #filter-need .Select-placeholder,
-            #filter-agent .Select-placeholder {
+            #filter-need .Select-placeholder {
                 color: var(--text-primary) !important;
             }
 
             #filter-supplier .Select-menu-outer,
             #filter-category .Select-menu-outer,
-            #filter-need .Select-menu-outer, 
-            #filter-agent .Select-menu-outer {
+            #filter-need .Select-menu-outer {
                 background: var(--bg-tertiary) !important;
                 border: 2px solid var(--border-color) !important;
             }
 
             #filter-supplier .Select-option,
             #filter-category .Select-option,
-            #filter-need .Select-option,
-            #filter-agent .Select-option {
+            #filter-need .Select-option {
                 background: var(--bg-tertiary) !important;
                 color: var(--text-primary) !important;
             }
 
             #filter-supplier .Select-option:hover,
             #filter-category .Select-option:hover,
-            #filter-need .Select-option:hover
-            #filter-agent .Select-option:hover {
+            #filter-need .Select-option:hover {
                 background: rgba(34, 211, 238, 0.15) !important;
                 color: var(--brand-accent) !important;
             }
@@ -10167,7 +10399,7 @@ def page_agents(master_df: pd.DataFrame = None):
         ], style=kpi_card_style),
         html.Div([
             html.Div(f"{total_at_risk}", style={**kpi_value_style, "color": "#fbbf24"}),
-            html.Div(" À Risque", style=kpi_label_style)
+            html.Div("️ À Risque", style=kpi_label_style)
         ], style=kpi_card_style),
     ], style={"display": "flex", "flexWrap": "wrap", "gap": "12px", "marginBottom": "20px"})
 

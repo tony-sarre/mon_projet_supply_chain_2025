@@ -6814,7 +6814,7 @@ def page_overview(master_df: pd.DataFrame = None):
     return html.Div(className="content", children=[
         # En-tête avec titre + KPI risque de rupture
         dbc.Row([
-            dbc.Col(html.H2("📊 Overview", style={"color": "#22d3ee", "fontWeight": "800"}), md=8),
+            dbc.Col(html.H2(" Overview", style={"color": "#22d3ee", "fontWeight": "800"}), md=8),
             dbc.Col(html.Div(risk_bell, style={"textAlign": "right"}), md=4),
         ], className="mb-3"),
 
@@ -10146,28 +10146,28 @@ def page_agents(master_df: pd.DataFrame = None):
     kpis_row = html.Div([
         html.Div([
             html.Div(f"{total_agents}", style={**kpi_value_style, "color": "#22d3ee"}),
-            html.Div("👥 Agents", style=kpi_label_style)
+            html.Div(" Agents", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
             html.Div(f"{avg_score:.0f}",
                      style={**kpi_value_style, "color": "#34d399" if avg_score >= 60 else "#f87171"}),
-            html.Div("🎯 Score Moyen", style=kpi_label_style)
+            html.Div(" Score Moyen", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
             html.Div(f"{total_order_value / 1e6:.1f}M", style={**kpi_value_style, "color": "#a78bfa"}),
-            html.Div("💰 Valeur Cmd", style=kpi_label_style)
+            html.Div(" Valeur Cmd", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
             html.Div(f"{avg_taux_traitement:.0f}%", style={**kpi_value_style, "color": "#34d399"}),
-            html.Div("✅ Traitement", style=kpi_label_style)
+            html.Div(" Traitement", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
             html.Div(f"{total_ruptures}", style={**kpi_value_style, "color": "#f87171"}),
-            html.Div("🚨 Ruptures", style=kpi_label_style)
+            html.Div(" Ruptures", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
             html.Div(f"{total_at_risk}", style={**kpi_value_style, "color": "#fbbf24"}),
-            html.Div("⚠️ À Risque", style=kpi_label_style)
+            html.Div(" À Risque", style=kpi_label_style)
         ], style=kpi_card_style),
     ], style={"display": "flex", "flexWrap": "wrap", "gap": "12px", "marginBottom": "20px"})
 
@@ -10372,7 +10372,7 @@ def page_agents(master_df: pd.DataFrame = None):
     return html.Div(className="content", children=[
         # Header
         html.Div([
-            html.H4("👤 Performance Agents",
+            html.H4(" Performance Agents",
                     style={"margin": "0", "fontSize": "20px", "fontWeight": "700", "color": "#22d3ee"}),
             html.P("Suivi des performances et gestion des risques par agent",
                    style={"margin": "4px 0 0 0", "color": "#64748b", "fontSize": "13px"})

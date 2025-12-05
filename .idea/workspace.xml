@@ -4,8 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="bc escompte logo">
+    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="supabase">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/supply_chain_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/supply_chain_analytics.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -76,14 +77,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00167" summary="stabilisation_dash">
-      <option name="closed" value="true" />
-      <created>1762781978792</created>
-      <option name="number" value="00167" />
-      <option name="presentableId" value="LOCAL-00167" />
-      <option name="project" value="LOCAL" />
-      <updated>1762781978792</updated>
     </task>
     <task id="LOCAL-00168" summary="ADS rotation">
       <option name="closed" value="true" />
@@ -469,7 +462,15 @@
       <option name="project" value="LOCAL" />
       <updated>1764935780920</updated>
     </task>
-    <option name="localTasksCounter" value="216" />
+    <task id="LOCAL-00216" summary="supabase">
+      <option name="closed" value="true" />
+      <created>1764937251982</created>
+      <option name="number" value="00216" />
+      <option name="presentableId" value="LOCAL-00216" />
+      <option name="project" value="LOCAL" />
+      <updated>1764937251982</updated>
+    </task>
+    <option name="localTasksCounter" value="217" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -514,7 +515,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="local storage for QAC edit" />
     <MESSAGE value="restore from storage for QAC edit" />
     <MESSAGE value="callback save to csv for QAC edit" />
     <MESSAGE value="callback load from csv for QAC edit" />
@@ -539,6 +539,7 @@
     <MESSAGE value="page agent" />
     <MESSAGE value="superbase tracking" />
     <MESSAGE value="bc escompte logo" />
-    <option name="LAST_COMMIT_MESSAGE" value="bc escompte logo" />
+    <MESSAGE value="supabase" />
+    <option name="LAST_COMMIT_MESSAGE" value="supabase" />
   </component>
 </project>

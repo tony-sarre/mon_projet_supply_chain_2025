@@ -7998,6 +7998,8 @@ def page_analytics(master_df: pd.DataFrame = None):
 # 📊 CALLBACK ANALYTICS AVEC GESTION D'ERREURS
 # ==========================================
 
+# NOTE: Ce callback est désactivé car dupliqué avec update_analytics_all_charts (ligne ~9232)
+'''
 @app.callback(
     [Output("analytics-scatter", "figure"),
      Output("analytics-hist-stock", "figure"),
@@ -8380,6 +8382,7 @@ def update_analytics_charts(supplier_value, category_value, need_value, master_j
         ])
 
         return (empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, error_indicator)
+'''
 
 
 def page_predictive(master_df: pd.DataFrame = None):

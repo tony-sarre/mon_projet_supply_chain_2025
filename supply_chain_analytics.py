@@ -359,7 +359,6 @@ def update_daily_stats_on_load(master_df):
             "out_of_stock_count": out_of_stock,
             "total_suppliers": total_suppliers,
             "total_stock_value": total_stock_value,
-            "at_risk_count": 0,  # Sera calculé plus tard
             "orders_generated": 0,
             "qac_edits_count": 0
         }
@@ -9131,11 +9130,12 @@ def update_predictive_table(supplier_value, category_value):
     return df.to_dict("records")
 '''
 
-
 # ==========================================
 # 🔧 HELPER : PLACEHOLDER POUR ÉVITER ERREURS
 # ==========================================
 
+# NOTE: Cette fonction est désactivée - main-table est défini dans le layout principal
+'''
 def create_hidden_table_placeholder():
     """
     Crée un placeholder caché pour main-table
@@ -9147,6 +9147,7 @@ def create_hidden_table_placeholder():
         columns=[],
         style_table={"display": "none"}
     )
+'''
 
 
 def page_analytics(master_df: pd.DataFrame = None):
@@ -9259,8 +9260,8 @@ def page_analytics(master_df: pd.DataFrame = None):
             ], md=6)
         ]),
 
-        # ✅ Placeholder pour éviter erreurs
-        create_hidden_table_placeholder()
+        # NOTE: Placeholder désactivé - main-table est dans le layout principal
+        # create_hidden_table_placeholder()
     ])
 
 
@@ -9658,8 +9659,8 @@ def page_predictive(master_df: pd.DataFrame = None):
             )
         ]),
 
-        # ✅ Placeholder
-        create_hidden_table_placeholder()
+        # NOTE: Placeholder désactivé - main-table est dans le layout principal
+        # create_hidden_table_placeholder()
     ])
 
 
@@ -11596,6 +11597,8 @@ def handle_logout(n_clicks, current_auth):
 # ============================================================
 
 
+# NOTE: Ce callback de debug est désactivé car il cause des conflits
+'''
 @app.callback(
     Output('action-feedback', 'children'),
     Input('some-input', 'value'),
@@ -11608,6 +11611,7 @@ def update_feedback(input_value):
     if input_value is None:
         return "No input provided"
     return f"Input value: {input_value}"
+'''
 
 
 @app.callback(
@@ -12380,6 +12384,8 @@ def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
 # SECTION CALLBACKS - VERSION NETTOYÉE (SUPPRIMER TOUS LES ANCIENS CALLBACKS)
 # ==================================================================================
 
+# NOTE: Ce callback est désactivé car dupliqué avec apply_filters (ligne ~7059)
+'''
 # ==================== CALLBACK 1 : INITIALISATION (PRIORITÉ 1) ====================
 @app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),
@@ -12482,7 +12488,7 @@ def initialize_table(master_json):
 
         # Retourner données vides en cas d'erreur
         return "[]", [], []
-
+'''
 
 '''@app.callback(
     [Output("filtered-data", "data", allow_duplicate=True),

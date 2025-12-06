@@ -4876,7 +4876,7 @@ app.index_string = """
                 box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06) !important;
                 border: 1px solid var(--border-color) !important;
             }
-            
+
             .dash-header {
                 background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%) !important;
                 color: #ffffff !important;
@@ -4886,31 +4886,61 @@ app.index_string = """
                 font-size: 11px !important;
                 border-bottom: 2px solid var(--brand-accent) !important;
             }
-            
+
             .dash-cell {
                 background: var(--bg-secondary) !important;
-                color: #1a202c !important;  /* ✅ Texte sombre par défaut */
+                color: var(--text-primary) !important;
                 border-color: var(--border-color) !important;
                 font-size: 13px !important;
             }
-            
+
             .dash-table-container tr:nth-child(even) .dash-cell {
                 background: var(--bg-tertiary) !important;
-                color: #1a202c !important;  /* ✅ Texte sombre sur lignes paires */
             }
-            
+
+            /* HOVER CLAIR ET VISIBLE */
             .dash-table-container tr:hover .dash-cell {
-                background: rgba(14, 165, 233, 0.12) !important;  /* ✅ Fond bleu clair au survol */
-                border-color: rgba(14, 165, 233, 0.3) !important;
-                color: #0f172a !important;  /* ✅ Texte très sombre au survol */
-                font-weight: 500 !important;  /* ✅ Légèrement plus gras pour meilleure lisibilité */
+                background: #e0f2fe !important;
+                border-color: #0ea5e9 !important;
+                cursor: pointer;
             }
-            
-            /* Force le texte sur tous les éléments enfants */
-            .dash-table-container tr:hover .dash-cell div,
-            .dash-table-container tr:hover .dash-cell span {
-                color: #0f172a !important;
+
+            /* Ligne sélectionnée - TRÈS VISIBLE */
+            .dash-table-container tr.row-selected .dash-cell,
+            .dash-table-container .dash-cell.cell-selected {
+                background: #0ea5e9 !important;
+                color: #ffffff !important;
+                font-weight: 600 !important;
             }
+
+            /* ========================================
+               AMÉLIORATION GRAPHIQUES
+               ======================================== */
+            .js-plotly-plot .plotly .main-svg {
+                background: transparent !important;
+            }
+
+            .js-plotly-plot .plotly text {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+            }
+
+            .js-plotly-plot .plotly .gtitle {
+                font-weight: 700 !important;
+                font-size: 16px !important;
+                fill: #1e293b !important;
+            }
+
+            .js-plotly-plot .plotly .xtick text,
+            .js-plotly-plot .plotly .ytick text {
+                font-size: 11px !important;
+                fill: #64748b !important;
+            }
+
+            .js-plotly-plot .plotly .legendtext {
+                font-size: 12px !important;
+                fill: #475569 !important;
+            }
+
             /* ========================================
                CHAT (LIGHT THEME PRÉSERVÉ)
                ======================================== */
@@ -6498,8 +6528,8 @@ def page_overview(master_df: pd.DataFrame = None):
             # ========================================
             {
                 "if": {"filter_query": "{Ajusted_total_need} = 'ORDER NOW'"},
-                "backgroundColor": "rgba(239, 68, 68, 0.15)",
-                "color": "#fecaca",
+                "backgroundColor": "rgba(239, 68, 68, 0.12)",
+                "color": "#991b1b",
                 "fontWeight": "600"
             },
 
@@ -6509,11 +6539,11 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{Ajusted_total_need} = 'ORDER NOW'",
                     "column_id": "Ajusted_total_need"
                 },
-                "backgroundColor": "rgba(239, 68, 68, 0.4)",
+                "backgroundColor": "#dc2626",
                 "color": "#ffffff",
                 "fontWeight": "800",
                 "fontSize": "12px",
-                "border": "2px solid #ef4444",
+                "border": "none",
                 "borderRadius": "6px",
                 "textTransform": "uppercase"
             },
@@ -6524,8 +6554,8 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{Ajusted_total_need} = 'ORDER NOW'",
                     "column_id": "product_name"
                 },
-                "backgroundColor": "rgba(239, 68, 68, 0.25)",
-                "color": "#fee2e2",
+                "backgroundColor": "rgba(239, 68, 68, 0.15)",
+                "color": "#7f1d1d",
                 "fontWeight": "700",
                 "borderLeft": "4px solid #ef4444"
             },
@@ -6536,8 +6566,8 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{Ajusted_total_need} = 'ORDER NOW'",
                     "column_id": "total_stock"
                 },
-                "backgroundColor": "rgba(239, 68, 68, 0.3)",
-                "color": "#fecaca",
+                "backgroundColor": "rgba(239, 68, 68, 0.18)",
+                "color": "#991b1b",
                 "fontWeight": "700",
                 "fontSize": "14px"
             },
@@ -6548,8 +6578,8 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{Ajusted_total_need} = 'ORDER NOW'",
                     "column_id": "QAC"
                 },
-                "backgroundColor": "rgba(239, 68, 68, 0.3)",
-                "color": "#ffffff",
+                "backgroundColor": "#fecaca",
+                "color": "#7f1d1d",
                 "fontWeight": "800",
                 "fontSize": "15px",
                 "border": "2px solid #ef4444"
@@ -6560,8 +6590,8 @@ def page_overview(master_df: pd.DataFrame = None):
             # ========================================
             {
                 "if": {"filter_query": "{Ajusted_total_need} = 'ORDER NOT URGENT'"},
-                "backgroundColor": "rgba(245, 158, 11, 0.12)",
-                "color": "#fde68a",
+                "backgroundColor": "rgba(245, 158, 11, 0.1)",
+                "color": "#92400e",
                 "fontWeight": "500"
             },
 
@@ -6571,11 +6601,11 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{Ajusted_total_need} = 'ORDER NOT URGENT'",
                     "column_id": "Ajusted_total_need"
                 },
-                "backgroundColor": "rgba(245, 158, 11, 0.35)",
+                "backgroundColor": "#f59e0b",
                 "color": "#ffffff",
                 "fontWeight": "700",
                 "fontSize": "12px",
-                "border": "2px solid #f59e0b",
+                "border": "none",
                 "borderRadius": "6px",
                 "textTransform": "uppercase"
             },
@@ -6586,8 +6616,8 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{Ajusted_total_need} = 'ORDER NOT URGENT'",
                     "column_id": "product_name"
                 },
-                "backgroundColor": "rgba(245, 158, 11, 0.2)",
-                "color": "#fef3c7",
+                "backgroundColor": "rgba(245, 158, 11, 0.12)",
+                "color": "#78350f",
                 "fontWeight": "600",
                 "borderLeft": "4px solid #f59e0b"
             },
@@ -6598,8 +6628,8 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{Ajusted_total_need} = 'ORDER NOT URGENT'",
                     "column_id": "QAC"
                 },
-                "backgroundColor": "rgba(245, 158, 11, 0.25)",
-                "color": "#ffffff",
+                "backgroundColor": "#fef3c7",
+                "color": "#92400e",
                 "fontWeight": "700",
                 "fontSize": "14px"
             },
@@ -6610,7 +6640,7 @@ def page_overview(master_df: pd.DataFrame = None):
             {
                 "if": {"filter_query": "{Ajusted_total_need} = 'NO NEED'"},
                 "backgroundColor": "rgba(16, 185, 129, 0.08)",
-                "color": "#d1fae5"
+                "color": "#065f46"
             },
 
             # Colonne Ajusted_total_need - NO NEED
@@ -6619,11 +6649,11 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{Ajusted_total_need} = 'NO NEED'",
                     "column_id": "Ajusted_total_need"
                 },
-                "backgroundColor": "rgba(16, 185, 129, 0.3)",
+                "backgroundColor": "#10b981",
                 "color": "#ffffff",
                 "fontWeight": "700",
                 "fontSize": "12px",
-                "border": "2px solid #10b981",
+                "border": "none",
                 "borderRadius": "6px",
                 "textTransform": "uppercase"
             },
@@ -6634,7 +6664,8 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{Ajusted_total_need} = 'NO NEED'",
                     "column_id": "product_name"
                 },
-                "borderLeft": "4px solid #10b981"
+                "borderLeft": "4px solid #10b981",
+                "color": "#064e3b"
             },
 
             # ========================================
@@ -6647,8 +6678,8 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{Max Coverage Day} < 7",
                     "column_id": "Max Coverage Day"
                 },
-                "backgroundColor": "rgba(239, 68, 68, 0.25)",
-                "color": "#ffffff",
+                "backgroundColor": "#fecaca",
+                "color": "#7f1d1d",
                 "fontWeight": "800",
                 "fontSize": "13px",
                 "border": "1px solid #ef4444"
@@ -6660,8 +6691,8 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{Max Coverage Day} >= 7 && {Max Coverage Day} < 14",
                     "column_id": "Max Coverage Day"
                 },
-                "backgroundColor": "rgba(245, 158, 11, 0.2)",
-                "color": "#fde68a",
+                "backgroundColor": "#fef3c7",
+                "color": "#92400e",
                 "fontWeight": "700",
                 "fontSize": "13px"
             },
@@ -6672,8 +6703,8 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{Max Coverage Day} >= 14 && {Max Coverage Day} < 30",
                     "column_id": "Max Coverage Day"
                 },
-                "backgroundColor": "rgba(34, 197, 94, 0.15)",
-                "color": "#bbf7d0",
+                "backgroundColor": "#d1fae5",
+                "color": "#065f46",
                 "fontWeight": "600"
             },
 
@@ -6683,8 +6714,8 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{Max Coverage Day} >= 30",
                     "column_id": "Max Coverage Day"
                 },
-                "backgroundColor": "rgba(16, 185, 129, 0.2)",
-                "color": "#a7f3d0",
+                "backgroundColor": "#a7f3d0",
+                "color": "#064e3b",
                 "fontWeight": "600"
             },
 
@@ -6696,24 +6727,24 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{Product Category} contains 'a'",
                     "column_id": "Product Category"
                 },
-                "backgroundColor": "rgba(239, 68, 68, 0.2)",
-                "color": "#fecaca"
+                "backgroundColor": "#fee2e2",
+                "color": "#991b1b"
             },
             {
                 "if": {
                     "filter_query": "{Product Category} contains 'b'",
                     "column_id": "Product Category"
                 },
-                "backgroundColor": "rgba(245, 158, 11, 0.2)",
-                "color": "#fde68a"
+                "backgroundColor": "#fef3c7",
+                "color": "#92400e"
             },
             {
                 "if": {
                     "filter_query": "{Product Category} contains 'c'",
                     "column_id": "Product Category"
                 },
-                "backgroundColor": "rgba(16, 185, 129, 0.15)",
-                "color": "#a7f3d0"
+                "backgroundColor": "#d1fae5",
+                "color": "#065f46"
             },
 
             # ========================================
@@ -6725,8 +6756,8 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{days_since_reception} < 7",
                     "column_id": "days_since_reception"
                 },
-                "backgroundColor": "rgba(16, 185, 129, 0.25)",
-                "color": "#34d399",
+                "backgroundColor": "#d1fae5",
+                "color": "#065f46",
                 "fontWeight": "700"
             },
             # Réception moyenne (7-14 jours) - Jaune
@@ -6735,8 +6766,8 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{days_since_reception} >= 7 && {days_since_reception} < 14",
                     "column_id": "days_since_reception"
                 },
-                "backgroundColor": "rgba(245, 158, 11, 0.2)",
-                "color": "#fbbf24",
+                "backgroundColor": "#fef3c7",
+                "color": "#92400e",
                 "fontWeight": "600"
             },
             # Réception ancienne (14-30 jours) - Orange
@@ -6745,8 +6776,8 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{days_since_reception} >= 14 && {days_since_reception} < 30",
                     "column_id": "days_since_reception"
                 },
-                "backgroundColor": "rgba(249, 115, 22, 0.2)",
-                "color": "#fb923c",
+                "backgroundColor": "#fed7aa",
+                "color": "#9a3412",
                 "fontWeight": "600"
             },
             # Réception très ancienne (> 30 jours) - Rouge
@@ -6755,8 +6786,8 @@ def page_overview(master_df: pd.DataFrame = None):
                     "filter_query": "{days_since_reception} >= 30",
                     "column_id": "days_since_reception"
                 },
-                "backgroundColor": "rgba(239, 68, 68, 0.2)",
-                "color": "#f87171",
+                "backgroundColor": "#fecaca",
+                "color": "#991b1b",
                 "fontWeight": "700"
             },
 
@@ -6764,22 +6795,22 @@ def page_overview(master_df: pd.DataFrame = None):
             # 🎯 ÉTATS INTERACTIFS
             # ========================================
 
-            # Lignes sélectionnées
+            # Lignes sélectionnées - TRÈS VISIBLE
             {
                 "if": {"state": "selected"},
-                "backgroundColor": "rgba(34, 211, 238, 0.3)",
-                "border": "2px solid #0ea5e9",
+                "backgroundColor": "#0ea5e9 !important",
+                "border": "2px solid #0369a1",
                 "fontWeight": "700",
-                "color": "#ffffff"
+                "color": "#ffffff !important"
             },
 
             # Cellule active (en cours d'édition)
             {
                 "if": {"state": "active"},
-                "backgroundColor": "#f1f5f9",
+                "backgroundColor": "#e0f2fe",
                 "border": "2px solid #0ea5e9",
                 "outline": "none",
-                "color": "#ffffff",
+                "color": "#0c4a6e",
                 "fontWeight": "700"
             },
 
@@ -8171,7 +8202,7 @@ def update_analytics_charts(supplier_value, category_value, need_value, master_j
             fig_scatter.update_layout(
                 plot_bgcolor="#f8fafc",
                 paper_bgcolor="#ffffff",
-                font=dict(color="#e5e7eb", size=12),
+                font=dict(color="#374151", size=12),
                 showlegend=True,
                 legend=dict(
                     bgcolor="rgba(15, 22, 37, 0.8)",
@@ -8207,7 +8238,7 @@ def update_analytics_charts(supplier_value, category_value, need_value, master_j
             fig_hist_stock.update_layout(
                 plot_bgcolor="#f8fafc",
                 paper_bgcolor="#ffffff",
-                font=dict(color="#e5e7eb", size=12),
+                font=dict(color="#374151", size=12),
                 showlegend=False,
                 height=400
             )
@@ -8233,7 +8264,7 @@ def update_analytics_charts(supplier_value, category_value, need_value, master_j
             fig_box_category.update_layout(
                 plot_bgcolor="#f8fafc",
                 paper_bgcolor="#ffffff",
-                font=dict(color="#e5e7eb", size=12),
+                font=dict(color="#374151", size=12),
                 showlegend=False,
                 height=400
             )
@@ -8271,7 +8302,7 @@ def update_analytics_charts(supplier_value, category_value, need_value, master_j
                 fig_purchase_supplier.update_layout(
                     plot_bgcolor="#f8fafc",
                     paper_bgcolor="#ffffff",
-                    font=dict(color="#e5e7eb", size=12),
+                    font=dict(color="#374151", size=12),
                     xaxis=dict(tickangle=-45),
                     showlegend=False,
                     height=400
@@ -8307,7 +8338,7 @@ def update_analytics_charts(supplier_value, category_value, need_value, master_j
             fig_qac_optimal.update_layout(
                 plot_bgcolor="#f8fafc",
                 paper_bgcolor="#ffffff",
-                font=dict(color="#e5e7eb", size=12),
+                font=dict(color="#374151", size=12),
                 showlegend=True,
                 height=400
             )
@@ -8342,7 +8373,7 @@ def update_analytics_charts(supplier_value, category_value, need_value, master_j
             fig_pie_need.update_layout(
                 plot_bgcolor="#f8fafc",
                 paper_bgcolor="#ffffff",
-                font=dict(color="#e5e7eb", size=12),
+                font=dict(color="#374151", size=12),
                 height=400
             )
             print("   ✅ Pie chart créé")
@@ -8686,7 +8717,7 @@ def update_predictive_charts(supplier_value, category_value, need_value, master_
     fig_bar.update_layout(
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb"),
+        font=dict(color="#374151"),
         xaxis=dict(tickangle=-45)
     )
 
@@ -8723,7 +8754,7 @@ def update_predictive_charts(supplier_value, category_value, need_value, master_
     fig_scatter.update_layout(
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb")
+        font=dict(color="#374151")
     )
 
     # ========================================
@@ -8755,7 +8786,7 @@ def update_predictive_charts(supplier_value, category_value, need_value, master_
     fig_safety.update_layout(
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb"),
+        font=dict(color="#374151"),
         showlegend=False
     )
 
@@ -8984,7 +9015,7 @@ def page_predictive(master_df: pd.DataFrame = None):
     fig_bar.update_layout(
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb"),
+        font=dict(color="#374151"),
         xaxis=dict(tickangle=-45)
     )
 
@@ -9091,7 +9122,7 @@ def update_predictive_bar(supplier_value, category_value):
     fig.update_layout(
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb"),
+        font=dict(color="#374151"),
         xaxis=dict(tickangle=-45)
     )
 
@@ -9342,10 +9373,13 @@ def update_analytics_all_charts(supplier_filter, category_filter, need_filter, f
     )
 
     fig_scatter.update_layout(
+        title=dict(text="Lead Time vs Couverture Stock", font=dict(size=16, color="#1e293b")),
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb", size=11),
-        height=400
+        font=dict(family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif", color="#374151", size=12),
+        legend=dict(bgcolor="rgba(255,255,255,0.9)", bordercolor="#e2e8f0", borderwidth=1),
+        margin=dict(l=60, r=30, t=60, b=50),
+        height=380
     )
 
     # ========================================
@@ -9360,11 +9394,13 @@ def update_analytics_all_charts(supplier_filter, category_filter, need_filter, f
     )
 
     fig_hist.update_layout(
+        title=dict(text="Distribution des Niveaux de Stock", font=dict(size=16, color="#1e293b")),
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb", size=11),
+        font=dict(family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif", color="#374151", size=12),
         showlegend=False,
-        height=400
+        margin=dict(l=60, r=30, t=60, b=50),
+        height=380
     )
 
     # ========================================
@@ -9379,11 +9415,13 @@ def update_analytics_all_charts(supplier_filter, category_filter, need_filter, f
     )
 
     fig_box.update_layout(
+        title=dict(text="Ventes par Catégorie", font=dict(size=16, color="#1e293b")),
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb", size=11),
+        font=dict(family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif", color="#374151", size=12),
         showlegend=False,
-        height=400
+        margin=dict(l=60, r=30, t=60, b=80),
+        height=380
     )
 
     # ========================================
@@ -9407,12 +9445,15 @@ def update_analytics_all_charts(supplier_filter, category_filter, need_filter, f
     )
 
     fig_supplier.update_layout(
+        title=dict(text="Top 10 Fournisseurs - Besoin d'Achat", font=dict(size=16, color="#1e293b")),
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb", size=11),
-        xaxis=dict(tickangle=-45),
+        font=dict(family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif", color="#374151", size=12),
+        xaxis=dict(tickangle=-45, tickfont=dict(size=10)),
         showlegend=False,
-        height=400
+        coloraxis_showscale=False,
+        margin=dict(l=60, r=30, t=60, b=100),
+        height=380
     )
 
     # ========================================
@@ -9429,10 +9470,13 @@ def update_analytics_all_charts(supplier_filter, category_filter, need_filter, f
     )
 
     fig_qac.update_layout(
+        title=dict(text="QAC vs Stock Optimal", font=dict(size=16, color="#1e293b")),
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb", size=11),
-        height=400
+        font=dict(family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif", color="#374151", size=12),
+        legend=dict(bgcolor="rgba(255,255,255,0.9)", bordercolor="#e2e8f0", borderwidth=1),
+        margin=dict(l=60, r=30, t=60, b=50),
+        height=380
     )
 
     # ========================================
@@ -9453,7 +9497,7 @@ def update_analytics_all_charts(supplier_filter, category_filter, need_filter, f
     fig_pie.update_layout(
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb", size=11),
+        font=dict(color="#374151", size=11),
         height=400
     )
 
@@ -9478,7 +9522,7 @@ def update_analytics_all_charts(supplier_filter, category_filter, need_filter, f
     fig_rotation.update_layout(
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb", size=11),
+        font=dict(color="#374151", size=11),
         xaxis=dict(tickangle=-45),
         height=400
     )
@@ -9506,7 +9550,7 @@ def update_analytics_all_charts(supplier_filter, category_filter, need_filter, f
     fig_stock_value.update_layout(
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb", size=11),
+        font=dict(color="#374151", size=11),
         xaxis=dict(tickangle=-45),
         height=400
     )
@@ -9739,7 +9783,7 @@ def update_predictive_all_charts(supplier_filter, category_filter, need_filter, 
     fig_bar.update_layout(
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb", size=11),
+        font=dict(color="#374151", size=11),
         xaxis=dict(tickangle=-45),
         height=400
     )
@@ -9772,10 +9816,13 @@ def update_predictive_all_charts(supplier_filter, category_filter, need_filter, 
         )
 
     fig_scatter.update_layout(
+        title=dict(text="Lead Time vs Couverture Stock", font=dict(size=16, color="#1e293b")),
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb", size=11),
-        height=400
+        font=dict(family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif", color="#374151", size=12),
+        legend=dict(bgcolor="rgba(255,255,255,0.9)", bordercolor="#e2e8f0", borderwidth=1),
+        margin=dict(l=60, r=30, t=60, b=50),
+        height=380
     )
 
     # ========================================
@@ -9807,7 +9854,7 @@ def update_predictive_all_charts(supplier_filter, category_filter, need_filter, 
     fig_safety.update_layout(
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb", size=11),
+        font=dict(color="#374151", size=11),
         height=400
     )
 
@@ -9842,7 +9889,7 @@ def update_predictive_all_charts(supplier_filter, category_filter, need_filter, 
     fig_trend.update_layout(
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb", size=11),
+        font=dict(color="#374151", size=11),
         height=400
     )
 
@@ -9884,7 +9931,7 @@ def update_predictive_all_charts(supplier_filter, category_filter, need_filter, 
     fig_risk.update_layout(
         plot_bgcolor="#f8fafc",
         paper_bgcolor="#ffffff",
-        font=dict(color="#e5e7eb", size=11),
+        font=dict(color="#374151", size=11),
         height=400
     )
 
@@ -10014,7 +10061,7 @@ def page_promotions():
         fig_roi.update_layout(
             plot_bgcolor="#f8fafc",
             paper_bgcolor="#ffffff",
-            font=dict(color="#e5e7eb"),
+            font=dict(color="#374151"),
             xaxis=dict(tickangle=-45),
             height=400
         )
@@ -10035,7 +10082,7 @@ def page_promotions():
         fig_uplift.update_layout(
             plot_bgcolor="#f8fafc",
             paper_bgcolor="#ffffff",
-            font=dict(color="#e5e7eb"),
+            font=dict(color="#374151"),
             xaxis=dict(tickangle=-45),
             height=400
         )
@@ -13193,20 +13240,21 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
         ws[f'A{current_row}'] = f'📦 FOURNISSEUR : {supplier_upper}'
         ws[f'A{current_row}'].font = Font(size=14, bold=True, color="228B22")
         ws[f'A{current_row}'].fill = PatternFill(start_color="F0FFF0", end_color="F0FFF0", fill_type="solid")
-        ws.merge_cells(f'A{current_row}:I{current_row}')
+        ws.merge_cells(f'A{current_row}:J{current_row}')
         ws.row_dimensions[current_row].height = 25
         current_row += 1
 
-        # En-têtes colonnes (SANS Escompte par ligne)
+        # En-têtes colonnes avec TVA sur PU
         headers = [
             'Réf.',
             'Désignation',
             'Qté',
             'Unité',
             'PU HT',
+            'TVA Unit.',
+            'PU TTC',
             'Remise %',
             'Total HT',
-            'TVA 18%',
             'Total TTC'
         ]
 
@@ -13217,8 +13265,8 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = border
 
-        # Colorier colonne Remise éditable
-        ws.cell(row=current_row, column=6).fill = remise_fill
+        # Colorier colonne Remise éditable (maintenant colonne 8)
+        ws.cell(row=current_row, column=8).fill = remise_fill
 
         current_row += 1
         first_data_row = current_row
@@ -13287,8 +13335,24 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # Colonne 6 : Remise % (ÉDITABLE par produit)
-            cell = ws.cell(row=current_row, column=6, value=0)
+            # Colonne 6 : TVA Unitaire (18% du PU HT)
+            formula_tva_unit = f"=E{current_row}*0.18"
+            cell = ws.cell(row=current_row, column=6, value=formula_tva_unit)
+            cell.number_format = '#,##0'
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.border = border
+            cell.font = Font(italic=True, color="666666")
+
+            # Colonne 7 : PU TTC (PU HT + TVA Unitaire)
+            formula_pu_ttc = f"=E{current_row}+F{current_row}"
+            cell = ws.cell(row=current_row, column=7, value=formula_pu_ttc)
+            cell.number_format = '#,##0'
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.border = border
+            cell.font = Font(bold=True, color="0066CC")
+
+            # Colonne 8 : Remise % (ÉDITABLE par produit)
+            cell = ws.cell(row=current_row, column=8, value=0)
             cell.number_format = '0.00'
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.fill = remise_fill
@@ -13296,27 +13360,19 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             cell.font = Font(bold=True)
 
             # ========================================
-            # FORMULES AUTOMATIQUES (sans escompte ligne)
+            # FORMULES AUTOMATIQUES (TVA sur PU)
             # ========================================
 
-            # Colonne 7 : Total HT (formule avec remise seulement)
-            # Total HT = (PU × Qté) × (1-Remise/100)
-            formula_ht = f"=(E{current_row}*C{current_row})*(1-F{current_row}/100)"
-            cell = ws.cell(row=current_row, column=7, value=formula_ht)
+            # Colonne 9 : Total HT = (PU HT × Qté) × (1-Remise/100)
+            formula_ht = f"=(E{current_row}*C{current_row})*(1-H{current_row}/100)"
+            cell = ws.cell(row=current_row, column=9, value=formula_ht)
             cell.number_format = '#,##0'
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # Colonne 8 : TVA 18% (formule)
-            formula_tva = f"=G{current_row}*0.18"
-            cell = ws.cell(row=current_row, column=8, value=formula_tva)
-            cell.number_format = '#,##0'
-            cell.alignment = Alignment(horizontal='right', vertical='center')
-            cell.border = border
-
-            # Colonne 9 : Total TTC (formule)
-            formula_ttc = f"=G{current_row}+H{current_row}"
-            cell = ws.cell(row=current_row, column=9, value=formula_ttc)
+            # Colonne 10 : Total TTC = (PU TTC × Qté) × (1-Remise/100)
+            formula_ttc = f"=(G{current_row}*C{current_row})*(1-H{current_row}/100)"
+            cell = ws.cell(row=current_row, column=10, value=formula_ttc)
             cell.number_format = '#,##0'
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.fill = total_fill
@@ -13333,28 +13389,21 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
 
         if last_data_row >= first_data_row:
             # Ligne Sous-total brut
-            ws.merge_cells(f'A{current_row}:F{current_row}')
+            ws.merge_cells(f'A{current_row}:H{current_row}')
             cell = ws.cell(row=current_row, column=1, value=f"Sous-total {supplier_upper}")
             cell.font = Font(bold=True, size=10)
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # Total HT brut
-            cell = ws.cell(row=current_row, column=7, value=f"=SUM(G{first_data_row}:G{last_data_row})")
-            cell.number_format = '#,##0'
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal='right', vertical='center')
-            cell.border = border
-
-            # TVA brute
-            cell = ws.cell(row=current_row, column=8, value=f"=SUM(H{first_data_row}:H{last_data_row})")
-            cell.number_format = '#,##0'
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal='right', vertical='center')
-            cell.border = border
-
-            # TTC brut
+            # Total HT brut (colonne 9)
             cell = ws.cell(row=current_row, column=9, value=f"=SUM(I{first_data_row}:I{last_data_row})")
+            cell.number_format = '#,##0'
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.border = border
+
+            # TTC brut (colonne 10)
+            cell = ws.cell(row=current_row, column=10, value=f"=SUM(J{first_data_row}:J{last_data_row})")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True)
             cell.alignment = Alignment(horizontal='right', vertical='center')
@@ -13366,36 +13415,29 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             # ========================================
             # 🎯 LIGNE ESCOMPTE FOURNISSEUR (ÉDITABLE)
             # ========================================
-            ws.merge_cells(f'A{current_row}:E{current_row}')
+            ws.merge_cells(f'A{current_row}:G{current_row}')
             cell = ws.cell(row=current_row, column=1, value=f"🎯 Escompte {supplier_upper}")
             cell.font = Font(bold=True, size=10, color="E65100")
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # Cellule escompte % (ÉDITABLE - colonne F)
-            escompte_cell = ws.cell(row=current_row, column=6, value=0)
+            # Cellule escompte % (ÉDITABLE - colonne H)
+            escompte_cell = ws.cell(row=current_row, column=8, value=0)
             escompte_cell.number_format = '0.00"%"'
             escompte_cell.alignment = Alignment(horizontal='center', vertical='center')
             escompte_cell.fill = escompte_fill
             escompte_cell.border = border
             escompte_cell.font = Font(bold=True, size=11)
 
-            # Montant escompte HT (formule)
-            cell = ws.cell(row=current_row, column=7, value=f"=-G{subtotal_row}*F{current_row}/100")
+            # Montant escompte HT (formule - colonne 9)
+            cell = ws.cell(row=current_row, column=9, value=f"=-I{subtotal_row}*H{current_row}/100")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True, color="E65100")
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # Montant escompte TVA
-            cell = ws.cell(row=current_row, column=8, value=f"=-H{subtotal_row}*F{current_row}/100")
-            cell.number_format = '#,##0'
-            cell.font = Font(bold=True, color="E65100")
-            cell.alignment = Alignment(horizontal='right', vertical='center')
-            cell.border = border
-
-            # Montant escompte TTC
-            cell = ws.cell(row=current_row, column=9, value=f"=-I{subtotal_row}*F{current_row}/100")
+            # Montant escompte TTC (colonne 10)
+            cell = ws.cell(row=current_row, column=10, value=f"=-J{subtotal_row}*H{current_row}/100")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True, color="E65100")
             cell.alignment = Alignment(horizontal='right', vertical='center')
@@ -13407,31 +13449,23 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             # ========================================
             # 💚 TOTAL NET FOURNISSEUR (après escompte)
             # ========================================
-            ws.merge_cells(f'A{current_row}:F{current_row}')
+            ws.merge_cells(f'A{current_row}:H{current_row}')
             cell = ws.cell(row=current_row, column=1, value=f"TOTAL NET {supplier.upper()}")
             cell.font = Font(bold=True, size=11)
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
             cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
 
-            # Total HT net (sous-total + escompte)
-            cell = ws.cell(row=current_row, column=7, value=f"=G{subtotal_row}+G{escompte_row}")
-            cell.number_format = '#,##0'
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal='right', vertical='center')
-            cell.border = border
-            cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
-
-            # TVA nette
-            cell = ws.cell(row=current_row, column=8, value=f"=H{subtotal_row}+H{escompte_row}")
-            cell.number_format = '#,##0'
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal='right', vertical='center')
-            cell.border = border
-            cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
-
-            # TTC net
+            # Total HT net (sous-total + escompte - colonne 9)
             cell = ws.cell(row=current_row, column=9, value=f"=I{subtotal_row}+I{escompte_row}")
+            cell.number_format = '#,##0'
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.border = border
+            cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
+
+            # TTC net (colonne 10)
+            cell = ws.cell(row=current_row, column=10, value=f"=J{subtotal_row}+J{escompte_row}")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True, size=11)
             cell.alignment = Alignment(horizontal='right', vertical='center')
@@ -13448,37 +13482,37 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
 
     current_row += 1
 
-    # Total HT (colonne G maintenant)
-    ws[f'F{current_row}'] = "TOTAL HT :"
-    ws[f'F{current_row}'].font = Font(bold=True, size=12)
-    ws[f'F{current_row}'].alignment = Alignment(horizontal='right')
-    ws[f'G{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",G:G)'
-    ws[f'G{current_row}'].number_format = '#,##0 "FCFA"'
-    ws[f'G{current_row}'].font = Font(bold=True, size=12)
-    ws[f'G{current_row}'].border = Border(bottom=Side(style='thin'))
+    # Total HT (colonne I maintenant)
+    ws[f'H{current_row}'] = "TOTAL HT :"
+    ws[f'H{current_row}'].font = Font(bold=True, size=12)
+    ws[f'H{current_row}'].alignment = Alignment(horizontal='right')
+    ws[f'I{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",I:I)'
+    ws[f'I{current_row}'].number_format = '#,##0 "FCFA"'
+    ws[f'I{current_row}'].font = Font(bold=True, size=12)
+    ws[f'I{current_row}'].border = Border(bottom=Side(style='thin'))
 
     current_row += 1
 
-    # TVA (colonne H maintenant)
-    ws[f'F{current_row}'] = "TVA (18%) :"
-    ws[f'F{current_row}'].font = Font(bold=True, size=12)
-    ws[f'F{current_row}'].alignment = Alignment(horizontal='right')
-    ws[f'G{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",H:H)'
-    ws[f'G{current_row}'].number_format = '#,##0 "FCFA"'
-    ws[f'G{current_row}'].font = Font(bold=True, size=12)
-    ws[f'G{current_row}'].border = Border(bottom=Side(style='thin'))
+    # TVA Totale (différence TTC - HT)
+    ws[f'H{current_row}'] = "TVA (18%) :"
+    ws[f'H{current_row}'].font = Font(bold=True, size=12)
+    ws[f'H{current_row}'].alignment = Alignment(horizontal='right')
+    ws[f'I{current_row}'] = f'=I{current_row + 1}-I{current_row - 1}'
+    ws[f'I{current_row}'].number_format = '#,##0 "FCFA"'
+    ws[f'I{current_row}'].font = Font(bold=True, size=12)
+    ws[f'I{current_row}'].border = Border(bottom=Side(style='thin'))
 
     current_row += 1
 
-    # Total TTC (colonne I maintenant)
-    ws[f'F{current_row}'] = "TOTAL TTC :"
-    ws[f'F{current_row}'].font = Font(bold=True, size=14, color="006400")
-    ws[f'F{current_row}'].alignment = Alignment(horizontal='right')
-    ws[f'G{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",I:I)'
-    ws[f'G{current_row}'].number_format = '#,##0 "FCFA"'
-    ws[f'G{current_row}'].font = Font(bold=True, size=14, color="FFFFFF")
-    ws[f'G{current_row}'].fill = PatternFill(start_color="27AE60", end_color="27AE60", fill_type="solid")
-    ws[f'G{current_row}'].border = Border(
+    # Total TTC (colonne J maintenant)
+    ws[f'H{current_row}'] = "TOTAL TTC :"
+    ws[f'H{current_row}'].font = Font(bold=True, size=14, color="006400")
+    ws[f'H{current_row}'].alignment = Alignment(horizontal='right')
+    ws[f'I{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",J:J)'
+    ws[f'I{current_row}'].number_format = '#,##0 "FCFA"'
+    ws[f'I{current_row}'].font = Font(bold=True, size=14, color="FFFFFF")
+    ws[f'I{current_row}'].fill = PatternFill(start_color="27AE60", end_color="27AE60", fill_type="solid")
+    ws[f'I{current_row}'].border = Border(
         top=Side(style='double'),
         bottom=Side(style='double')
     )
@@ -13555,16 +13589,17 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
     # 📐 MISE EN PAGE
     # ========================================
 
-    # Largeurs colonnes (9 colonnes maintenant)
+    # Largeurs colonnes (10 colonnes maintenant)
     ws.column_dimensions['A'].width = 10  # Réf
-    ws.column_dimensions['B'].width = 40  # Désignation
+    ws.column_dimensions['B'].width = 35  # Désignation
     ws.column_dimensions['C'].width = 8  # Qté
-    ws.column_dimensions['D'].width = 10  # Unité
+    ws.column_dimensions['D'].width = 8  # Unité
     ws.column_dimensions['E'].width = 12  # PU HT
-    ws.column_dimensions['F'].width = 12  # Remise % (par produit) / Escompte % (par fournisseur)
-    ws.column_dimensions['G'].width = 15  # Total HT
-    ws.column_dimensions['H'].width = 15  # TVA
-    ws.column_dimensions['I'].width = 15  # Total TTC
+    ws.column_dimensions['F'].width = 10  # TVA Unitaire
+    ws.column_dimensions['G'].width = 12  # PU TTC
+    ws.column_dimensions['H'].width = 10  # Remise %
+    ws.column_dimensions['I'].width = 14  # Total HT
+    ws.column_dimensions['J'].width = 14  # Total TTC
 
     # Hauteur des premières lignes (pour le logo)
     ws.row_dimensions[1].height = 60

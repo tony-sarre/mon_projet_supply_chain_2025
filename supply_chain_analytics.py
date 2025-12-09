@@ -103,16 +103,90 @@ import requests
 import threading
 import plotly.graph_objects as go
 import time
+import threading
+from queue import Queue
+from functools import wraps
 
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
-# Cache setup
-cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
+# ============================================================
+# 🔒 CONFIGURATION CACHE THREAD-SAFE MULTI-UTILISATEURS
+# ============================================================
+
+# Cache avec FileSystem pour environnement multi-processus (Gunicorn)
+cache_config = {
+    "CACHE_TYPE": "FileSystemCache",
+    "CACHE_DIR": "/tmp/dash_cache",
+    "CACHE_DEFAULT_TIMEOUT": 300,  # 5 minutes
+    "CACHE_THRESHOLD": 500  # Max 500 items
+}
+
+# Fallback sur SimpleCache si FileSystem échoue
+try:
+    import os
+
+    os.makedirs("/tmp/dash_cache", exist_ok=True)
+    cache = Cache(app.server, config=cache_config)
+    print("✅ Cache FileSystem initialisé (multi-processus)")
+except Exception as e:
+    print(f"⚠️ FileSystem cache failed, using SimpleCache: {e}")
+    cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 300})
+
+# Lock pour les opérations thread-safe
+_data_lock = threading.Lock()
+
+# Cache des données par utilisateur (évite les conflits)
+_user_data_cache = {}
+_user_cache_lock = threading.Lock()
 
 
-@cache.memoize()  # Exemple de mise en cache pour la fonction
+def get_user_data(username: str = None):
+    """Récupère les données pour un utilisateur spécifique (thread-safe)"""
+    cache_key = username or "global"
+
+    with _user_cache_lock:
+        if cache_key in _user_data_cache:
+            cached = _user_data_cache[cache_key]
+            # Vérifier si le cache est encore valide (5 minutes)
+            if time.time() - cached.get("timestamp", 0) < 300:
+                return cached.get("data")
+
+    # Charger les données fraîches
+    df = load_supply_data()
+
+    with _user_cache_lock:
+        _user_data_cache[cache_key] = {
+            "data": df,
+            "timestamp": time.time()
+        }
+
+    return df
+
+
+def invalidate_user_cache(username: str = None):
+    """Invalide le cache pour un utilisateur"""
+    cache_key = username or "global"
+    with _user_cache_lock:
+        if cache_key in _user_data_cache:
+            del _user_data_cache[cache_key]
+
+
+@cache.memoize(timeout=300)
 def get_df_cached():
-    return load_supply_data()  # Fonction pour charger vos données
+    """Fonction cachée pour charger les données (avec timeout)"""
+    return load_supply_data()
+
+
+def clear_all_caches():
+    """Nettoie tous les caches"""
+    global _user_data_cache
+    with _user_cache_lock:
+        _user_data_cache = {}
+    try:
+        cache.clear()
+    except:
+        pass
+    print("🧹 Tous les caches nettoyés")
 
 
 RENDER_ENV = os.getenv("RENDER", False)
@@ -137,10 +211,64 @@ if SUPABASE_AVAILABLE:
 else:
     print("⚠️ Supabase non disponible - tracking désactivé")
 
+# ============================================================
+# 📊 FONCTIONS DE TRACKING SUPABASE - ASYNCHRONE
+# ============================================================
 
-# ============================================================
-# 📊 FONCTIONS DE TRACKING SUPABASE
-# ============================================================
+# Queue pour le tracking asynchrone (ne bloque pas l'UI)
+_tracking_queue = Queue()
+_tracking_thread = None
+_tracking_running = False
+
+
+def _tracking_worker():
+    """Worker thread pour traiter les événements de tracking en arrière-plan"""
+    global _tracking_running
+    while _tracking_running:
+        try:
+            # Attendre un événement (timeout 1 seconde)
+            event = _tracking_queue.get(timeout=1)
+            if event is None:
+                continue
+
+            event_type = event.get("type")
+            data = event.get("data", {})
+
+            if event_type == "activity":
+                _do_track_activity(**data)
+            elif event_type == "qac_edit":
+                _do_track_qac_edit(**data)
+            elif event_type == "po_generated":
+                _do_track_po_generated(**data)
+            elif event_type == "filter_used":
+                _do_track_filter_used(**data)
+            elif event_type == "selection":
+                _do_track_selection(**data)
+
+            _tracking_queue.task_done()
+        except Exception:
+            pass  # Timeout ou erreur, on continue
+
+
+def start_tracking_worker():
+    """Démarre le worker de tracking"""
+    global _tracking_thread, _tracking_running
+    if _tracking_thread is None or not _tracking_thread.is_alive():
+        _tracking_running = True
+        _tracking_thread = threading.Thread(target=_tracking_worker, daemon=True)
+        _tracking_thread.start()
+        print("✅ Worker de tracking Supabase démarré")
+
+
+def stop_tracking_worker():
+    """Arrête le worker de tracking"""
+    global _tracking_running
+    _tracking_running = False
+
+
+# Démarrer le worker au lancement
+start_tracking_worker()
+
 
 def get_or_create_user(username: str) -> dict:
     """Récupère ou crée un utilisateur dans Supabase"""
@@ -231,7 +359,25 @@ def end_session(session_id: str):
 
 
 def track_activity(user_id: str, session_id: str, action_type: str, page: str = None, details: dict = None):
-    """Enregistre une activité utilisateur"""
+    """Enregistre une activité utilisateur (asynchrone via queue)"""
+    if not supabase_client or not SUPABASE_TRACKING_ENABLED:
+        return
+
+    # Ajouter à la queue pour traitement asynchrone
+    _tracking_queue.put({
+        "type": "activity",
+        "data": {
+            "user_id": user_id,
+            "session_id": session_id,
+            "action_type": action_type,
+            "page": page,
+            "details": details
+        }
+    })
+
+
+def _do_track_activity(user_id: str, session_id: str, action_type: str, page: str = None, details: dict = None):
+    """Exécution réelle du tracking activité"""
     global SUPABASE_TRACKING_ENABLED
 
     if not supabase_client or not SUPABASE_TRACKING_ENABLED:
@@ -257,7 +403,26 @@ def track_activity(user_id: str, session_id: str, action_type: str, page: str = 
 
 def track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: int, new_value: int,
                    supplier: str = None):
-    """Enregistre une modification QAC"""
+    """Enregistre une modification QAC (asynchrone)"""
+    if not supabase_client or not SUPABASE_TRACKING_ENABLED:
+        return
+
+    _tracking_queue.put({
+        "type": "qac_edit",
+        "data": {
+            "user_id": user_id,
+            "session_id": session_id,
+            "product_name": product_name,
+            "old_value": old_value,
+            "new_value": new_value,
+            "supplier": supplier
+        }
+    })
+
+
+def _do_track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: int, new_value: int,
+                       supplier: str = None):
+    """Exécution réelle du tracking QAC edit"""
     global SUPABASE_TRACKING_ENABLED
 
     if not supabase_client or not SUPABASE_TRACKING_ENABLED:
@@ -280,6 +445,156 @@ def track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: 
             SUPABASE_TRACKING_ENABLED = False
         else:
             print(f"⚠️ Erreur track_qac_edit: {e}")
+
+
+# ============================================================
+# 📊 NOUVELLES FONCTIONS DE TRACKING - ACTIONS AGENTS
+# ============================================================
+
+def track_po_generated(user_id: str, session_id: str, supplier: str, products_count: int, total_amount: float,
+                       po_type: str = "excel"):
+    """Track la génération d'un bon de commande"""
+    if not supabase_client or not SUPABASE_TRACKING_ENABLED:
+        return
+
+    _tracking_queue.put({
+        "type": "po_generated",
+        "data": {
+            "user_id": user_id,
+            "session_id": session_id,
+            "supplier": supplier,
+            "products_count": products_count,
+            "total_amount": total_amount,
+            "po_type": po_type
+        }
+    })
+
+
+def _do_track_po_generated(user_id: str, session_id: str, supplier: str, products_count: int, total_amount: float,
+                           po_type: str = "excel"):
+    """Exécution réelle du tracking PO"""
+    global SUPABASE_TRACKING_ENABLED
+
+    if not supabase_client or not SUPABASE_TRACKING_ENABLED:
+        return
+
+    try:
+        # Tracker comme activité
+        activity_data = {
+            "user_id": user_id,
+            "session_id": session_id,
+            "action_type": "po_generated",
+            "page": "overview",
+            "action_details": {
+                "supplier": supplier,
+                "products_count": products_count,
+                "total_amount": total_amount,
+                "po_type": po_type
+            }
+        }
+        supabase_client.table("user_activities").insert(activity_data).execute()
+        print(f"📄 PO tracké: {supplier} - {products_count} produits - {total_amount:,.0f} FCFA")
+    except Exception as e:
+        error_str = str(e)
+        if "row-level security policy" in error_str or "42501" in error_str:
+            SUPABASE_TRACKING_ENABLED = False
+
+
+def track_filter_used(user_id: str, session_id: str, filter_type: str, filter_value):
+    """Track l'utilisation des filtres"""
+    if not supabase_client or not SUPABASE_TRACKING_ENABLED:
+        return
+
+    _tracking_queue.put({
+        "type": "filter_used",
+        "data": {
+            "user_id": user_id,
+            "session_id": session_id,
+            "filter_type": filter_type,
+            "filter_value": filter_value
+        }
+    })
+
+
+def _do_track_filter_used(user_id: str, session_id: str, filter_type: str, filter_value):
+    """Exécution réelle du tracking filtre"""
+    global SUPABASE_TRACKING_ENABLED
+
+    if not supabase_client or not SUPABASE_TRACKING_ENABLED:
+        return
+
+    try:
+        activity_data = {
+            "user_id": user_id,
+            "session_id": session_id,
+            "action_type": "filter_used",
+            "page": "overview",
+            "action_details": {
+                "filter_type": filter_type,
+                "filter_value": str(filter_value) if filter_value else None
+            }
+        }
+        supabase_client.table("user_activities").insert(activity_data).execute()
+    except Exception as e:
+        error_str = str(e)
+        if "row-level security policy" in error_str or "42501" in error_str:
+            SUPABASE_TRACKING_ENABLED = False
+
+
+def track_selection(user_id: str, session_id: str, selected_count: int, action: str = "select"):
+    """Track la sélection de produits"""
+    if not supabase_client or not SUPABASE_TRACKING_ENABLED:
+        return
+
+    _tracking_queue.put({
+        "type": "selection",
+        "data": {
+            "user_id": user_id,
+            "session_id": session_id,
+            "selected_count": selected_count,
+            "action": action
+        }
+    })
+
+
+def _do_track_selection(user_id: str, session_id: str, selected_count: int, action: str = "select"):
+    """Exécution réelle du tracking sélection"""
+    global SUPABASE_TRACKING_ENABLED
+
+    if not supabase_client or not SUPABASE_TRACKING_ENABLED:
+        return
+
+    try:
+        activity_data = {
+            "user_id": user_id,
+            "session_id": session_id,
+            "action_type": f"products_{action}",
+            "page": "overview",
+            "action_details": {
+                "selected_count": selected_count
+            }
+        }
+        supabase_client.table("user_activities").insert(activity_data).execute()
+    except Exception as e:
+        error_str = str(e)
+        if "row-level security policy" in error_str or "42501" in error_str:
+            SUPABASE_TRACKING_ENABLED = False
+
+
+def track_data_refresh(user_id: str, session_id: str, products_count: int):
+    """Track le rafraîchissement des données"""
+    track_activity(user_id, session_id, "data_refresh", "overview", {
+        "products_count": products_count,
+        "timestamp": datetime.now().isoformat()
+    })
+
+
+def track_export(user_id: str, session_id: str, export_type: str, records_count: int):
+    """Track l'export de données"""
+    track_activity(user_id, session_id, "data_export", "overview", {
+        "export_type": export_type,
+        "records_count": records_count
+    })
 
 
 # ==========================================
@@ -4705,93 +5020,78 @@ app.index_string = """
                 background: var(--bg-input) !important;
             }
 
-            /* Container principal */
-            #rotation-period {
-                background: var(--bg-input) !important;
+            /* ========================================
+               DROPDOWN ROTATION COMPACT
+               ======================================== */
+            .rotation-dropdown-compact .Select-control {
+                background: #ffffff !important;
+                border: 1px solid #e2e8f0 !important;
+                border-radius: 6px !important;
+                min-height: 32px !important;
+                height: 32px !important;
             }
 
-            /* Contrôle du dropdown */
-            .dark-dropdown .Select-control,
-            #rotation-period .Select-control {
-                background: var(--bg-input) !important;
-                border: 2px solid var(--border-color) !important;
-                border-radius: 12px !important;
-                color: var(--text-primary) !important;
-                transition: all 0.3s ease !important;
-            }
-
-            .dark-dropdown .Select-control:hover,
-            #rotation-period .Select-control:hover {
-                border-color: var(--border-hover) !important;
-            }
-
-            /* Focus state */
-            .dark-dropdown .is-focused:not(.is-open) > .Select-control,
-            #rotation-period .is-focused:not(.is-open) > .Select-control {
-                border-color: var(--brand-accent) !important;
-                box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15) !important;
-            }
-
-            /* Texte sélectionné */
-            .dark-dropdown .Select-value-label,
-            .dark-dropdown .Select-placeholder,
-            #rotation-period .Select-value-label,
-            #rotation-period .Select-placeholder {
-                color: var(--text-primary) !important;
+            .rotation-dropdown-compact .Select-value-label {
+                color: #1e293b !important;
                 font-weight: 600 !important;
-                font-size: 14px !important;
+                font-size: 13px !important;
+                line-height: 30px !important;
             }
 
-            /* Flèche */
-            .dark-dropdown .Select-arrow-zone,
-            #rotation-period .Select-arrow-zone {
-                color: var(--text-primary) !important;
+            .rotation-dropdown-compact .Select-arrow-zone {
+                padding: 4px 8px !important;
             }
 
-            .dark-dropdown .Select-arrow,
-            #rotation-period .Select-arrow {
-                border-color: var(--text-primary) transparent transparent !important;
+            .rotation-dropdown-compact .Select-menu-outer {
+                background: #ffffff !important;
+                border: 1px solid #e2e8f0 !important;
+                border-radius: 6px !important;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
             }
 
-            /* Menu déroulant */
-            .dark-dropdown .Select-menu-outer,
-            #rotation-period .Select-menu-outer {
-                background: var(--bg-tertiary) !important;
-                border: 2px solid var(--border-color) !important;
-                border-radius: 12px !important;
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
-                margin-top: 4px !important;
+            .rotation-dropdown-compact .Select-option {
+                padding: 8px 12px !important;
+                font-size: 13px !important;
+                color: #1e293b !important;
             }
 
-            /* Options */
-            .dark-dropdown .Select-option,
-            #rotation-period .Select-option {
-                background: var(--bg-tertiary) !important;
-                color: var(--text-primary) !important;
-                padding: 12px 16px !important;
-                font-weight: 500 !important;
-                transition: all 0.2s ease !important;
+            .rotation-dropdown-compact .Select-option:hover,
+            .rotation-dropdown-compact .Select-option.is-focused {
+                background: #f0f9ff !important;
+                color: #0ea5e9 !important;
             }
 
-            .dark-dropdown .Select-option:hover,
-            .dark-dropdown .Select-option.is-focused,
-            #rotation-period .Select-option:hover,
-            #rotation-period .Select-option.is-focused {
-                background: rgba(34, 211, 238, 0.15) !important;
-                color: var(--brand-accent) !important;
+            /* ========================================
+               TABLE STABILISATION - ÉVITER MOUVEMENT
+               ======================================== */
+            .dash-table-container {
+                overflow: hidden !important;
             }
 
-            .dark-dropdown .Select-option.is-selected,
-            #rotation-period .Select-option.is-selected {
-                background: rgba(34, 211, 238, 0.25) !important;
-                color: var(--brand-accent) !important;
-                font-weight: 700 !important;
+            .dash-table-container .dash-spreadsheet-container {
+                overflow: visible !important;
             }
 
-            /* Input dans le dropdown */
-            .dark-dropdown .Select-input > input,
-            #rotation-period .Select-input > input {
-                color: var(--text-primary) !important;
+            .dash-table-container .dash-spreadsheet-inner {
+                table-layout: fixed !important;
+            }
+
+            /* Empêcher le redimensionnement lors de la sélection */
+            .dash-table-container td {
+                box-sizing: border-box !important;
+            }
+
+            /* Checkbox de sélection - taille fixe */
+            .dash-table-container .dash-select-cell {
+                width: 40px !important;
+                min-width: 40px !important;
+                max-width: 40px !important;
+                text-align: center !important;
+            }
+
+            /* Ligne sélectionnée - pas de changement de largeur */
+            .dash-table-container tr.row-selected {
+                outline: none !important;
             }
 
             /* ========================================
@@ -6325,37 +6625,35 @@ def page_overview(master_df: pd.DataFrame = None):
         dbc.Col(html.Div(risk_bell, style={"textAlign": "right"}), md=4),
     ])
 
-    # Dans page_overview(), AVANT le tableau
-
-    # ✅ DROPDOWN SIMPLIFIÉ (sans indicateur)
+    # ✅ DROPDOWN COMPACT ET CLAIR
     rotation_dropdown = html.Div([
-        html.Label(" Période de rotation ADS :", style={
-            "fontWeight": "700",
-            "marginRight": "12px",
-            "color": "#1e293b",
-            "fontSize": "14px"
+        html.Span("📊 Période ADS :", style={
+            "fontWeight": "600",
+            "marginRight": "10px",
+            "color": "#475569",
+            "fontSize": "13px"
         }),
         dcc.Dropdown(
             id="rotation-period",
             options=[
-                {"label": " 3 jours ", "value": "3d"},
-                {"label": " 7 jours ", "value": "7d"},
-                {"label": " 30 jours ", "value": "30d"},
+                {"label": "3 jours", "value": "3d"},
+                {"label": "7 jours", "value": "7d"},
+                {"label": "30 jours", "value": "30d"},
             ],
             value="7d",
             clearable=False,
             searchable=False,
-            style={"width": "400px"},
-            className="dark-dropdown"
+            style={"width": "120px", "display": "inline-block", "verticalAlign": "middle"},
+            className="rotation-dropdown-compact"
         ),
-        # ❌ SUPPRIMER rotation-indicator
     ], style={
-        "padding": "16px 18px",
-        "background": "linear-gradient(135deg, #1a2332 0%, #141b2d 100%)",
-        "borderRadius": "12px",
-        "border": "1px solid #334155",
-        "marginBottom": "20px",
-        "boxShadow": "0 4px 12px rgba(0,0,0,0.2)"
+        "display": "inline-flex",
+        "alignItems": "center",
+        "padding": "8px 14px",
+        "background": "#f1f5f9",
+        "borderRadius": "8px",
+        "border": "1px solid #e2e8f0",
+        "marginBottom": "12px"
     })
 
     # Ajouter la nouvelle colonne 'QAC edited' dans available_cols
@@ -6833,12 +7131,27 @@ def page_overview(master_df: pd.DataFrame = None):
                          "selected_rows", "selected_columns", "hidden_columns"],
     )
 
-    action_buttons = dbc.ButtonGroup([
-        dbc.Button("🔄 Actualiser", id="btn-refresh", className="btn-outline-secondary", size="sm"),
-        dbc.Button("➕ Ajouter produit", id="btn-add-row", className="btn-primary", size="sm"),
-        dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, className="btn-success",
-                   size="sm"),  # ✅ nouveau
-    ], style={"marginBottom": "15px"})
+    # Boutons d'action améliorés
+    action_buttons = html.Div([
+        dbc.ButtonGroup([
+            dbc.Button("🔄 Actualiser", id="btn-refresh", className="btn-outline-secondary", size="sm",
+                       style={"fontWeight": "600"}),
+            dbc.Button("☑️ Tout sélect.", id="btn-select-all", className="btn-outline-primary", size="sm",
+                       style={"fontWeight": "600"}),
+            dbc.Button("➕ Ajouter", id="btn-add-row", className="btn-primary", size="sm",
+                       style={"fontWeight": "600"}),
+            #dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, className="btn-success",
+                       #size="sm",
+                       #style={"fontWeight": "600"}),
+        ], size="sm"),
+        # Compteur de sélection inline
+        html.Span(id="selection-count-inline", style={
+            "marginLeft": "15px",
+            "fontSize": "13px",
+            "color": "#0ea5e9",
+            "fontWeight": "600"
+        })
+    ], style={"display": "flex", "alignItems": "center", "marginBottom": "12px"})
 
     # Dropdown filter-status
     # dcc.Dropdown(
@@ -7810,47 +8123,136 @@ def send_note_with_notifications(n_clicks, message, author, product_name):
 @app.callback(
     [Output('main-table', 'data', allow_duplicate=True),
      Output('master-data', 'data', allow_duplicate=True),
-     Output('action-feedback', 'children', allow_duplicate=True)],
+     Output('filtered-data', 'data', allow_duplicate=True),
+     Output('action-feedback', 'children', allow_duplicate=True),
+     Output('search-input', 'value', allow_duplicate=True),
+     Output('filter-supplier', 'value', allow_duplicate=True),
+     Output('filter-category', 'value', allow_duplicate=True),
+     Output('filter-need', 'value', allow_duplicate=True),
+     Output('main-table', 'selected_rows', allow_duplicate=True),
+     Output('page-container', 'children', allow_duplicate=True)],
     Input('btn-refresh', 'n_clicks'),
+    State('auth-state', 'data'),
     prevent_initial_call=True
 )
-def refresh_data(n_clicks):
-    """Rafraîchit les données depuis Google Sheets"""
+def refresh_data(n_clicks, auth_state):
+    """Rafraîchit TOUTE la page Overview : données, KPIs, filtres"""
+    global initial_df
+
     if n_clicks:
         try:
-            # Rafraîchir les données depuis la source
+            print(f"\n{'=' * 60}")
+            print(f"🔄 ACTUALISATION COMPLÈTE DE LA PAGE OVERVIEW")
+            print(f"{'=' * 60}")
+
+            # Récupérer l'utilisateur actif
+            username = auth_state.get("username", "") if auth_state else ""
+
+            # 1. Invalider le cache utilisateur
+            invalidate_user_cache(username)
+            clear_all_caches()
+
+            # 2. Rafraîchir les données depuis la source
             updated_df = load_supply_data()
 
-            # Ajouter la colonne QAC edited si elle n'existe pas
+            # 3. Mettre à jour le DataFrame global (thread-safe)
+            with _data_lock:
+                initial_df = updated_df
+
+            # 4. Ajouter la colonne QAC edited si elle n'existe pas
             if 'QAC edited' not in updated_df.columns:
                 updated_df['QAC edited'] = ' '
 
-            # Convertir en liste de records pour la DataTable
+            # 5. Convertir en liste de records pour la DataTable
             records = updated_df.to_dict('records')
             json_data = updated_df.to_json(orient="records")
 
-            print(f"🔄 Données rafraîchies : {len(updated_df)} produits")
+            # 6. Régénérer la page Overview avec les nouvelles données
+            new_page_content = page_overview(updated_df)
 
-            feedback = dbc.Alert(
-                f"✅ Données actualisées : {len(updated_df)} produits chargés",
-                color="success",
-                duration=4000,
-                dismissable=True
-            )
+            print(f"   ✅ {len(updated_df)} produits chargés")
+            print(f"   ✅ KPIs recalculés")
+            print(f"   ✅ Filtres réinitialisés")
+            print(f"   ✅ Cache invalidé")
+            print(f"{'=' * 60}\n")
 
-            return records, json_data, feedback
+            # 7. Tracking Supabase
+            if username and username in ACTIVE_SESSIONS:
+                session_info = ACTIVE_SESSIONS[username]
+                track_data_refresh(
+                    session_info.get("user_id"),
+                    session_info.get("session_id"),
+                    len(updated_df)
+                )
+
+            feedback = dbc.Alert([
+                html.I(className="fas fa-check-circle me-2"),
+                f"Page actualisée : {len(updated_df)} produits | KPIs et filtres réinitialisés"
+            ], color="success", duration=4000, dismissable=True,
+                style={"fontWeight": "600"})
+
+            # Retourner : données table, master, filtered, feedback, filtres vides, sélection vide, nouvelle page
+            return records, json_data, json_data, feedback, "", [], [], [], [], new_page_content
 
         except Exception as e:
             print(f"❌ Erreur refresh: {e}")
-            feedback = dbc.Alert(
-                f"❌ Erreur lors du rafraîchissement : {str(e)}",
-                color="danger",
-                duration=5000,
-                dismissable=True
-            )
-            return no_update, no_update, feedback
+            import traceback
+            traceback.print_exc()
 
-    return no_update, no_update, no_update
+            feedback = dbc.Alert([
+                html.I(className="fas fa-exclamation-triangle me-2"),
+                f"Erreur : {str(e)}"
+            ], color="danger", duration=5000, dismissable=True)
+
+            return no_update, no_update, no_update, feedback, no_update, no_update, no_update, no_update, no_update, no_update
+
+    return no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update
+
+
+# ==========================================
+# ☑️ CALLBACK SELECT ALL / DESELECT ALL
+# ==========================================
+@app.callback(
+    [Output('main-table', 'selected_rows', allow_duplicate=True),
+     Output('btn-select-all', 'children'),
+     Output('selection-count-inline', 'children')],
+    [Input('btn-select-all', 'n_clicks')],
+    [State('main-table', 'data'),
+     State('main-table', 'selected_rows')],
+    prevent_initial_call=True
+)
+def toggle_select_all(n_clicks, table_data, current_selection):
+    """Sélectionne ou désélectionne toutes les lignes"""
+    if not n_clicks or not table_data:
+        return no_update, no_update, no_update
+
+    total_rows = len(table_data)
+    currently_selected = len(current_selection) if current_selection else 0
+
+    # Si tout est sélectionné, on désélectionne
+    if currently_selected == total_rows:
+        return [], "☑️ Tout sélect.", ""
+    else:
+        # Sélectionner toutes les lignes
+        all_rows = list(range(total_rows))
+        return all_rows, "☐ Tout désélect.", f"✓ {total_rows} produits sélectionnés"
+
+
+# ==========================================
+# 📊 CALLBACK COMPTEUR SÉLECTION
+# ==========================================
+@app.callback(
+    Output('selection-count-inline', 'children', allow_duplicate=True),
+    Input('main-table', 'selected_rows'),
+    State('main-table', 'data'),
+    prevent_initial_call=True
+)
+def update_selection_count(selected_rows, table_data):
+    """Met à jour le compteur de sélection"""
+    if not selected_rows:
+        return ""
+    count = len(selected_rows)
+    return f"✓ {count} produit{'s' if count > 1 else ''} sélectionné{'s' if count > 1 else ''}"
 
 
 @app.callback(
@@ -9300,8 +9702,17 @@ def page_analytics(master_df: pd.DataFrame = None):
             ], md=6)
         ]),
 
-        # NOTE: Placeholder désactivé - main-table est dans le layout principal
-        # create_hidden_table_placeholder()
+        # ========================================
+        # 🔒 MAIN-TABLE CACHÉ (pour callbacks cross-page)
+        # ========================================
+        html.Div([
+            dash_table.DataTable(
+                id="main-table",
+                data=[],
+                columns=[],
+                style_table={"display": "none"}
+            )
+        ], style={"display": "none"})
     ])
 
 
@@ -9712,8 +10123,17 @@ def page_predictive(master_df: pd.DataFrame = None):
             )
         ]),
 
-        # NOTE: Placeholder désactivé - main-table est dans le layout principal
-        # create_hidden_table_placeholder()
+        # ========================================
+        # 🔒 MAIN-TABLE CACHÉ (pour callbacks cross-page)
+        # ========================================
+        html.Div([
+            dash_table.DataTable(
+                id="main-table",
+                data=[],
+                columns=[],
+                style_table={"display": "none"}
+            )
+        ], style={"display": "none"})
     ])
 
 
@@ -10133,7 +10553,19 @@ def page_promotions():
                      "color": "#86efac"}
                 ]
             )
-        ])
+        ]),
+
+        # ========================================
+        # 🔒 MAIN-TABLE CACHÉ (pour callbacks cross-page)
+        # ========================================
+        html.Div([
+            dash_table.DataTable(
+                id="main-table",
+                data=[],
+                columns=[],
+                style_table={"display": "none"}
+            )
+        ], style={"display": "none"})
     ])
 
 
@@ -10727,7 +11159,19 @@ def page_agents(master_df: pd.DataFrame = None):
         risk_row,
 
         # Détail fournisseurs
-        detail
+        detail,
+
+        # ========================================
+        # 🔒 MAIN-TABLE CACHÉ (pour callbacks cross-page)
+        # ========================================
+        html.Div([
+            dash_table.DataTable(
+                id="main-table",
+                data=[],
+                columns=[],
+                style_table={"display": "none"}
+            )
+        ], style={"display": "none"})
     ])
 
 
@@ -12156,6 +12600,7 @@ app.validation_layout = html.Div([
     # html.Div(id="risk-banner"),
     html.Div(id="action-feedback"),  # ✅ AJOUTER
     html.Div(id="selection-counter"),  # ✅ AJOUTER
+    html.Span(id="selection-count-inline"),  # ✅ AJOUTER
     dcc.Input(id="search-input"),
     dcc.Dropdown(id="filter-supplier"),
     dcc.Dropdown(id="filter-category"),
@@ -14053,6 +14498,31 @@ def export_po_word_optimized(n_clicks, selected_rows, table_data):
     print(f"   - Total TTC : {total_ttc_global:,.0f} FCFA")
     print("=" * 60 + "\n")
 
+    # ========== 12. TRACKING SUPABASE ==========
+    try:
+        # Récupérer l'utilisateur actif
+        for username, session_info in ACTIVE_SESSIONS.items():
+            user_id = session_info.get("user_id")
+            session_id = session_info.get("session_id")
+            if user_id and session_id:
+                # Tracker chaque fournisseur
+                for supplier_name, supplier_products in suppliers.items():
+                    supplier_total = sum(
+                        safe_float(p.get("QAC edited", 0), 0) * safe_float(price_map.get(str(p.get("product_name", "")).lower(), 1000), 1000)
+                        for p in supplier_products
+                    )
+                    track_po_generated(
+                        user_id=user_id,
+                        session_id=session_id,
+                        supplier=supplier_name,
+                        products_count=len(supplier_products),
+                        total_amount=supplier_total * 1.18,
+                        po_type="docx"
+                    )
+                break
+    except Exception as e:
+        print(f"⚠️ Erreur tracking PO: {e}")
+
     return dcc.send_bytes(buf.read(), filename=fname), False  # ✅ Fermer overlay
 '''
 
@@ -14453,6 +14923,8 @@ def update_selection_counter(selected_rows):
     )
 
 
+# NOTE: Callback select_all_rows désactivé - remplacé par toggle_select_all plus haut
+'''
 @app.callback(
     Output("main-table", "selected_rows", allow_duplicate=True),
     Input("btn-select-all", "n_clicks"),
@@ -14470,6 +14942,7 @@ def select_all_rows(n_clicks, table_data):
 
     # Indices 0..N-1 de la vue affichée
     return list(range(len(table_data)))
+'''
 
 
 @app.callback(

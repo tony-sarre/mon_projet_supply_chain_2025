@@ -4,10 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="Fix hover">
+    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="optimisation">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/custom.css" beforeDir="false" afterPath="$PROJECT_DIR$/assets/custom.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/po_counter.json" beforeDir="false" afterPath="$PROJECT_DIR$/po_counter.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/supply_chain_analytics.py" beforeDir="false" afterPath="$PROJECT_DIR$/supply_chain_analytics.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -79,14 +78,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00177" summary="ML risque de rupture">
-      <option name="closed" value="true" />
-      <created>1763119952999</created>
-      <option name="number" value="00177" />
-      <option name="presentableId" value="LOCAL-00177" />
-      <option name="project" value="LOCAL" />
-      <updated>1763119952999</updated>
     </task>
     <task id="LOCAL-00178" summary="css">
       <option name="closed" value="true" />
@@ -472,7 +463,15 @@
       <option name="project" value="LOCAL" />
       <updated>1764952308213</updated>
     </task>
-    <option name="localTasksCounter" value="226" />
+    <task id="LOCAL-00226" summary="optimisation">
+      <option name="closed" value="true" />
+      <created>1765063777676</created>
+      <option name="number" value="00226" />
+      <option name="presentableId" value="LOCAL-00226" />
+      <option name="project" value="LOCAL" />
+      <updated>1765063777676</updated>
+    </task>
+    <option name="localTasksCounter" value="227" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -517,7 +516,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="reset_selection_on_filter" />
     <MESSAGE value="filter_dataframe review" />
     <MESSAGE value="debug QAC edited" />
     <MESSAGE value="bon de commande" />
@@ -542,6 +540,7 @@
     <MESSAGE value="duplicate callbacks" />
     <MESSAGE value="Fix duplicate btn-refresh callback" />
     <MESSAGE value="Fix hover" />
-    <option name="LAST_COMMIT_MESSAGE" value="Fix hover" />
+    <MESSAGE value="optimisation" />
+    <option name="LAST_COMMIT_MESSAGE" value="optimisation" />
   </component>
 </project>

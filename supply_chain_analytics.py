@@ -106,6 +106,7 @@ import time
 import threading
 from queue import Queue
 from functools import wraps
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
@@ -138,6 +139,131 @@ _data_lock = threading.Lock()
 # Cache des données par utilisateur (évite les conflits)
 _user_data_cache = {}
 _user_cache_lock = threading.Lock()
+
+# ============================================================
+# 📦 CACHE GLOBAL POUR LES DONNÉES DE RÉCEPTION (ASYNC)
+# ============================================================
+_receptions_cache = {
+    "data": None,
+    "timestamp": 0,
+    "loading": False,
+    "error": None
+}
+_receptions_lock = threading.Lock()
+
+# ThreadPool pour chargements asynchrones
+_async_executor = ThreadPoolExecutor(max_workers=3)
+
+
+def load_receptions_async(url: str, timeout: int = 8):
+    """
+    Charge les données de réception de manière asynchrone avec timeout.
+    Ne bloque jamais le thread principal.
+    """
+    global _receptions_cache
+
+    with _receptions_lock:
+        # Vérifier si le cache est valide (10 minutes)
+        if _receptions_cache["data"] is not None:
+            age = time.time() - _receptions_cache["timestamp"]
+            if age < 600:  # 10 minutes
+                return _receptions_cache["data"]
+
+        # Éviter les chargements multiples simultanés
+        if _receptions_cache["loading"]:
+            # Retourner les anciennes données ou DataFrame vide
+            return _receptions_cache["data"] if _receptions_cache["data"] is not None else pd.DataFrame()
+
+        _receptions_cache["loading"] = True
+
+    def _fetch_receptions():
+        """Fonction interne pour charger les réceptions"""
+        try:
+            import requests
+            from io import StringIO
+
+            response = requests.get(url, timeout=timeout)
+            if response.status_code == 200:
+                df = pd.read_csv(StringIO(response.text))
+
+                # Harmoniser les colonnes
+                df.columns = (
+                    df.columns.astype(str)
+                    .str.strip()
+                    .str.lower()
+                    .str.replace(" ", "_")
+                )
+
+                # Renommer les colonnes clés
+                col_renames = {}
+                for col in df.columns:
+                    if 'product' in col and 'name' in col:
+                        col_renames[col] = 'product_name'
+                    elif col in ['product', 'produit', 'nom_produit']:
+                        col_renames[col] = 'product_name'
+                    elif 'quantity' in col or 'qty' in col or 'qte' in col:
+                        col_renames[col] = 'last_reception_qty'
+                    elif 'date' in col and 'reception' not in col_renames.values():
+                        col_renames[col] = 'last_reception_date'
+
+                if col_renames:
+                    df.rename(columns=col_renames, inplace=True)
+
+                return df
+            else:
+                print(f"⚠️ Réceptions HTTP {response.status_code}")
+                return pd.DataFrame()
+
+        except Exception as e:
+            print(f"⚠️ Erreur chargement réceptions: {e}")
+            return pd.DataFrame()
+
+    try:
+        # Soumettre la tâche au ThreadPool avec timeout
+        future = _async_executor.submit(_fetch_receptions)
+        result = future.result(timeout=timeout + 2)  # Timeout légèrement supérieur
+
+        with _receptions_lock:
+            if result is not None and not result.empty:
+                _receptions_cache["data"] = result
+                _receptions_cache["timestamp"] = time.time()
+                _receptions_cache["error"] = None
+                print(f"✅ Réceptions chargées: {len(result)} lignes")
+            _receptions_cache["loading"] = False
+
+        return result
+
+    except FuturesTimeoutError:
+        print(f"⏱️ Timeout chargement réceptions ({timeout}s)")
+        with _receptions_lock:
+            _receptions_cache["loading"] = False
+            _receptions_cache["error"] = "timeout"
+        return _receptions_cache["data"] if _receptions_cache["data"] is not None else pd.DataFrame()
+
+    except Exception as e:
+        print(f"⚠️ Erreur async réceptions: {e}")
+        with _receptions_lock:
+            _receptions_cache["loading"] = False
+            _receptions_cache["error"] = str(e)
+        return pd.DataFrame()
+
+
+def get_cached_receptions():
+    """Retourne les réceptions en cache (sans bloquer)"""
+    with _receptions_lock:
+        if _receptions_cache["data"] is not None:
+            return _receptions_cache["data"].copy()
+    return pd.DataFrame(columns=['product_name', 'last_reception_qty', 'last_reception_date'])
+
+
+def preload_receptions_background(url: str):
+    """Lance le chargement des réceptions en arrière-plan (non-bloquant)"""
+
+    def _bg_load():
+        load_receptions_async(url, timeout=15)
+
+    _async_executor.submit(_bg_load)
+    print("🔄 Chargement réceptions lancé en arrière-plan...")
 
 
 def get_user_data(username: str = None):
@@ -856,6 +982,73 @@ def save_product_note(user_id: str, product_name: str, note_text: str, mentions:
         return None
 
 
+def save_added_product(user_id: str, session_id: str, product_data: dict):
+    """
+    Sauvegarde un produit ajouté manuellement dans Supabase.
+    Table: added_products
+    """
+    global SUPABASE_TRACKING_ENABLED
+
+    if not supabase_client or not SUPABASE_TRACKING_ENABLED:
+        return None
+
+    try:
+        record = {
+            "user_id": user_id,
+            "session_id": session_id,
+            "product_name": product_data.get("product_name", ""),
+            "supplier": product_data.get("supplier", ""),
+            "category": product_data.get("category", ""),
+            "initial_stock": product_data.get("stock", 0),
+            "added_by": product_data.get("added_by", ""),
+            "metadata": {
+                "source": "dashboard_manual_add",
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+        result = supabase_client.table("added_products").insert(record).execute()
+        if result.data:
+            print(f"✅ Produit ajouté sauvegardé dans Supabase: {product_data.get('product_name')}")
+            return result.data[0]
+        return None
+    except Exception as e:
+        error_str = str(e)
+        if "relation" in error_str and "does not exist" in error_str:
+            print(f"ℹ️ Table 'added_products' n'existe pas - création recommandée")
+        elif "row-level security policy" in error_str or "42501" in error_str:
+            SUPABASE_TRACKING_ENABLED = False
+        else:
+            print(f"⚠️ Erreur save_added_product: {e}")
+        return None
+
+
+def track_product_action(user_id: str, session_id: str, action: str, product_name: str, details: dict = None):
+    """
+    Track une action sur un produit (ajout, modification, suppression)
+    """
+    track_activity(user_id, session_id, f"product_{action}", "overview", {
+        "product_name": product_name,
+        **(details or {})
+    })
+
+
+def get_added_products(limit: int = 100) -> list:
+    """Récupère les produits ajoutés manuellement"""
+    if not supabase_client:
+        return []
+
+    try:
+        result = supabase_client.table("added_products") \
+            .select("*, users(username, name)") \
+            .order("created_at", desc=True) \
+            .limit(limit) \
+            .execute()
+        return result.data or []
+    except Exception as e:
+        print(f"⚠️ Erreur get_added_products: {e}")
+        return []
+
+
 def get_product_notes(product_name: str) -> list:
     """Récupère les notes d'un produit"""
     if not supabase_client:
@@ -1474,9 +1667,9 @@ LOGIN_CSS = """
     100% { background-position: 0% 50%; }
 }
 
-/* ===== CARTE LOGIN ===== */
+/* ===== CARTE LOGIN - FOND BLANC ===== */
 .login-card {
-    background: rgba(30, 41, 59, 0.95);
+    background: rgba(255, 255, 255, 0.98) !important;
     backdrop-filter: blur(20px);
     border-radius: 24px;
     padding: 48px;
@@ -1514,7 +1707,7 @@ LOGIN_CSS = """
 }
 
 .login-subtitle {
-    color: #94a3b8;
+    color: #475569;
     font-size: 14px;
 }
 
@@ -1538,26 +1731,38 @@ LOGIN_CSS = """
     z-index: 10;
 }
 
-.login-input {
+/* ✅ INPUTS FORCÉS LISIBLES - FOND BLANC, TEXTE NOIR */
+.login-input,
+#login-username,
+#login-password,
+.login-form input,
+.login-form input[type="text"],
+.login-form input[type="password"] {
     width: 100%;
     padding: 16px 16px 16px 48px;
-    background: rgba(15, 23, 42, 0.8);
-    border: 2px solid #334155;
+    background: #ffffff !important;
+    border: 2px solid #e2e8f0 !important;
     border-radius: 12px;
-    color: #f0f4f8;
+    color: #1e293b !important;
     font-size: 15px;
     transition: all 0.3s ease;
+    -webkit-text-fill-color: #1e293b !important;
 }
 
+#login-username:focus,
+#login-password:focus,
 .login-input:focus {
     outline: none;
-    border-color: #0ea5e9;
-    box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.15);
-    background: rgba(15, 23, 42, 1);
+    border-color: #0ea5e9 !important;
+    box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.15);
+    background: #ffffff !important;
 }
 
+#login-username::placeholder,
+#login-password::placeholder,
 .login-input::placeholder {
-    color: #64748b;
+    color: #94a3b8 !important;
+    -webkit-text-fill-color: #94a3b8 !important;
 }
 
 /* ===== BOUTON ===== */
@@ -1567,7 +1772,7 @@ LOGIN_CSS = """
     background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
     border: none;
     border-radius: 12px;
-    color: #0f172a;
+    color: #ffffff;
     font-size: 16px;
     font-weight: 700;
     cursor: pointer;
@@ -1593,7 +1798,7 @@ LOGIN_CSS = """
     border-radius: 10px;
     padding: 12px 16px;
     margin-bottom: 20px;
-    color: #fca5a5;
+    color: #dc2626;
     font-size: 13px;
     display: flex;
     align-items: center;
@@ -1666,31 +1871,50 @@ LOGIN_CSS = """
 
 
 def create_login_layout():
-    """Crée le layout de la page de connexion"""
-    return html.Div([
-        # Styles CSS injectés via une balise style dans un Iframe srcdoc ou via style inline
-        # On utilise un Div avec dangerouslySetInnerHTML n'existe pas en Dash, donc on met les styles inline
+    """Crée le layout de la page de connexion avec image de fond Supply Chain"""
 
-        # Conteneur principal avec styles inline
+    # Image de fond encodée en base64
+    bg_image_url = "url('data:image/jpeg;base64,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')"
+
+    return html.Div([
+        # Conteneur principal avec image de fond
         html.Div(className="login-background", style={
             "minHeight": "100vh",
-            "background": "linear-gradient(-45deg, #0f172a, #1e293b, #0f172a, #1a1a2e)",
-            "backgroundSize": "400% 400%",
+            "backgroundImage": bg_image_url,
+            "backgroundSize": "cover",
+            "backgroundPosition": "center",
+            "backgroundRepeat": "no-repeat",
             "display": "flex",
             "alignItems": "center",
             "justifyContent": "center",
             "padding": "20px",
-            "fontFamily": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+            "fontFamily": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            "position": "relative"
         }, children=[
+
+            # Overlay sombre semi-transparent pour lisibilité
+            html.Div(style={
+                "position": "absolute",
+                "top": "0",
+                "left": "0",
+                "right": "0",
+                "bottom": "0",
+                "background": "rgba(15, 23, 42, 0.7)",
+                "zIndex": "1"
+            }),
+
+            # Carte de connexion
             html.Div(className="login-card", style={
-                "background": "rgba(30, 41, 59, 0.95)",
+                "background": "rgba(255, 255, 255, 0.95)",
                 "backdropFilter": "blur(20px)",
                 "borderRadius": "24px",
                 "padding": "48px",
                 "width": "100%",
                 "maxWidth": "420px",
-                "boxShadow": "0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1)",
-                "border": "1px solid rgba(255, 255, 255, 0.1)"
+                "boxShadow": "0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.2)",
+                "border": "1px solid rgba(255, 255, 255, 0.3)",
+                "position": "relative",
+                "zIndex": "10"
             }, children=[
 
                 # Logo MAAD et titre
@@ -1704,14 +1928,15 @@ def create_login_layout():
                     html.H1("Supply Chain Analytics", style={
                         "fontSize": "28px",
                         "fontWeight": "800",
-                        "background": "linear-gradient(135deg, #0ea5e9 0%, #7c3aed 100%)",
+                        "background": "linear-gradient(135deg, #0ea5e9 0%, #1e40af 100%)",
                         "WebkitBackgroundClip": "text",
                         "WebkitTextFillColor": "transparent",
                         "marginBottom": "8px"
                     }),
                     html.P("Connectez-vous pour accéder au dashboard", style={
-                        "color": "#94a3b8",
-                        "fontSize": "14px"
+                        "color": "#475569",
+                        "fontSize": "14px",
+                        "fontWeight": "500"
                     })
                 ]),
 
@@ -1721,81 +1946,105 @@ def create_login_layout():
                 # Formulaire
                 html.Div(className="login-form", style={"marginTop": "24px"}, children=[
 
-                    # Champ identifiant
+                    # Label Identifiant
+                    html.Label("Identifiant", style={
+                        "display": "block",
+                        "marginBottom": "8px",
+                        "color": "#1e293b",
+                        "fontWeight": "600",
+                        "fontSize": "14px"
+                    }),
+
+                    # Champ identifiant - FOND BLANC, TEXTE NOIR
                     html.Div(style={"position": "relative", "marginBottom": "20px"}, children=[
                         html.Span("👤", style={
                             "position": "absolute",
                             "left": "16px",
                             "top": "50%",
                             "transform": "translateY(-50%)",
-                            "color": "#64748b",
                             "fontSize": "18px",
                             "zIndex": "10"
                         }),
                         dcc.Input(
                             id="login-username",
                             type="text",
-                            placeholder="Identifiant (ex: tony, samuel...)",
+                            placeholder="Entrez votre identifiant",
                             style={
                                 "width": "100%",
                                 "padding": "16px 16px 16px 48px",
-                                "background": "rgba(15, 23, 42, 0.8)",
-                                "border": "2px solid #334155",
+                                "background": "#ffffff",
+                                "border": "2px solid #e2e8f0",
                                 "borderRadius": "12px",
                                 "color": "#1e293b",
                                 "fontSize": "15px",
-                                "boxSizing": "border-box"
+                                "fontWeight": "500",
+                                "boxSizing": "border-box",
+                                "outline": "none",
+                                "transition": "border-color 0.2s"
                             },
                             autoComplete="username"
                         )
                     ]),
 
-                    # Champ mot de passe
-                    html.Div(style={"position": "relative", "marginBottom": "20px"}, children=[
+                    # Label Mot de passe
+                    html.Label("Mot de passe", style={
+                        "display": "block",
+                        "marginBottom": "8px",
+                        "color": "#1e293b",
+                        "fontWeight": "600",
+                        "fontSize": "14px"
+                    }),
+
+                    # Champ mot de passe - FOND BLANC, TEXTE NOIR
+                    html.Div(style={"position": "relative", "marginBottom": "24px"}, children=[
                         html.Span("🔒", style={
                             "position": "absolute",
                             "left": "16px",
                             "top": "50%",
                             "transform": "translateY(-50%)",
-                            "color": "#64748b",
                             "fontSize": "18px",
                             "zIndex": "10"
                         }),
                         dcc.Input(
                             id="login-password",
                             type="password",
-                            placeholder="Mot de passe",
+                            placeholder="Entrez votre mot de passe",
                             style={
                                 "width": "100%",
                                 "padding": "16px 16px 16px 48px",
-                                "background": "rgba(15, 23, 42, 0.8)",
-                                "border": "2px solid #334155",
+                                "background": "#ffffff",
+                                "border": "2px solid #e2e8f0",
                                 "borderRadius": "12px",
                                 "color": "#1e293b",
                                 "fontSize": "15px",
-                                "boxSizing": "border-box"
+                                "fontWeight": "500",
+                                "boxSizing": "border-box",
+                                "outline": "none",
+                                "transition": "border-color 0.2s"
                             },
                             autoComplete="current-password"
                         )
                     ]),
 
-                    # Bouton de connexion - utiliser dbc.Button pour meilleure compatibilité
+                    # Bouton de connexion
                     dbc.Button(
                         "🚀 Se connecter",
                         id="login-button",
                         n_clicks=0,
-                        color="info",
-                        className="w-100 mt-2",
+                        color="primary",
+                        className="w-100",
                         style={
                             "padding": "16px",
                             "background": "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)",
                             "border": "none",
                             "borderRadius": "12px",
-                            "color": "#0f172a",
+                            "color": "#ffffff",
                             "fontSize": "16px",
                             "fontWeight": "700",
                             "textTransform": "uppercase",
-                            "letterSpacing": "1px"
+                            "letterSpacing": "1px",
+                            "cursor": "pointer",
+                            "boxShadow": "0 4px 14px rgba(14, 165, 233, 0.4)"
                         }
                     )
                 ]),
@@ -2174,6 +2423,12 @@ def create_supervised_target_from_sales(sales_history_df: pd.DataFrame, current_
     from sklearn.model_selection import train_test_split
     from sklearn.metrics import mean_absolute_error, r2_score
 
+    # ✅ PRÉSERVER product_id dès le début
+    has_product_id = 'product_id' in current_df.columns
+    product_id_backup = None
+    if has_product_id:
+        product_id_backup = current_df[['product_name', 'product_id']].copy()
+
     if sales_history_df.empty:
         print("Pas d'historique ventes")
         current_df['target_quantity'] = calculate_formula_based_target(current_df)
@@ -2260,6 +2515,10 @@ def create_supervised_target_from_sales(sales_history_df: pd.DataFrame, current_
         df_ml['target_quantity'] = df_ml['target_supervised'].fillna(
             calculate_formula_based_target(df_ml)
         )
+        # ✅ RESTAURER product_id s'il a été perdu
+        if product_id_backup is not None and 'product_id' not in df_ml.columns:
+            df_ml = df_ml.merge(product_id_backup, on='product_name', how='left')
+            df_ml['product_id'] = df_ml['product_id'].fillna(0).astype(int)
         return df_ml, None
 
     X = df_train[feature_cols].fillna(0)
@@ -2313,6 +2572,12 @@ def create_supervised_target_from_sales(sales_history_df: pd.DataFrame, current_
         predictions_clipped,  # ✅
         calculate_formula_based_target(df_ml)
     )
+
+    # ✅ RESTAURER product_id s'il a été perdu
+    if product_id_backup is not None and 'product_id' not in df_ml.columns:
+        df_ml = df_ml.merge(product_id_backup, on='product_name', how='left')
+        df_ml['product_id'] = df_ml['product_id'].fillna(0).astype(int)
+        print(f"   ✅ product_id restauré dans ML: {(df_ml['product_id'] > 0).sum()} valides")
 
     return df_ml, model
 
@@ -2427,11 +2692,20 @@ def calculate_promo_roi_analysis(sales_df: pd.DataFrame, promo_df: pd.DataFrame,
     # 2. Récupérer prix et marges depuis current_df
     # =========================
     # Merger avec données produit actuelles
+    # ✅ product_id est optionnel - ne pas échouer s'il est absent
+    merge_cols = ['product_name']
+    if 'product_id' in current_df.columns:
+        merge_cols.append('product_id')
+
     roi_df = promo_pivot.merge(
-        current_df[['product_name', 'product_id']],
+        current_df[merge_cols],
         on='product_name',
         how='left'
     )
+
+    # S'assurer que product_id existe
+    if 'product_id' not in roi_df.columns:
+        roi_df['product_id'] = 0
 
     # Supposons qu'on a ces colonnes (ajustez selon vos données)
     # Si pas disponibles, utiliser des estimations
@@ -2707,6 +2981,22 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     suppliers_df = pd.read_csv(SUPPLIERS_URL)
     df_leadtime = pd.read_csv(url_leadtime)
     inventory_pikine_staging_df = pd.read_csv(inventory_pikine_staging, skiprows=1)
+
+    # ✅ DEBUG: Afficher les colonnes chargées
+    print(f"\n📋 Inventaire chargé:")
+    print(f"   - Colonnes: {inventory_pikine_staging_df.columns.tolist()[:8]}...")
+    print(f"   - Lignes: {len(inventory_pikine_staging_df)}")
+
+    # ✅ Vérifier si product_id existe déjà
+    if 'product_id' in inventory_pikine_staging_df.columns:
+        print(f"   - product_id existe! Échantillon: {inventory_pikine_staging_df['product_id'].head(5).tolist()}")
+    else:
+        # La première colonne doit être product_id
+        first_col = inventory_pikine_staging_df.columns[0]
+        print(f"   - Première colonne: '{first_col}'")
+        if first_col != 'product_id':
+            inventory_pikine_staging_df.rename(columns={first_col: 'product_id'}, inplace=True)
+            print(f"   → Renommée en 'product_id'")
     sales_pikine_df = pd.read_csv(sales_pikine, header=1, low_memory=False)
     Tbh_7dsales_df = pd.read_csv(Tbh_7dsales)
     Tbh_30dsales_products_df = pd.read_csv(Tbh_30dsales_products)
@@ -2727,10 +3017,31 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
         parametres_replenish_df = pd.DataFrame()
 
     # ✅ NOUVEAU: Charger les dernières réceptions (Heroku Dataclip)
-    # ⚠️ DÉSACTIVÉ temporairement car peut bloquer le chargement
-    # Pour réactiver, décommenter le bloc try ci-dessous
-    last_receptions_df = pd.DataFrame(columns=['product_name', 'last_reception_qty', 'last_reception_date'])
-    print("\n📦 Chargement des dernières réceptions: DÉSACTIVÉ (pour éviter les timeouts)")
+    # Utilise le système de chargement asynchrone avec cache
+    print("\n📦 Chargement des dernières réceptions...")
+
+    try:
+        # Essayer d'abord le cache
+        last_receptions_df = get_cached_receptions()
+
+        if last_receptions_df.empty:
+            # Charger avec timeout de 8 secondes
+            last_receptions_df = load_receptions_async(LAST_RECEPTIONS_URL, timeout=8)
+
+            if not last_receptions_df.empty:
+                print(f"   ✅ {len(last_receptions_df)} réceptions chargées")
+            else:
+                print("   ℹ️ Pas de données de réception disponibles")
+                last_receptions_df = pd.DataFrame(columns=['product_name', 'last_reception_qty', 'last_reception_date'])
+        else:
+            print(f"   ✅ {len(last_receptions_df)} réceptions (depuis cache)")
+
+    except Exception as e:
+        print(f"   ⚠️ Erreur réceptions: {e}")
+        last_receptions_df = pd.DataFrame(columns=['product_name', 'last_reception_qty', 'last_reception_date'])
+
+    # Lancer le préchargement en arrière-plan pour la prochaine fois
+    preload_receptions_background(LAST_RECEPTIONS_URL)
 
     # try:
     #     import requests
@@ -2778,6 +3089,11 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     # Harmonisation inventaire
     # =========================
     inv = inventory_pikine_staging_df.copy()
+
+    print(f"\n📋 Harmonisation inventaire:")
+    print(f"   Colonnes originales: {inv.columns.tolist()[:10]}...")
+
+    # ✅ Normaliser les noms de colonnes en minuscules
     inv.columns = (
         inv.columns.astype(str)
         .str.strip()
@@ -2785,9 +3101,13 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
         .str.replace(" ", "_")
         .str.replace("-", "_")
     )
+
+    print(f"   Colonnes normalisées: {inv.columns.tolist()[:10]}...")
+
+    # ✅ Mapping des colonnes (tout en minuscules maintenant)
     col_map = {
         "product_name": ["product_name", "produit", "nom_produit", "name"],
-        "Supplier": ["supplier", "supplier.1", "fournisseur", "vendor"],
+        "supplier": ["supplier", "supplier.1", "fournisseur", "vendor"],
         "total_stock": ["total_stock", "stock_total", "qte_stock", "current_stock"],
     }
     for target, aliases in col_map.items():
@@ -2795,74 +3115,122 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
             for alias in aliases:
                 if alias in inv.columns:
                     inv.rename(columns={alias: target}, inplace=True)
+                    print(f"   ✅ '{alias}' → '{target}'")
                     break
-        if target not in inv.columns:
+        if target not in inv.columns and target != "supplier":
             inv[target] = 0
+            print(f"   ⚠️ '{target}' créée avec valeur 0")
 
-    if "supplier" in inv.columns and "Supplier" not in inv.columns:
+    # ✅ Renommer supplier en Supplier (majuscule) pour cohérence avec le reste du code
+    if "supplier" in inv.columns:
         inv.rename(columns={"supplier": "Supplier"}, inplace=True)
 
+    # ✅ Convertir product_id en int
+    if "product_id" in inv.columns:
+        inv['product_id'] = pd.to_numeric(inv['product_id'], errors='coerce').fillna(0).astype(int)
+        valid = (inv['product_id'] > 0).sum()
+        print(f"   ✅ product_id: {valid}/{len(inv)} valides")
+        print(f"      Échantillon: {inv['product_id'].head(5).tolist()}")
+    else:
+        print("   ⚠️ product_id ABSENT - création avec 0")
+        inv['product_id'] = 0
+
     inventory_pikine_staging_df = inv
-    print("Colonnes inventaire après harmonisation:", inventory_pikine_staging_df.columns.tolist())
+    print(f"   Colonnes finales: {inventory_pikine_staging_df.columns.tolist()[:10]}...")
 
-    # Charger le catalogue pour product_id
-    # Charger le catalogue pour product_id ET is_active
+    # Charger le catalogue pour is_active ET product_id
+    # ✅ Le catalogue utilise "id" et "name" (pas "product_id" et "product_name")
     try:
-        # IMPORTANT : skiprows=1 pour sauter la ligne d'en-tête
-        catalog_df = pd.read_csv(CATALOG_URL, skiprows=1)
+        product_id_map = pd.DataFrame(columns=['product_name', 'product_id', 'is_active'])
 
-        print(f"📋 Catalogue chargé : {catalog_df.shape[0]} lignes, {catalog_df.shape[1]} colonnes")
-
-        # Vérifier qu'il y a au moins 8 colonnes (index 0-7)
-        if catalog_df.shape[1] > 7:
-            # Extraire colonnes : A (id), B (name), H (is_active)
-            # Index :              0        1          7
-            catalog_subset = catalog_df.iloc[:, [0, 1, 7]].copy()
-            catalog_subset.columns = ['product_id', 'product_name', 'is_active']
-
-            # Nettoyer product_name
-            catalog_subset['product_name_clean'] = (
-                catalog_subset['product_name']
-                .astype(str)
-                .str.lower()
-                .str.strip()
+        # Essayer différentes valeurs de skiprows
+        for skip in [0, 1, 2, 3]:
+            print(f"\n📋 Tentative catalogue avec skiprows={skip}...")
+            # ✅ IMPORTANT: keep_default_na=False pour ne pas convertir #N/A en NaN
+            catalog_df = pd.read_csv(
+                CATALOG_URL,
+                skiprows=skip if skip > 0 else None,
+                keep_default_na=False,
+                na_values=[]
             )
 
-            # Nettoyer is_active (TRUE/FALSE depuis Google Sheets)
-            catalog_subset['is_active'] = (
-                    catalog_subset['is_active']
-                    .astype(str)
-                    .str.upper()
-                    .str.strip()
-                    == 'TRUE'
-            )
+            print(f"   Colonnes: {catalog_df.columns.tolist()[:10]}...")
 
-            # Préparer le mapping
-            product_map = catalog_subset[['product_id', 'product_name_clean', 'is_active']].drop_duplicates(
-                subset=['product_name_clean']
-            )
-            product_map.columns = ['product_id', 'product_name', 'is_active']
+            # Normaliser les noms de colonnes
+            catalog_df.columns = [str(c).lower().strip() for c in catalog_df.columns]
 
-            # Convertir product_id en int
-            product_map['product_id'] = pd.to_numeric(product_map['product_id'], errors='coerce').fillna(0).astype(int)
+            # Vérifier si on a des colonnes avec de vrais noms (pas "unnamed")
+            named_cols = [c for c in catalog_df.columns if
+                          'unnamed' not in c.lower() and c != '' and '#n/a' not in c.lower()]
+            print(f"   Colonnes nommées: {len(named_cols)} -> {named_cols[:8]}")
 
-            print(f"✅ Catalogue traité :")
-            print(f"   - Total produits : {len(product_map)}")
-            print(f"   - Actifs (TRUE) : {product_map['is_active'].sum()}")
-            print(f"   - Inactifs (FALSE) : {(~product_map['is_active']).sum()}")
-            print(f"   - Échantillon actifs : {product_map[product_map['is_active']]['product_name'].head(3).tolist()}")
+            # Chercher product_id et product_name
+            # ✅ IMPORTANT: Le catalogue utilise "id" et "name" !
+            col_product_id = None
+            col_product_name = None
+            col_is_active = None
 
-            product_id_map = product_map
+            for col in catalog_df.columns:
+                col_lower = col.lower().strip()
 
-        else:
-            print(f"⚠️ Catalogue incomplet : {catalog_df.shape[1]} colonnes (8 minimum requis)")
-            product_id_map = pd.DataFrame(columns=['product_id', 'product_name', 'is_active'])
+                # Chercher product_id (peut s'appeler "id" ou "product_id")
+                if col_product_id is None and col_lower in ['id', 'product_id']:
+                    test_vals = pd.to_numeric(catalog_df[col], errors='coerce')
+                    if test_vals.notna().sum() > len(catalog_df) * 0.3:
+                        col_product_id = col
+                        print(f"   ✅ product_id trouvé: '{col}' -> échantillon: {test_vals.head(3).tolist()}")
+
+                # Chercher product_name (peut s'appeler "name" ou "product_name")
+                if col_product_name is None and col_lower in ['name', 'product_name']:
+                    col_product_name = col
+                    print(f"   ✅ product_name trouvé: '{col}' -> échantillon: {catalog_df[col].head(3).tolist()}")
+
+                # Chercher is_active
+                if col_is_active is None and 'is_active' in col_lower:
+                    col_is_active = col
+                    print(f"   ✅ is_active trouvé: '{col}'")
+
+            # Si on a trouvé les colonnes, construire le mapping
+            if col_product_id and col_product_name:
+                print(f"   🎯 SUCCÈS avec skiprows={skip}")
+
+                catalog_subset = pd.DataFrame()
+                catalog_subset['product_id'] = pd.to_numeric(catalog_df[col_product_id], errors='coerce').fillna(
+                    0).astype(int)
+                catalog_subset['product_name'] = catalog_df[col_product_name].astype(str).str.lower().str.strip()
+
+                if col_is_active:
+                    catalog_subset['is_active'] = (
+                        catalog_df[col_is_active]
+                        .astype(str)
+                        .str.upper()
+                        .str.strip()
+                        .isin(['TRUE', '1', 'YES', 'OUI'])
+                    )
+                else:
+                    catalog_subset['is_active'] = True
+
+                product_map = catalog_subset.drop_duplicates(subset=['product_name'])
+
+                print(f"\n✅ Catalogue traité (skiprows={skip}):")
+                print(f"   - Total produits : {len(product_map)}")
+                print(f"   - Avec product_id > 0 : {(product_map['product_id'] > 0).sum()}")
+                print(f"   - Échantillon:")
+                print(product_map.head(3).to_string())
+
+                product_id_map = product_map
+                break  # Sortir de la boucle, on a trouvé
+            else:
+                print(f"   ❌ skiprows={skip} - colonnes manquantes (id={col_product_id}, name={col_product_name})")
+
+        if product_id_map.empty:
+            print(f"\n⚠️ Catalogue non chargé - product_id viendra de l'inventaire uniquement")
 
     except Exception as e:
         print(f"❌ Erreur chargement catalogue : {e}")
         import traceback
         print(traceback.format_exc())
-        product_id_map = pd.DataFrame(columns=['product_id', 'product_name', 'is_active'])
+        product_id_map = pd.DataFrame(columns=['product_name', 'product_id', 'is_active'])
     # =========================
     # Clean text
     # =========================
@@ -2877,43 +3245,120 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
         Tbh_30dsales_products_df["2"] = Tbh_30dsales_products_df["2"].astype(str).str.lower().str.strip()
 
     # =========================
-    # Total stock
+    # Total stock - ✅ GARDER TOUS LES PRODUITS SANS REDONDANCE
     # =========================
-    total_stock_df = (
-        inventory_pikine_staging_df.groupby(["product_name", "Supplier"])["total_stock"]
-        .sum()
-        .reset_index()
+
+    print(f"\n📊 Inventaire brut: {len(inventory_pikine_staging_df)} lignes")
+
+    # Normaliser product_name pour éviter les doublons dûs aux espaces/casse
+    inventory_pikine_staging_df['product_name'] = (
+        inventory_pikine_staging_df['product_name']
+        .astype(str)
+        .str.strip()
+        .str.lower()
     )
-    print(f"Shape of total_stock_df before merge: {total_stock_df.shape}")
 
-    # ✅ MERGER product_id ET is_active
+    # ✅ GARDER product_id de l'inventaire dans le groupby
+    # L'inventaire a déjà des product_id valides qu'on ne doit pas perdre
+    if 'product_id' in inventory_pikine_staging_df.columns:
+        total_stock_df = (
+            inventory_pikine_staging_df.groupby(["product_name", "Supplier"], as_index=False)
+            .agg({
+                "total_stock": "sum",
+                "product_id": "first"  # Garder le premier product_id
+            })
+        )
+        # Convertir product_id en int
+        total_stock_df['product_id'] = pd.to_numeric(total_stock_df['product_id'], errors='coerce').fillna(0).astype(
+            int)
+        inv_valid = (total_stock_df['product_id'] > 0).sum()
+        print(f"   ✅ Après groupby: {len(total_stock_df)} produits, {inv_valid} avec product_id de l'inventaire")
+    else:
+        total_stock_df = (
+            inventory_pikine_staging_df.groupby(["product_name", "Supplier"], as_index=False)["total_stock"]
+            .sum()
+        )
+        total_stock_df['product_id'] = 0
+        print(f"   ✅ Après groupby: {len(total_stock_df)} produits (pas de product_id dans inventaire)")
+
+    print(f"Shape of total_stock_df: {total_stock_df.shape}")
+
+    # ✅ MERGER product_id ET is_active depuis le catalogue (pour compléter les manquants)
+
     if not product_id_map.empty:
-        # Supprimer colonnes existantes si présentes
-        for col in ['product_id', 'is_active']:
-            if col in total_stock_df.columns:
-                print(f"⚠️ Colonne '{col}' déjà présente, elle sera remplacée")
-                total_stock_df.drop(columns=[col], inplace=True)
+        # S'assurer que total_stock_df a product_name normalisé
+        total_stock_df['product_name'] = total_stock_df['product_name'].astype(str).str.lower().str.strip()
 
-        # Merge
+        # Préparer le mapping
+        merge_map = product_id_map[['product_name', 'product_id', 'is_active']].copy()
+        merge_map.columns = ['product_name', 'catalog_product_id', 'is_active']
+        merge_map['product_name'] = merge_map['product_name'].astype(str).str.lower().str.strip()
+
+        # ✅ DEBUG DÉTAILLÉ: Voir pourquoi le merge échoue
+        print(f"\n🔍 DEBUG MERGE:")
+        print(f"   Inventaire: {len(total_stock_df)} produits")
+        print(f"   Catalogue: {len(merge_map)} produits")
+        print(f"   product_id déjà valides (inventaire): {(total_stock_df['product_id'] > 0).sum()}")
+
+        # Vérifier combien de noms correspondent
+        inv_names = set(total_stock_df['product_name'].unique())
+        cat_names = set(merge_map['product_name'].unique())
+        common = inv_names & cat_names
+        only_inv = inv_names - cat_names
+        only_cat = cat_names - inv_names
+
+        print(f"   Noms communs: {len(common)}")
+        print(f"   Seulement dans inventaire: {len(only_inv)}")
+        print(f"   Seulement dans catalogue: {len(only_cat)}")
+
+        if len(common) == 0:
+            print(f"\n   ⚠️ AUCUN NOM EN COMMUN!")
+            print(f"   Exemples inventaire: {list(inv_names)[:5]}")
+            print(f"   Exemples catalogue: {list(cat_names)[:5]}")
+        elif len(common) < len(inv_names) * 0.5:
+            print(f"\n   ⚠️ MOINS DE 50% DE CORRESPONDANCE!")
+            print(f"   Non trouvés: {list(only_inv)[:5]}")
+
+        # Merge pour récupérer catalog_product_id et is_active
         total_stock_df = total_stock_df.merge(
-            product_id_map,
+            merge_map,
             on="product_name",
-            how="left",
-            validate="m:1"
+            how="left"
         )
 
-        # Gestion des valeurs manquantes
-        total_stock_df['product_id'] = total_stock_df['product_id'].fillna(0).astype(int)
-        total_stock_df['is_active'] = total_stock_df['is_active'].fillna(False)  # Par défaut inactif si absent
+        # ✅ PRIORITÉ: Garder product_id de l'inventaire, compléter avec catalogue si manquant
+        if 'catalog_product_id' in total_stock_df.columns:
+            # Si product_id inventaire = 0, utiliser catalog_product_id
+            mask_missing = total_stock_df['product_id'] == 0
+            total_stock_df.loc[mask_missing, 'product_id'] = total_stock_df.loc[mask_missing, 'catalog_product_id']
+            total_stock_df.drop(columns=['catalog_product_id'], errors='ignore', inplace=True)
 
-        print(f"✅ Merge catalogue effectué :")
-        print(f"   - Produits avec ID valide : {(total_stock_df['product_id'] > 0).sum()}")
-        print(f"   - Produits actifs : {total_stock_df['is_active'].sum()}")
-        print(f"   - Produits sans match catalogue : {(total_stock_df['product_id'] == 0).sum()}")
+        # Remplir les valeurs manquantes
+        total_stock_df['product_id'] = pd.to_numeric(total_stock_df['product_id'], errors='coerce').fillna(0).astype(
+            int)
+        total_stock_df['is_active'] = total_stock_df['is_active'].fillna(True)
+
+        print(f"\n✅ Merge catalogue effectué:")
+        print(f"   - product_id valides: {(total_stock_df['product_id'] > 0).sum()}/{len(total_stock_df)}")
+        print(f"   - Produits actifs: {total_stock_df['is_active'].sum()}")
+
+        # Échantillon des résultats
+        sample = total_stock_df[['product_name', 'product_id']].head(5)
+        print(f"   Échantillon résultat:")
+        print(sample.to_string())
     else:
-        print("⚠️ Catalogue vide, product_id=0 et is_active=True par défaut")
         total_stock_df['product_id'] = 0
         total_stock_df['is_active'] = True
+
+    # ✅ S'assurer que product_id existe et est propre
+    if 'product_id' not in total_stock_df.columns:
+        total_stock_df['product_id'] = 0
+    total_stock_df['product_id'] = pd.to_numeric(total_stock_df['product_id'], errors='coerce').fillna(0).astype(int)
+
+    print(f"✅ État final total_stock_df:")
+    print(f"   - Colonnes: {total_stock_df.columns.tolist()}")
+    print(f"   - Produits: {len(total_stock_df)}")
+    print(f"   - product_id valides: {(total_stock_df['product_id'] > 0).sum()}")
 
     # =========================
     # Max sales (unique par produit)
@@ -2931,6 +3376,13 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
         max_sales_pikine, on="product_name", how="left", validate="m:1"
     )
     print(f"Shape of final_stock_sales_df after merging max sales: {final_stock_sales_df.shape}")
+
+    # ✅ DEBUG: Vérifier product_id après premier merge
+    if 'product_id' in final_stock_sales_df.columns:
+        print(
+            f"✅ product_id présent dans final_stock_sales_df: {(final_stock_sales_df['product_id'] > 0).sum()} valeurs valides")
+    else:
+        print(f"⚠️ product_id ABSENT de final_stock_sales_df - colonnes: {final_stock_sales_df.columns.tolist()[:8]}")
 
     # =========================
     # Product Category (unique par produit)
@@ -3563,7 +4015,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
             'last_reception_qty'].notna().sum() if 'last_reception_qty' in final_stock_sales_df.columns else 0
         print(f"   ✅ {matched}/{before_merge} produits avec données de réception")
     else:
-        print("⚠️ Pas de données de réception à fusionner")
+        # ℹ️ Les données de réception ne sont pas disponibles (timeout ou erreur)
+        print("   ℹ️ Données de réception non disponibles - colonnes initialisées à 0")
         final_stock_sales_df['last_reception_qty'] = 0
         final_stock_sales_df['last_reception_date'] = None
         final_stock_sales_df['days_since_reception'] = None
@@ -3573,6 +4026,28 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     # =========================
     final_stock_sales_df = final_stock_sales_df.drop_duplicates(subset=["product_name"], keep="first")
     print(f"Shape after removing duplicates: {final_stock_sales_df.shape}")
+
+    # ✅ CORRECTION: Renommer product_id_x en product_id si nécessaire
+    # Cela arrive quand un merge crée un conflit de noms
+    if 'product_id_x' in final_stock_sales_df.columns and 'product_id' not in final_stock_sales_df.columns:
+        final_stock_sales_df.rename(columns={'product_id_x': 'product_id'}, inplace=True)
+        print(f"   ✅ product_id_x renommé en product_id")
+
+    # Supprimer product_id_y si présent
+    if 'product_id_y' in final_stock_sales_df.columns:
+        final_stock_sales_df.drop(columns=['product_id_y'], inplace=True)
+
+    # ✅ DEBUG: Vérifier product_id après déduplication
+    if 'product_id' in final_stock_sales_df.columns:
+        final_stock_sales_df['product_id'] = pd.to_numeric(final_stock_sales_df['product_id'], errors='coerce').fillna(
+            0).astype(int)
+        valid = (final_stock_sales_df['product_id'] > 0).sum()
+        print(f"   🔍 product_id après dédup: {valid}/{len(final_stock_sales_df)} valides")
+    else:
+        # Dernier recours : créer product_id à 0
+        print(
+            f"   ⚠️ product_id toujours absent après corrections! Colonnes: {final_stock_sales_df.columns.tolist()[:8]}...")
+        final_stock_sales_df['product_id'] = 0
 
     # =========================
     # Métriques métier (suite exacte de votre code)
@@ -3658,10 +4133,24 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
 
     if not sales_history.empty:
         print("Entraînement modèle supervisé...")
+
+        # ✅ DEBUG: Vérifier product_id AVANT ML
+        before_ml_valid = (final_stock_sales_df[
+                               'product_id'] > 0).sum() if 'product_id' in final_stock_sales_df.columns else 'ABSENT'
+        print(f"   🔍 product_id AVANT ML: {before_ml_valid}")
+
         final_stock_sales_df, ml_model = create_supervised_target_from_sales(
             sales_history,
             final_stock_sales_df
         )
+
+        # ✅ DEBUG: Vérifier product_id APRÈS ML
+        after_ml_valid = (final_stock_sales_df[
+                              'product_id'] > 0).sum() if 'product_id' in final_stock_sales_df.columns else 'ABSENT'
+        print(f"   🔍 product_id APRÈS ML: {after_ml_valid}")
+        if after_ml_valid == 'ABSENT' and before_ml_valid != 'ABSENT':
+            print(f"   ⚠️⚠️⚠️ product_id PERDU dans create_supervised_target_from_sales! ⚠️⚠️⚠️")
+            print(f"   Colonnes retournées: {final_stock_sales_df.columns.tolist()[:10]}...")
     else:
         print("Pas d'historique, utilisation formule")
         final_stock_sales_df['target_quantity'] = calculate_formula_based_target(
@@ -3683,11 +4172,23 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     promo_roi = pd.DataFrame()
     promo_history = pd.DataFrame()
 
+    # ✅ DEBUG: Vérifier product_id avant l'appel à calculate_promo_roi_analysis
+    print(f"🔍 DEBUG avant promo: colonnes={final_stock_sales_df.columns.tolist()[:10]}...")
+    print(f"   product_id présent: {'product_id' in final_stock_sales_df.columns}")
+    if 'product_id' in final_stock_sales_df.columns:
+        print(f"   product_id valides: {(final_stock_sales_df['product_id'] > 0).sum()}")
+
     try:
         promo_history = load_and_analyze_promotions()
 
         if not sales_history.empty and not promo_history.empty:
             print("Calcul ROI des promotions...")
+
+            # ✅ S'assurer que product_id existe avant l'appel
+            if 'product_id' not in final_stock_sales_df.columns:
+                print("⚠️ product_id absent - création temporaire")
+                final_stock_sales_df['product_id'] = 0
+
             promo_roi = calculate_promo_roi_analysis(
                 sales_history,
                 promo_history,
@@ -3901,6 +4402,11 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
         .clip(lower=0.1)
     )
 
+    # ✅ DEBUG: Vérifier product_id avant réordonnancement
+    print(f"🔍 DEBUG avant réord: product_id présent = {'product_id' in final_stock_sales_df.columns}")
+    if 'product_id' in final_stock_sales_df.columns:
+        print(f"   product_id valides: {(final_stock_sales_df['product_id'] > 0).sum()}")
+
     # Colonnes en tête pour visibilité
     _front = ["product_name", "Supplier", "Average Daily Sales"]
     final_stock_sales_df = final_stock_sales_df[
@@ -3931,25 +4437,27 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     print("========================================================\n")
 
     # =========================
-    # ✅ FILTRE FINAL : Produits actifs uniquement
+    # ℹ️ INFO : Produits actifs/inactifs (SANS FILTRE)
     # =========================
+    # NOTE: Le filtre is_active a été DÉSACTIVÉ pour afficher TOUS les produits
+    # Les produits inactifs seront affichés mais marqués visuellement
     if 'is_active' in final_stock_sales_df.columns:
-        initial_count = len(final_stock_sales_df)
         active_count = final_stock_sales_df['is_active'].sum()
-
-        # Filtrer
-        final_stock_sales_df = final_stock_sales_df[final_stock_sales_df['is_active'] == True].copy()
+        inactive_count = len(final_stock_sales_df) - active_count
 
         print(f"\n{'=' * 60}")
-        print(f"✅ FILTRE PRODUITS ACTIFS")
+        print(f"ℹ️ STATUT PRODUITS (PAS DE FILTRE)")
         print(f"{'=' * 60}")
-        print(f"   Avant filtre : {initial_count} produits")
-        print(f"   Actifs détectés : {active_count}")
-        print(f"   Après filtre : {len(final_stock_sales_df)} produits")
-        print(f"   Exclus : {initial_count - len(final_stock_sales_df)} produits")
+        print(f"   Total : {len(final_stock_sales_df)} produits")
+        print(f"   Actifs : {active_count}")
+        print(f"   Inactifs : {inactive_count}")
         print(f"{'=' * 60}\n")
+
+        # S'assurer que is_active est bien défini pour tous
+        final_stock_sales_df['is_active'] = final_stock_sales_df['is_active'].fillna(True)
     else:
-        print("\n⚠️ Colonne 'is_active' absente, TOUS les produits sont affichés")
+        print("\n⚠️ Colonne 'is_active' absente - TOUS les produits sont affichés")
+        final_stock_sales_df['is_active'] = True
 
     # =========================
     # ✅ FILTRE : Exclure les produits "cadeau"
@@ -4018,6 +4526,17 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                     else:
                         print(f"   ✗ {col} MANQUANTE")
 
+        # ✅ GARANTIR product_id avant le return
+        if 'product_id' not in final_stock_sales_df.columns:
+            final_stock_sales_df['product_id'] = 0
+            print("⚠️ product_id créé avec 0 (absent)")
+        else:
+            final_stock_sales_df['product_id'] = pd.to_numeric(
+                final_stock_sales_df['product_id'], errors='coerce'
+            ).fillna(0).astype(int)
+            valid_count = (final_stock_sales_df['product_id'] > 0).sum()
+            print(f"✅ product_id final: {valid_count}/{len(final_stock_sales_df)} valides")
+
         # ✅ AJOUTER JUSTE AVANT LE RETURN FINAL
         print(f"\n{'=' * 70}")
         print(f"🎉 LOAD_SUPPLY_DATA TERMINÉ")
@@ -4025,6 +4544,7 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
         print(f"   Période : {period_days}")
         print(f"   Produits : {len(final_stock_sales_df)}")
         print(f"   Colonnes : {len(final_stock_sales_df.columns)}")
+        print(f"   product_id valides : {(final_stock_sales_df['product_id'] > 0).sum()}")
 
         if 'Average Daily Sales' in final_stock_sales_df.columns:
             print(f"   ADS min : {final_stock_sales_df['Average Daily Sales'].min():.2f}")
@@ -4190,15 +4710,41 @@ def update_rotation_period(period_value):
                 .clip(lower=0.1)
             )
 
-        # product_id
+        # ✅ NETTOYAGE COLONNES DUPLIQUÉES product_id
+        # Chercher toutes les colonnes qui contiennent "product_id"
+        product_id_cols = [c for c in df.columns if 'product_id' in c.lower()]
+        print(f"📋 Colonnes product_id trouvées: {product_id_cols}")
+
+        if len(product_id_cols) > 1:
+            # Trouver la colonne avec les vraies valeurs (pas que des 0)
+            best_col = None
+            best_count = 0
+            for col in product_id_cols:
+                try:
+                    col_numeric = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                    valid_count = (col_numeric > 0).sum()
+                    print(f"   - {col}: {valid_count} valeurs > 0")
+                    if valid_count > best_count:
+                        best_count = valid_count
+                        best_col = col
+                except:
+                    pass
+
+            if best_col:
+                print(f"   ✅ Colonne retenue: {best_col} ({best_count} valeurs)")
+                # Garder la meilleure colonne et supprimer les autres
+                df['product_id'] = pd.to_numeric(df[best_col], errors='coerce').fillna(0).astype(int)
+                # Supprimer les doublons
+                cols_to_drop = [c for c in product_id_cols if c != 'product_id']
+                df.drop(columns=cols_to_drop, errors='ignore', inplace=True)
+                print(f"   ✅ Colonnes supprimées: {cols_to_drop}")
+
+        # S'assurer que product_id existe et est propre
         if "product_id" not in df.columns:
             df["product_id"] = 0
-        else:
-            df["product_id"] = (
-                pd.to_numeric(df["product_id"], errors="coerce")
-                .fillna(0)
-                .astype(int)
-            )
+        df["product_id"] = pd.to_numeric(df["product_id"], errors="coerce").fillna(0).astype(int)
+
+        print(f"✅ product_id final: {(df['product_id'] > 0).sum()} valeurs valides sur {len(df)}")
 
         # ✅ Préparer colonnes table
         print("📋 Préparation colonnes...")
@@ -4302,6 +4848,27 @@ def update_rotation_period(period_value):
             print(f"⚠️ Colonnes manquantes : {missing_cols}")
             # Retirer colonnes manquantes
             available_cols = [c for c in available_cols if c in df_overview.columns]
+
+        # ✅ NETTOYAGE FINAL: Garantir UNE SEULE colonne product_id
+        product_id_variants = [c for c in df.columns if 'product_id' in c.lower()]
+        if len(product_id_variants) > 1:
+            print(f"⚠️ NETTOYAGE: {len(product_id_variants)} colonnes product_id détectées: {product_id_variants}")
+            # Garder celle avec le plus de valeurs valides
+            best_col = max(product_id_variants, key=lambda c: (pd.to_numeric(df[c], errors='coerce').fillna(0) > 0).sum())
+            df['product_id'] = pd.to_numeric(df[best_col], errors='coerce').fillna(0).astype(int)
+            cols_to_drop = [c for c in product_id_variants if c != 'product_id']
+            df.drop(columns=cols_to_drop, errors='ignore', inplace=True)
+            df_overview.drop(columns=[c for c in cols_to_drop if c in df_overview.columns], errors='ignore', inplace=True)
+            print(f"   ✅ Colonnes supprimées: {cols_to_drop}")
+
+        # S'assurer que product_id est en première position dans available_cols
+        if 'product_id' in df_overview.columns and 'product_id' not in available_cols:
+            available_cols.insert(0, 'product_id')
+        elif 'product_id' in available_cols and available_cols[0] != 'product_id':
+            available_cols.remove('product_id')
+            available_cols.insert(0, 'product_id')
+
+        print(f"✅ product_id final: {(df['product_id'] > 0).sum()} valeurs valides")
 
         # ✅ Préparer données retour
         print("📤 Préparation données retour...")
@@ -5062,14 +5629,16 @@ app.index_string = """
             }
 
             /* ========================================
-               TABLE STABILISATION - ÉVITER MOUVEMENT
+               TABLE - SCROLL HORIZONTAL UNIQUEMENT
                ======================================== */
             .dash-table-container {
-                overflow: hidden !important;
+                overflow-x: auto !important;
+                overflow-y: visible !important;
             }
 
             .dash-table-container .dash-spreadsheet-container {
-                overflow: visible !important;
+                overflow-x: auto !important;
+                overflow-y: visible !important;
             }
 
             .dash-table-container .dash-spreadsheet-inner {
@@ -5092,6 +5661,34 @@ app.index_string = """
             /* Ligne sélectionnée - pas de changement de largeur */
             .dash-table-container tr.row-selected {
                 outline: none !important;
+            }
+
+            /* ✅ SCROLLBAR HORIZONTAL */
+            .dash-table-container::-webkit-scrollbar {
+                height: 10px;
+            }
+
+            .dash-table-container::-webkit-scrollbar-track {
+                background: #f1f5f9;
+                border-radius: 5px;
+            }
+
+            .dash-table-container::-webkit-scrollbar-thumb {
+                background: #94a3b8;
+                border-radius: 5px;
+            }
+
+            .dash-table-container::-webkit-scrollbar-thumb:hover {
+                background: #64748b;
+            }
+
+            /* ✅ CURSEUR NAVIGATION */
+            .dash-table-container .dash-cell {
+                cursor: pointer !important;
+            }
+
+            .dash-table-container .dash-cell:hover {
+                background-color: #f0f9ff !important;
             }
 
             /* ========================================
@@ -5442,18 +6039,11 @@ app.index_string = """
 </html>
 """
 
+
 # ------------------------------ Data cache layer ---------------------------------
-'''@cache.memoize()
-def get_df_cached():
-    return load_supply_data()
-'''
 
-
-@lru_cache(maxsize=10)
-def get_df_cached(period: str = "7d"):
-    """Cache avec support période rotation"""
-    return load_supply_data(period_days=period)
-
+# NOTE: get_df_cached est défini au début du fichier (ligne ~294) avec @cache.memoize
+# NE PAS redéfinir ici pour éviter les conflits
 
 # ------------------------------ Sidebar ------------------------------------------
 def make_sidebar():
@@ -6480,6 +7070,27 @@ def page_overview(master_df: pd.DataFrame = None):
             .clip(lower=0.1)
         )
 
+        # ✅ NETTOYAGE COLONNES DUPLIQUÉES product_id
+        product_id_cols = [c for c in df.columns if 'product_id' in c.lower()]
+        if len(product_id_cols) > 1:
+            # Trouver la colonne avec les vraies valeurs
+            best_col = None
+            best_count = 0
+            for col in product_id_cols:
+                try:
+                    col_numeric = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                    valid_count = (col_numeric > 0).sum()
+                    if valid_count > best_count:
+                        best_count = valid_count
+                        best_col = col
+                except:
+                    pass
+
+            if best_col:
+                df['product_id'] = pd.to_numeric(df[best_col], errors='coerce').fillna(0).astype(int)
+                cols_to_drop = [c for c in product_id_cols if c != 'product_id']
+                df.drop(columns=cols_to_drop, errors='ignore', inplace=True)
+
         if "product_id" not in df.columns:
             df["product_id"] = 0
         df["product_id"] = pd.to_numeric(df["product_id"], errors="coerce").fillna(0).astype(int)
@@ -6590,9 +7201,40 @@ def page_overview(master_df: pd.DataFrame = None):
         if must not in available_cols:
             available_cols.insert(1, must)
 
+    # ✅ NETTOYAGE: Supprimer colonnes product_id dupliquées
+    product_id_variants = [c for c in df_overview.columns if 'product_id' in c.lower()]
+    if len(product_id_variants) > 1:
+        print(f"⚠️ page_overview: {len(product_id_variants)} colonnes product_id: {product_id_variants}")
+        # Garder celle avec le plus de valeurs valides
+        best_col = max(product_id_variants,
+                       key=lambda c: (pd.to_numeric(df_overview[c], errors='coerce').fillna(0) > 0).sum())
+        df_overview['product_id'] = pd.to_numeric(df_overview[best_col], errors='coerce').fillna(0).astype(int)
+        cols_to_drop = [c for c in product_id_variants if c != 'product_id']
+        df_overview.drop(columns=cols_to_drop, errors='ignore', inplace=True)
+        # Aussi nettoyer available_cols
+        available_cols = [c for c in available_cols if c not in cols_to_drop]
+        print(f"   ✅ Supprimé: {cols_to_drop}")
+
+    # ✅ Vérifier que product_id est en PREMIÈRE position
+    if "product_id" in df_overview.columns:
+        if "product_id" not in available_cols:
+            available_cols.insert(0, "product_id")
+        elif available_cols[0] != "product_id":
+            available_cols.remove("product_id")
+            available_cols.insert(0, "product_id")
+        valid_ids = (df_overview['product_id'] > 0).sum()
+        total = len(df_overview)
+        print(f"✅ product_id en première position - valeurs valides: {valid_ids}/{total}")
+        if valid_ids == 0:
+            print(f"   ⚠️⚠️⚠️ TOUS LES PRODUCT_ID SONT 0 ⚠️⚠️⚠️")
+            print(f"   Échantillon df_overview:")
+            print(df_overview[['product_id', 'product_name']].head(5).to_string())
+    else:
+        print(f"⚠️ product_id ABSENT de df_overview - colonnes: {df_overview.columns.tolist()[:10]}")
+
     # Vérifier que product_name est dans available_cols
     if "product_name" not in available_cols and "product_name" in df_overview.columns:
-        available_cols.insert(0, "product_name")
+        available_cols.insert(1, "product_name")
 
     # Ligne ~145, juste avant make_kpis()
 
@@ -6670,10 +7312,10 @@ def page_overview(master_df: pd.DataFrame = None):
         id="main-table",
         columns=columns,
         data=df_overview[available_cols].to_dict("records"),
-        page_size=15,
+        page_size=20,  # ✅ Augmenté légèrement
         filter_action="native",
         sort_action="native",
-        sort_mode="multi",
+        sort_mode="single",  # ✅ Single pour performance
         column_selectable="single",
         editable=True,
         active_cell=None,
@@ -6681,12 +7323,19 @@ def page_overview(master_df: pd.DataFrame = None):
         row_selectable="multi",
         selected_rows=[],
 
+        # ✅ OPTIMISATION PERFORMANCE
+        virtualization=False,  # Désactivé pour scroll fluide
+        page_action='native',
+
         # ========================================
-        # TABLE STYLES
+        # TABLE STYLES - SCROLL HORIZONTAL UNIQUEMENT
         # ========================================
         style_table={
             "overflowX": "auto",
-            "maxWidth": "100%"
+            "overflowY": "visible",
+            "maxWidth": "100%",
+            "border": "1px solid #e2e8f0",
+            "borderRadius": "8px"
         },
 
         style_header={
@@ -7135,14 +7784,16 @@ def page_overview(master_df: pd.DataFrame = None):
     action_buttons = html.Div([
         dbc.ButtonGroup([
             dbc.Button("🔄 Actualiser", id="btn-refresh", className="btn-outline-secondary", size="sm",
-                       style={"fontWeight": "600"}),
+                       style={"fontWeight": "600"}, title="Rafraîchir l'interface (rapide)"),
+            dbc.Button("📥 Recharger données", id="btn-reload-data", className="btn-outline-warning", size="sm",
+                       style={"fontWeight": "600"}, title="Recharger depuis Google Sheets (lent)"),
             dbc.Button("☑️ Tout sélect.", id="btn-select-all", className="btn-outline-primary", size="sm",
                        style={"fontWeight": "600"}),
             dbc.Button("➕ Ajouter", id="btn-add-row", className="btn-primary", size="sm",
                        style={"fontWeight": "600"}),
-            #dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, className="btn-success",
-                       #size="sm",
-                       #style={"fontWeight": "600"}),
+            #dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, #className="btn-success",
+              #         size="sm",
+               #        style={"fontWeight": "600"}),
         ], size="sm"),
         # Compteur de sélection inline
         html.Span(id="selection-count-inline", style={
@@ -7463,6 +8114,11 @@ def apply_filters(search, sup, cat, need, options, master_json):
 
     print(f"📊 Base : {len(base)} produits")
 
+    # ✅ PRÉSERVER product_id IMMÉDIATEMENT après chargement
+    if 'product_id' in base.columns:
+        base['product_id'] = pd.to_numeric(base['product_id'], errors='coerce').fillna(0).astype(int)
+        print(f"   product_id: {(base['product_id'] > 0).sum()} valides")
+
     # ✅ Validation
     base = validate_core_columns(base)
 
@@ -7513,6 +8169,10 @@ def apply_filters(search, sup, cat, need, options, master_json):
     for col in ['total_stock', 'QAC', 'target_quantity']:
         if col in fdf.columns:
             fdf[col] = pd.to_numeric(fdf[col], errors='coerce').fillna(0).astype(int)
+
+    # ✅ PRÉSERVER product_id
+    if 'product_id' in fdf.columns:
+        fdf['product_id'] = pd.to_numeric(fdf['product_id'], errors='coerce').fillna(0).astype(int)
 
     if 'Max Coverage Day' in fdf.columns:
         fdf['Max Coverage Day'] = pd.to_numeric(fdf['Max Coverage Day'], errors='coerce').fillna(0).round(1)
@@ -8122,91 +8782,126 @@ def send_note_with_notifications(n_clicks, message, author, product_name):
 
 @app.callback(
     [Output('main-table', 'data', allow_duplicate=True),
-     Output('master-data', 'data', allow_duplicate=True),
-     Output('filtered-data', 'data', allow_duplicate=True),
      Output('action-feedback', 'children', allow_duplicate=True),
      Output('search-input', 'value', allow_duplicate=True),
      Output('filter-supplier', 'value', allow_duplicate=True),
      Output('filter-category', 'value', allow_duplicate=True),
      Output('filter-need', 'value', allow_duplicate=True),
-     Output('main-table', 'selected_rows', allow_duplicate=True),
-     Output('page-container', 'children', allow_duplicate=True)],
+     Output('main-table', 'selected_rows', allow_duplicate=True)],
     Input('btn-refresh', 'n_clicks'),
+    State('master-data', 'data'),
+    prevent_initial_call=True
+)
+def refresh_data(n_clicks, current_master_data):
+    """
+    ⚡ ACTUALISATION RAPIDE - Réinitialise les filtres sans recharger les données
+    NE régénère PAS la page entière, juste la table
+    """
+    if not n_clicks:
+        return [no_update] * 7
+
+    try:
+        start = time.time()
+        print(f"\n⚡ ACTUALISATION RAPIDE")
+
+        # Utiliser les données existantes
+        if current_master_data:
+            updated_df = pd.DataFrame(json.loads(current_master_data))
+        else:
+            updated_df = get_df_cached()
+
+        if updated_df.empty:
+            return [no_update] * 7
+
+        # S'assurer que QAC edited existe
+        if 'QAC edited' not in updated_df.columns:
+            updated_df['QAC edited'] = ' '
+
+        # Convertir en records (rapide)
+        records = updated_df.to_dict('records')
+
+        elapsed = time.time() - start
+        print(f"   ✅ Fait en {elapsed:.2f}s - {len(records)} produits")
+
+        feedback = dbc.Alert([
+            html.I(className="fas fa-sync-alt me-2"),
+            f"✅ Filtres réinitialisés ({len(records)} produits)"
+        ], color="info", duration=1500, dismissable=True)
+
+        # Retourner: data, feedback, search vide, filtres vides, sélection vide
+        return records, feedback, "", [], [], [], []
+
+    except Exception as e:
+        print(f"❌ Erreur refresh: {e}")
+        return [no_update] * 7
+
+
+# ==========================================
+# 📥 CALLBACK RECHARGEMENT COMPLET DONNÉES
+# ==========================================
+@app.callback(
+    [Output('main-table', 'data', allow_duplicate=True),
+     Output('master-data', 'data', allow_duplicate=True),
+     Output('filtered-data', 'data', allow_duplicate=True),
+     Output('action-feedback', 'children', allow_duplicate=True),
+     Output('page-container', 'children', allow_duplicate=True)],
+    Input('btn-reload-data', 'n_clicks'),
     State('auth-state', 'data'),
     prevent_initial_call=True
 )
-def refresh_data(n_clicks, auth_state):
-    """Rafraîchit TOUTE la page Overview : données, KPIs, filtres"""
+def reload_data_from_source(n_clicks, auth_state):
+    """Recharge TOUTES les données depuis Google Sheets (lent mais complet)"""
     global initial_df
 
-    if n_clicks:
-        try:
-            print(f"\n{'=' * 60}")
-            print(f"🔄 ACTUALISATION COMPLÈTE DE LA PAGE OVERVIEW")
-            print(f"{'=' * 60}")
+    if not n_clicks:
+        return [no_update] * 5
 
-            # Récupérer l'utilisateur actif
-            username = auth_state.get("username", "") if auth_state else ""
+    try:
+        print(f"\n{'=' * 60}")
+        print(f"📥 RECHARGEMENT COMPLET DEPUIS GOOGLE SHEETS")
+        print(f"{'=' * 60}")
 
-            # 1. Invalider le cache utilisateur
-            invalidate_user_cache(username)
-            clear_all_caches()
+        username = auth_state.get("username", "") if auth_state else ""
 
-            # 2. Rafraîchir les données depuis la source
-            updated_df = load_supply_data()
+        # Invalider le cache
+        invalidate_user_cache(username)
+        clear_all_caches()
 
-            # 3. Mettre à jour le DataFrame global (thread-safe)
-            with _data_lock:
-                initial_df = updated_df
+        # Recharger depuis la source
+        updated_df = load_supply_data()
 
-            # 4. Ajouter la colonne QAC edited si elle n'existe pas
-            if 'QAC edited' not in updated_df.columns:
-                updated_df['QAC edited'] = ' '
+        # Mettre à jour le DataFrame global
+        with _data_lock:
+            initial_df = updated_df
 
-            # 5. Convertir en liste de records pour la DataTable
-            records = updated_df.to_dict('records')
-            json_data = updated_df.to_json(orient="records")
+        if 'QAC edited' not in updated_df.columns:
+            updated_df['QAC edited'] = ' '
 
-            # 6. Régénérer la page Overview avec les nouvelles données
-            new_page_content = page_overview(updated_df)
+        records = updated_df.to_dict('records')
+        json_data = updated_df.to_json(orient="records")
+        new_page_content = page_overview(updated_df)
 
-            print(f"   ✅ {len(updated_df)} produits chargés")
-            print(f"   ✅ KPIs recalculés")
-            print(f"   ✅ Filtres réinitialisés")
-            print(f"   ✅ Cache invalidé")
-            print(f"{'=' * 60}\n")
+        print(f"   ✅ {len(updated_df)} produits rechargés")
+        print(f"{'=' * 60}\n")
 
-            # 7. Tracking Supabase
-            if username and username in ACTIVE_SESSIONS:
-                session_info = ACTIVE_SESSIONS[username]
-                track_data_refresh(
-                    session_info.get("user_id"),
-                    session_info.get("session_id"),
-                    len(updated_df)
-                )
+        feedback = dbc.Alert([
+            html.I(className="fas fa-check-circle me-2"),
+            f"Données rechargées : {len(updated_df)} produits depuis Google Sheets"
+        ], color="warning", duration=4000, dismissable=True)
 
-            feedback = dbc.Alert([
-                html.I(className="fas fa-check-circle me-2"),
-                f"Page actualisée : {len(updated_df)} produits | KPIs et filtres réinitialisés"
-            ], color="success", duration=4000, dismissable=True,
-                style={"fontWeight": "600"})
+        return records, json_data, json_data, feedback, new_page_content
 
-            # Retourner : données table, master, filtered, feedback, filtres vides, sélection vide, nouvelle page
-            return records, json_data, json_data, feedback, "", [], [], [], [], new_page_content
+    except Exception as e:
+        print(f"❌ Erreur reload: {e}")
+        import traceback
+        traceback.print_exc()
 
-        except Exception as e:
-            print(f"❌ Erreur refresh: {e}")
-            import traceback
-            traceback.print_exc()
+        feedback = dbc.Alert([
+            html.I(className="fas fa-exclamation-triangle me-2"),
+            f"Erreur rechargement : {str(e)}"
+        ], color="danger", duration=5000, dismissable=True)
 
-            feedback = dbc.Alert([
-                html.I(className="fas fa-exclamation-triangle me-2"),
-                f"Erreur : {str(e)}"
-            ], color="danger", duration=5000, dismissable=True)
-
-            return no_update, no_update, no_update, feedback, no_update, no_update, no_update, no_update, no_update, no_update
-
-    return no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update
+        return [no_update] * 4 + [feedback]
 
 
 # ==========================================
@@ -11684,6 +12379,14 @@ except Exception as e:
 initial_df = get_df_cached()
 initial_df['QAC edited'] = ' '
 
+# ✅ GARANTIR product_id dans le DataFrame initial
+if 'product_id' in initial_df.columns:
+    initial_df['product_id'] = pd.to_numeric(initial_df['product_id'], errors='coerce').fillna(0).astype(int)
+    print(f"✅ product_id initial: {(initial_df['product_id'] > 0).sum()} valides sur {len(initial_df)}")
+else:
+    initial_df['product_id'] = 0
+    print("⚠️ product_id absent du DataFrame initial - créé avec 0")
+
 # ✅ Mettre à jour les stats journalières dans Supabase
 try:
     update_daily_stats_on_load(initial_df)
@@ -12612,6 +13315,7 @@ app.validation_layout = html.Div([
     # ], value='all'),
     dbc.Checklist(id="toggle-options"),
     dbc.Button(id="btn-refresh"),
+    dbc.Button(id="btn-reload-data"),  # ✅ AJOUT bouton rechargement
     dbc.Button(id="btn-add-row"),
     dbc.Button(id="btn-po-pdf"),
     dbc.Button(id="btn-save-qac"),  # ✅ AJOUT
@@ -12649,11 +13353,12 @@ app.validation_layout = html.Div([
     dash_table.DataTable(
         id="main-table",
         columns=[
+            {"name": "ID", "id": "product_id"},  # ✅ PREMIÈRE COLONNE = product_id
             {"name": "product_name", "id": "product_name"},
             {"name": "Supplier", "id": "Supplier"},
             {"name": "total_stock", "id": "total_stock"},
             {"name": "QAC", "id": "QAC"},
-            {"name": "QAC edited", "id": "QAC edited", "editable": True},  # ✅ AJOUT
+            {"name": "QAC edited", "id": "QAC edited", "editable": True},
         ],
         data=[],
         row_selectable="multi",
@@ -12858,6 +13563,13 @@ def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: li
 def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Garantit que les colonnes critiques existent et sont valides"""
     df = df.copy()
+
+    # 0. product_id - CRITIQUE: doit être préservé
+    if "product_id" in df.columns:
+        # Garder les valeurs existantes, convertir en int
+        df["product_id"] = pd.to_numeric(df["product_id"], errors='coerce').fillna(0).astype(int)
+    else:
+        df["product_id"] = 0
 
     # 1. Supplier
     if "Supplier" not in df.columns:
@@ -13183,6 +13895,282 @@ import re, math, csv, os, io
 from datetime import datetime
 
 PACKAGING_URL = "https://data.heroku.com/dataclips/cnmhrqqjneeunkbqibxklyxwcsrl.csv"
+
+# ✅ URL du catalogue avec Conditionnement (AG) et Product Name propre (AH)
+CATALOG_PACKAGING_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRTyAxh6v8o0FXV0r7f6ALPDgmeJNkjTZITjrEoKBHo2gs_f3iyV8sFk8fOzcAsUSkJMXBJCpJnhQKi/pub?gid=990028336&single=true&output=csv"
+
+# Cache global pour le catalogue conditionnement
+_catalog_packaging_cache = {
+    "data": None,
+    "timestamp": 0
+}
+
+# Cache pour le packaging Heroku
+_heroku_packaging_cache = {
+    "data": None,
+    "timestamp": 0
+}
+
+
+def load_heroku_packaging():
+    """
+    Charge le packaging depuis Heroku dataclip.
+    Contient les infos comme "1/2 carton", "1/4 carton", etc.
+
+    Retourne: {product_name_lower: packaging_text}
+    """
+    global _heroku_packaging_cache
+
+    # Vérifier le cache (10 minutes)
+    if _heroku_packaging_cache["data"] is not None:
+        age = time.time() - _heroku_packaging_cache["timestamp"]
+        if age < 600:
+            return _heroku_packaging_cache["data"]
+
+    try:
+        print("📦 Chargement packaging Heroku...")
+        dfp = pd.read_csv(PACKAGING_URL, timeout=10)
+
+        name_col = next((c for c in dfp.columns if c.lower() in ("name", "product_name", "designation")), None)
+        pack_col = next(
+            (c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
+
+        if not name_col or not pack_col:
+            print("   ⚠️ Colonnes name/packaging non trouvées")
+            return _heroku_packaging_cache["data"] or {}
+
+        dfp["__key__"] = dfp[name_col].astype(str).str.lower().str.strip()
+        dfp["__pack__"] = dfp[pack_col].astype(str).str.lower().str.strip()
+
+        result = dict(zip(dfp["__key__"], dfp["__pack__"]))
+
+        print(f"   ✅ {len(result)} produits avec packaging chargés")
+
+        # Mettre en cache
+        _heroku_packaging_cache["data"] = result
+        _heroku_packaging_cache["timestamp"] = time.time()
+
+        return result
+
+    except Exception as e:
+        print(f"   ❌ Erreur Heroku packaging: {e}")
+        return _heroku_packaging_cache["data"] or {}
+
+
+def load_catalog_packaging():
+    """
+    Charge le catalogue Google Sheet avec:
+    - Colonne AG (index 32): Conditionnement (ex: 12, 24, 6)
+    - Colonne AH (index 33): Product Name propre (sans "1/2 carton")
+    - Colonne B (index 1): Nom original du produit
+
+    Retourne: {product_name_lower: {"conditionnement": int, "clean_name": str}}
+    """
+    global _catalog_packaging_cache
+
+    # Vérifier le cache (10 minutes)
+    if _catalog_packaging_cache["data"] is not None:
+        age = time.time() - _catalog_packaging_cache["timestamp"]
+        if age < 600:
+            return _catalog_packaging_cache["data"]
+
+    try:
+        print("📦 Chargement catalogue conditionnement (Google Sheet)...")
+        df = pd.read_csv(CATALOG_PACKAGING_URL, timeout=10)
+
+        print(f"   📊 {df.shape[0]} lignes, {df.shape[1]} colonnes")
+
+        result = {}
+
+        # Vérifier qu'on a assez de colonnes (au moins 34 pour AH)
+        if df.shape[1] >= 34:
+            for idx, row in df.iterrows():
+                try:
+                    # Nom original (colonne B, index 1)
+                    original_name = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else ""
+                    if not original_name or original_name.lower() == "nan":
+                        continue
+
+                    key = original_name.lower().strip()
+
+                    # Conditionnement (colonne AG, index 32)
+                    conditionnement = 1
+                    if pd.notna(row.iloc[32]):
+                        try:
+                            conditionnement = int(float(str(row.iloc[32]).strip()))
+                            if conditionnement <= 0:
+                                conditionnement = 1
+                        except (ValueError, TypeError):
+                            conditionnement = 1
+
+                    # Nom propre (colonne AH, index 33)
+                    clean_name = original_name
+                    if pd.notna(row.iloc[33]):
+                        temp_name = str(row.iloc[33]).strip()
+                        if temp_name and temp_name.lower() != "nan":
+                            clean_name = temp_name
+
+                    result[key] = {
+                        "conditionnement": conditionnement,
+                        "clean_name": clean_name
+                    }
+
+                except Exception:
+                    continue
+
+            print(f"   ✅ {len(result)} produits avec conditionnement chargés")
+        else:
+            print(f"   ⚠️ Pas assez de colonnes ({df.shape[1]} < 34)")
+
+        # Mettre en cache
+        _catalog_packaging_cache["data"] = result
+        _catalog_packaging_cache["timestamp"] = time.time()
+
+        return result
+
+    except Exception as e:
+        print(f"   ❌ Erreur catalogue: {e}")
+        return _catalog_packaging_cache["data"] or {}
+
+
+def get_clean_product_name(product_name: str, catalog_packaging: dict) -> str:
+    """
+    Retourne le nom propre du produit (sans "1/2 carton", "1/2 demi carton", etc.)
+    Utilise d'abord le catalogue, sinon nettoie manuellement.
+    """
+    if not product_name:
+        return product_name
+
+    key = product_name.lower().strip()
+
+    # 1. Chercher dans le catalogue Google Sheet
+    if key in catalog_packaging:
+        clean = catalog_packaging[key].get("clean_name", "")
+        if clean and clean.lower() != "nan":
+            return clean
+
+    # 2. Sinon, nettoyer manuellement
+    clean = product_name
+    patterns_to_remove = [
+        "1/2 demi carton ", "1/2 demi-carton ",
+        "1/2 carton ", "1/2carton ",
+        "demi carton ", "demi-carton ",
+        "1/4 carton ", "1/4carton ",
+        "1/3 carton ", "1/3carton ",
+        "1/2 demi carton", "1/2 demi-carton",
+        "1/2 carton", "1/2carton",
+        "demi carton", "demi-carton",
+        "1/4 carton", "1/4carton",
+        "1/3 carton", "1/3carton",
+    ]
+
+    name_lower = clean.lower()
+    for pattern in patterns_to_remove:
+        if name_lower.startswith(pattern):
+            clean = clean[len(pattern):]
+            break
+        elif pattern in name_lower:
+            idx = name_lower.find(pattern)
+            clean = clean[:idx] + clean[idx + len(pattern):]
+            break
+
+    # Nettoyer les espaces multiples
+    clean = " ".join(clean.split()).strip()
+
+    return clean if clean else product_name
+
+
+def get_conditionnement(product_name: str, catalog_packaging: dict) -> int:
+    """
+    Retourne le conditionnement du produit (nombre d'unités par carton).
+    """
+    if not product_name:
+        return 1
+
+    key = product_name.lower().strip()
+
+    if key in catalog_packaging:
+        cond = catalog_packaging[key].get("conditionnement", 1)
+        if cond and cond > 0:
+            return cond
+
+    return 1
+
+
+def get_fraction_from_packaging(product_name: str, heroku_packaging: dict) -> float:
+    """
+    Détecte la fraction depuis le packaging Heroku (1/2, 1/4, etc.)
+
+    Exemples:
+    - "1/2 carton" → 0.5
+    - "1/4 carton" → 0.25
+    - "carton" ou vide → 1.0
+    """
+    if not product_name:
+        return 1.0
+
+    key = product_name.lower().strip()
+
+    # 1. Chercher dans Heroku
+    packaging_text = heroku_packaging.get(key, "")
+
+    if packaging_text:
+        frac = detect_fraction_from_text(packaging_text)
+        if frac != 1.0:
+            return frac
+
+    # 2. Chercher dans le nom du produit
+    frac = detect_fraction_from_text(product_name)
+
+    return frac
+
+
+def calculate_quantity_for_po(qac_edited: float, product_name: str, catalog_packaging: dict,
+                              heroku_packaging: dict) -> int:
+    """
+    Calcule la quantité finale pour le bon de commande.
+
+    Logique:
+    1. Détecter si c'est un demi-carton (fraction depuis Heroku)
+    2. Convertir en unités majeures (cartons entiers)
+    3. Arrondir au conditionnement supérieur
+
+    Exemple:
+    - Produit "1/2 carton Biscuit", QAC edited = 10, Conditionnement = 12
+    - Fraction = 0.5 (demi-carton)
+    - Unités majeures = 10 * 0.5 = 5 cartons
+    - Arrondi au conditionnement: ceil(5) = 5 (pas d'arrondi au conditionnement ici car c'est en cartons)
+
+    Pour les produits NON fractionnés:
+    - Produit "Biscuit", QAC edited = 25, Conditionnement = 12
+    - Fraction = 1.0
+    - Quantité = ceil(25 / 12) * 12 = 36
+    """
+    if qac_edited <= 0:
+        return 0
+
+    # 1. Obtenir la fraction (1/2, 1/4, etc.)
+    fraction = get_fraction_from_packaging(product_name, heroku_packaging)
+
+    # 2. Obtenir le conditionnement
+    conditionnement = get_conditionnement(product_name, catalog_packaging)
+
+    # 3. Calculer la quantité
+    if fraction < 1.0:
+        # C'est un demi/quart carton → convertir en cartons entiers
+        # QAC edited est en demi-cartons, on convertit en cartons
+        qty_cartons = qac_edited * fraction
+        # Arrondir au supérieur
+        qty_final = max(1, int(math.ceil(qty_cartons)))
+    else:
+        # Produit normal → arrondir au conditionnement
+        if conditionnement > 1:
+            nb_cartons = math.ceil(qac_edited / conditionnement)
+            qty_final = nb_cartons * conditionnement
+        else:
+            qty_final = int(math.ceil(qac_edited))
+
+    return qty_final
 
 
 def load_packaging_map():
@@ -13717,6 +14705,12 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
         first_data_row = current_row
 
         # ========================================
+        # 📦 CHARGER LES CATALOGUES
+        # ========================================
+        catalog_packaging = load_catalog_packaging()  # Google Sheet (conditionnement + nom propre)
+        heroku_packaging = load_heroku_packaging()  # Heroku (fractions 1/2, 1/4)
+
+        # ========================================
         # 📦 LIGNES PRODUITS
         # ========================================
 
@@ -13729,9 +14723,19 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             if qac_edited <= 0:
                 continue
 
-            # Récupération données
-            packaging_text = packaging_map.get(prod_key, "")
-            qty_major = consolidate_to_major(qac_edited, packaging_text, prod_name)
+            # ✅ NOUVEAU: Calculer la quantité en combinant les deux sources
+            qty_final = calculate_quantity_for_po(qac_edited, prod_name, catalog_packaging, heroku_packaging)
+
+            # ✅ NOUVEAU: Obtenir le nom propre (sans "1/2 carton")
+            clean_name = get_clean_product_name(prod_name, catalog_packaging)
+
+            # Debug log pour les produits avec transformation
+            fraction = get_fraction_from_packaging(prod_name, heroku_packaging)
+            conditionnement = get_conditionnement(prod_name, catalog_packaging)
+            if fraction < 1.0 or conditionnement > 1 or clean_name != prod_name:
+                print(f"   📦 {prod_name[:35]}...")
+                print(f"      → Fraction: {fraction}, Cond: {conditionnement}, QAC: {qac_edited} → Qté: {qty_final}")
+                print(f"      → Nom BC: {clean_name[:35]}")
 
             unit_price = safe_float(price_map.get(prod_key, 1000.0), 1000.0)
             if unit_price <= 0:
@@ -13758,13 +14762,13 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.font = Font(bold=True, size=10)
 
-            # Colonne 2 : Désignation
-            cell = ws.cell(row=current_row, column=2, value=prod_name[:50])
+            # Colonne 2 : Désignation (✅ nom propre, sans "1/2 carton")
+            cell = ws.cell(row=current_row, column=2, value=clean_name[:50])
             cell.border = border
             cell.alignment = Alignment(horizontal='left', vertical='center')
 
-            # Colonne 3 : Qté
-            cell = ws.cell(row=current_row, column=3, value=qty_major)
+            # Colonne 3 : Qté (✅ quantité calculée avec conditionnement)
+            cell = ws.cell(row=current_row, column=3, value=qty_final)
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = border
             cell.font = Font(bold=True)
@@ -15013,10 +16017,14 @@ import json
     State("toggle-options", "value"),
     State("master-data", "data"),
     State("adding-new-product-flag", "data"),
+    State("auth-state", "data"),
     prevent_initial_call=True
 )
-def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, fc, filter_opts, master_json, is_adding):
-    """Sauvegarde les modifications ou ajoute un nouveau produit"""
+def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, fc, filter_opts, master_json, is_adding,
+              auth_state):
+    """Sauvegarde les modifications ou ajoute un nouveau produit avec intégration Supabase"""
+    global initial_df
+
     if not n_clicks:
         return no_update, no_update, no_update, no_update, no_update, no_update, no_update
 
@@ -15024,6 +16032,15 @@ def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, f
     if not prod or not prod.strip():
         feedback = dbc.Alert("⚠️ Le nom du produit est requis", color="warning", duration=3000)
         return no_update, no_update, no_update, no_update, True, feedback, no_update
+
+    # Récupérer l'utilisateur actif
+    username = auth_state.get("username", "") if auth_state else ""
+    user_id = None
+    session_id = None
+    if username and username in ACTIVE_SESSIONS:
+        session_info = ACTIVE_SESSIONS[username]
+        user_id = session_info.get("user_id")
+        session_id = session_info.get("session_id")
 
     # If master_json is already a list (not a JSON string), use it directly
     if isinstance(master_json, str):
@@ -15036,30 +16053,86 @@ def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, f
     # Mode ajout ou édition
     if is_adding:
         # ✅ AJOUT D'UN NOUVEAU PRODUIT
+        print(f"\n{'=' * 60}")
+        print(f"➕ AJOUT D'UN NOUVEAU PRODUIT")
+        print(f"{'=' * 60}")
+
         new_row = {c: np.nan for c in df.columns}
         new_row["product_name"] = prod.strip()
         new_row["Supplier"] = sup.strip() if sup else ""
         new_row["Product Category"] = cat.strip() if cat else ""
         new_row["QAC edited"] = " "
+
         try:
             new_row["total_stock"] = float(stock or 0)
         except (ValueError, TypeError):
             new_row["total_stock"] = 0.0
 
         # Valeurs par défaut pour les colonnes numériques
-        for c in ["Average Daily Sales", "optimal stock ", "Max Lead Time", "Max Avg Daily Sales",
-                  "Max Coverage Day", "Daily OOS Rate (30d)", "Predicted Order Quantity", "QAC"]:
-            if c in df.columns:
-                new_row[c] = 0.0
+        numeric_defaults = {
+            "Average Daily Sales": 0.0,
+            "optimal stock ": 0.0,
+            "Max Lead Time": 7.0,
+            "Max Avg Daily Sales": 0.0,
+            "Max Coverage Day": 30.0,
+            "Daily OOS Rate (30d)": 0.0,
+            "Predicted Order Quantity": 0.0,
+            "QAC": 0.0,
+            "Avg Lead Time": 5.0,
+            "Purchase Need": 0.0,
+            "days_since_reception": None,
+            "last_reception_qty": 0,
+        }
 
+        for col, default_val in numeric_defaults.items():
+            if col in df.columns:
+                new_row[col] = default_val
+
+        # Status basé sur le stock
         if "Stock Status" in df.columns:
-            new_row["Stock Status"] = "Order Soon" if new_row["total_stock"] > 0 else "Out of Stock"
+            if new_row["total_stock"] <= 0:
+                new_row["Stock Status"] = "Out of Stock"
+            elif new_row["total_stock"] < 10:
+                new_row["Stock Status"] = "Order Soon"
+            else:
+                new_row["Stock Status"] = "In Stock"
+
         if "Ajusted_total_need" in df.columns:
             new_row["Ajusted_total_need"] = "ORDER NOW" if new_row["total_stock"] <= 0 else "STOCK OK"
 
+        # Ajouter au DataFrame
         df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-        feedback = dbc.Alert(f"✅ Produit '{prod}' ajouté avec succès", color="success", duration=4000)
-        print(f"➕ Nouveau produit ajouté: {prod} ({sup})")
+
+        print(f"   📦 Produit: {prod}")
+        print(f"   🏭 Fournisseur: {sup}")
+        print(f"   🏷️ Catégorie: {cat}")
+        print(f"   📊 Stock initial: {stock}")
+
+        # ✅ SAUVEGARDER DANS SUPABASE
+        if user_id and session_id:
+            # Sauvegarder le produit ajouté
+            save_added_product(user_id, session_id, {
+                "product_name": prod.strip(),
+                "supplier": sup.strip() if sup else "",
+                "category": cat.strip() if cat else "",
+                "stock": float(stock or 0),
+                "added_by": username
+            })
+
+            # Tracker l'action
+            track_product_action(user_id, session_id, "added", prod.strip(), {
+                "supplier": sup,
+                "category": cat,
+                "initial_stock": float(stock or 0)
+            })
+            print(f"   ✅ Sauvegardé dans Supabase")
+
+        print(f"{'=' * 60}\n")
+
+        feedback = dbc.Alert([
+            html.I(className="fas fa-check-circle me-2"),
+            f"Produit '{prod}' ajouté avec succès"
+        ], color="success", duration=4000)
 
     elif active_cell and active_cell.get("column_id") == "edit Edit" and active_cell.get(
             "row") is not None and table_data:
@@ -15069,8 +16142,16 @@ def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, f
         key_p = r.get("product_name")
         key_s = r.get("Supplier")
         idx = df[(df["product_name"].astype(str) == str(key_p)) & (df["Supplier"].astype(str) == str(key_s))].index
+
         if len(idx) > 0:
             i = idx[0]
+            old_values = {
+                "product_name": df.at[i, "product_name"],
+                "Supplier": df.at[i, "Supplier"],
+                "Product Category": df.at[i, "Product Category"] if "Product Category" in df.columns else "",
+                "total_stock": df.at[i, "total_stock"] if "total_stock" in df.columns else 0
+            }
+
             if prod is not None: df.at[i, "product_name"] = prod.strip()
             if sup is not None: df.at[i, "Supplier"] = sup.strip()
             if cat is not None: df.at[i, "Product Category"] = cat.strip()
@@ -15079,12 +16160,32 @@ def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, f
                     df.at[i, "total_stock"] = float(stock)
                 except (ValueError, TypeError):
                     pass
-        feedback = dbc.Alert(f"✅ Produit '{prod}' modifié avec succès", color="success", duration=4000)
+
+            # Tracker la modification
+            if user_id and session_id:
+                track_product_action(user_id, session_id, "edited", prod.strip(), {
+                    "old_values": old_values,
+                    "new_values": {
+                        "product_name": prod,
+                        "supplier": sup,
+                        "category": cat,
+                        "stock": stock
+                    }
+                })
+
+        feedback = dbc.Alert([
+            html.I(className="fas fa-edit me-2"),
+            f"Produit '{prod}' modifié avec succès"
+        ], color="info", duration=4000)
         print(f"✏️ Produit modifié: {prod} ({sup})")
     else:
         # Cas où on n'est ni en ajout ni en édition valide
         feedback = dbc.Alert("⚠️ Aucune action effectuée", color="warning", duration=3000)
         return no_update, no_update, no_update, no_update, False, feedback, False
+
+    # ✅ Mettre à jour le DataFrame global (thread-safe)
+    with _data_lock:
+        initial_df = df.copy()
 
     # Application des filtres
     sup_list = fs or []
@@ -15099,6 +16200,8 @@ def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, f
 
     # Application des actions sur fdf
     fdf_actions = add_action_cols(fdf)
+
+    print(f"📊 Table mise à jour: {len(fdf_actions)} produits affichés (total: {len(df)})")
 
     # Retour des résultats (fermer le modal et reset le flag)
     return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict(

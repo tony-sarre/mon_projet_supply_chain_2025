@@ -15335,6 +15335,114 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             current_row += 1
 
         current_row += 2
+        # ========================================
+        # 💰 TOTAUX GLOBAUX
+        # ========================================
+
+        current_row += 1
+
+        # Total HT (colonne I maintenant)
+        ws[f'H{current_row}'] = "TOTAL HT :"
+        ws[f'H{current_row}'].font = Font(bold=True, size=12)
+        ws[f'H{current_row}'].alignment = Alignment(horizontal='right')
+        ws[f'I{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",I:I)'
+        ws[f'I{current_row}'].number_format = '#,##0 "FCFA"'
+        ws[f'I{current_row}'].font = Font(bold=True, size=12)
+        ws[f'I{current_row}'].border = Border(bottom=Side(style='thin'))
+
+        current_row += 1
+
+        # TVA Totale (différence TTC - HT)
+        ws[f'H{current_row}'] = "TVA (18%) :"
+        ws[f'H{current_row}'].font = Font(bold=True, size=12)
+        ws[f'H{current_row}'].alignment = Alignment(horizontal='right')
+        ws[f'I{current_row}'] = f'=I{current_row + 1}-I{current_row - 1}'
+        ws[f'I{current_row}'].number_format = '#,##0 "FCFA"'
+        ws[f'I{current_row}'].font = Font(bold=True, size=12)
+        ws[f'I{current_row}'].border = Border(bottom=Side(style='thin'))
+
+        current_row += 1
+
+        # Total TTC (colonne J maintenant)
+        ws[f'H{current_row}'] = "TOTAL TTC :"
+        ws[f'H{current_row}'].font = Font(bold=True, size=14, color="006400")
+        ws[f'H{current_row}'].alignment = Alignment(horizontal='right')
+        ws[f'I{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",J:J)'
+        ws[f'I{current_row}'].number_format = '#,##0 "FCFA"'
+        ws[f'I{current_row}'].font = Font(bold=True, size=14, color="FFFFFF")
+        ws[f'I{current_row}'].fill = PatternFill(start_color="27AE60", end_color="27AE60", fill_type="solid")
+        ws[f'I{current_row}'].border = Border(
+            top=Side(style='double'),
+            bottom=Side(style='double')
+        )
+
+        # ========================================
+        # ✍️ SIGNATURE EN BAS
+        # ========================================
+
+        current_row += 4  # Espace entre total et signature
+        signature_row = current_row
+
+        try:
+            # Chercher la signature
+            signature_paths = [
+                "assets/signature.png",
+                "assets/signature.jpg",
+                "signature.png",
+                "signature.jpg"
+            ]
+
+            signature_path = None
+            for path in signature_paths:
+                if os.path.exists(path):
+                    signature_path = path
+                    break
+
+            if signature_path:
+                # Ajouter la signature
+                sig_img = XLImage(signature_path)
+
+                # Redimensionner signature (largeur 150px)
+                sig_img.width = 150
+                sig_img.height = int(150 / sig_img.width * sig_img.height) if sig_img.width > 0 else 80
+
+                # Positionner en bas à droite (colonne H)
+                ws.add_image(sig_img, f'H{signature_row}')
+
+                print(f"   ✅ Signature ajoutée dans Excel : {signature_path}")
+
+                current_row += 6  # Espace pour la signature
+            else:
+                print("   ⚠️ Signature non trouvée - ajout cadre signature")
+
+                # Alternative : Zone pour signature manuscrite
+                ws.merge_cells(f'H{current_row}:J{current_row}')
+                ws[f'H{current_row}'] = "Signature et Cachet"
+                ws[f'H{current_row}'].font = Font(bold=True, size=11)
+                ws[f'H{current_row}'].alignment = Alignment(horizontal='center', vertical='center')
+                ws[f'H{current_row}'].border = Border(
+                    bottom=Side(style='thin'),
+                    top=Side(style='thin'),
+                    left=Side(style='thin'),
+                    right=Side(style='thin')
+                )
+                ws.row_dimensions[current_row].height = 60
+
+                current_row += 1
+
+        except Exception as e:
+            print(f"   ⚠️ Erreur ajout signature Excel : {e}")
+            import traceback
+            traceback.print_exc()
+
+            # Fallback : Ligne pour signature
+            ws.merge_cells(f'H{current_row}:J{current_row}')
+            ws[f'H{current_row}'] = "_" * 30
+            ws[f'H{current_row}'].alignment = Alignment(horizontal='center')
+            current_row += 1
+            ws[f'H{current_row}'] = "Signature et Cachet"
+            ws[f'H{current_row}'].font = Font(bold=True, size=10)
+            ws[f'H{current_row}'].alignment = Alignment(horizontal='center')
 
     # ========================================
     # 📐 LARGEURS COLONNES

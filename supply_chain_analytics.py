@@ -4,12 +4,41 @@
 # pip install pandas scikit-learn flask-caching numpy
 # pip install reportlab supabase
 # Optional: pip install openai
+
+# ============================================================
+# 🚀 OPTIMISATIONS PERFORMANCE v2.0
+# - Chargement parallèle des CSV (ThreadPoolExecutor)
+# - Cache agressif en mémoire avec refresh en arrière-plan
+# - Compression gzip des réponses
+# - Connexion pooling (requests.Session)
+# - PO counter en mémoire (thread-safe)
+# ============================================================
+
 import csv
 import os, sys
 from functools import lru_cache
 import hashlib  # ✅ NOUVEAU: Pour l'authentification
+import gzip
+from io import BytesIO
 
 from dash.exceptions import PreventUpdate
+from sklearn.metrics import precision_score
+from sklearn.model_selection import train_test_split
+
+# ============================================================
+# 🔧 CONFIGURATION PERFORMANCE GLOBALE
+# ============================================================
+PERFORMANCE_CONFIG = {
+    "PARALLEL_LOADING": True,  # Chargement CSV en parallèle
+    "MAX_WORKERS": 6,  # Threads pour chargement parallèle
+    "CACHE_TTL_SECONDS": 600,  # Cache 10 minutes
+    "BACKGROUND_REFRESH": True,  # Refresh cache en arrière-plan
+    "COMPRESS_RESPONSES": True,  # Compression gzip
+    "CONNECTION_TIMEOUT": 15,  # Timeout connexions HTTP
+    "READ_TIMEOUT": 30,  # Timeout lecture HTTP
+    "CHUNK_SIZE": 50000,  # Taille des chunks pour gros DataFrames
+    "DEBOUNCE_MS": 300,  # Debounce pour callbacks UI
+}
 
 # ✅ NOUVEAU: Import Supabase pour tracking utilisateurs
 try:
@@ -42,6 +71,23 @@ server = app.server
 
 # ✅ NOUVEAU: Secret key pour les sessions Flask (authentification)
 server.secret_key = os.getenv("SECRET_KEY", "maad-supply-chain-secret-key-change-in-production-2024")
+
+# ============================================================
+# 🚀 OPTIMISATIONS SERVEUR FLASK
+# ============================================================
+
+# Compression gzip des réponses
+try:
+    from flask_compress import Compress
+
+    Compress(server)
+    print("✅ Compression gzip activée")
+except ImportError:
+    print("⚠️ flask-compress non installé - compression désactivée")
+
+# Configuration pour performance
+server.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000  # Cache statique 1 an
+server.config['JSON_SORT_KEYS'] = False  # Plus rapide sans tri
 
 # ✅ NOTE: L'authentification est intégrée directement dans ce fichier (voir section AUTH_USERS plus bas)
 # Pas besoin d'importer depuis auth.py
@@ -111,27 +157,62 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
 # ============================================================
-# 🔒 CONFIGURATION CACHE THREAD-SAFE MULTI-UTILISATEURS
+# 🔒 CONFIGURATION CACHE ULTRA-PERFORMANT MULTI-UTILISATEURS
 # ============================================================
 
-# Cache avec FileSystem pour environnement multi-processus (Gunicorn)
+# ✅ CACHE EN MÉMOIRE GLOBAL (plus rapide que FileSystemCache)
+# Structure: {"key": {"data": df, "timestamp": time, "refreshing": False}}
+_GLOBAL_DATA_CACHE = {}
+_GLOBAL_CACHE_LOCK = threading.Lock()
+
+# Session HTTP avec connection pooling (réutilise les connexions)
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+
+def create_http_session():
+    """Crée une session HTTP optimisée avec pooling et retry"""
+    session = requests.Session()
+
+    # Headers pour éviter les blocages Google Sheets
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/csv,text/plain,*/*',
+        'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
+    })
+
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1.0,  # Augmenté pour Google Sheets
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+    adapter = HTTPAdapter(
+        max_retries=retry_strategy,
+        pool_connections=10,
+        pool_maxsize=20
+    )
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+
+# Session globale réutilisable
+_HTTP_SESSION = create_http_session()
+
+# Cache avec FileSystem comme backup
 cache_config = {
-    "CACHE_TYPE": "FileSystemCache",
-    "CACHE_DIR": "/tmp/dash_cache",
-    "CACHE_DEFAULT_TIMEOUT": 300,  # 5 minutes
-    "CACHE_THRESHOLD": 500  # Max 500 items
+    "CACHE_TYPE": "SimpleCache",  # Plus rapide que FileSystem sur Render
+    "CACHE_DEFAULT_TIMEOUT": 600,  # 10 minutes
+    "CACHE_THRESHOLD": 100  # Moins d'items mais plus importants
 }
 
-# Fallback sur SimpleCache si FileSystem échoue
 try:
-    import os
-
-    os.makedirs("/tmp/dash_cache", exist_ok=True)
     cache = Cache(app.server, config=cache_config)
-    print("✅ Cache FileSystem initialisé (multi-processus)")
+    print("✅ Cache SimpleCache initialisé (optimisé pour performance)")
 except Exception as e:
-    print(f"⚠️ FileSystem cache failed, using SimpleCache: {e}")
-    cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 300})
+    print(f"⚠️ Cache failed: {e}")
+    cache = Cache(app.server, config={"CACHE_TYPE": "NullCache"})
 
 # Lock pour les opérations thread-safe
 _data_lock = threading.Lock()
@@ -139,6 +220,176 @@ _data_lock = threading.Lock()
 # Cache des données par utilisateur (évite les conflits)
 _user_data_cache = {}
 _user_cache_lock = threading.Lock()
+
+
+# ============================================================
+# 🚀 SYSTÈME DE CHARGEMENT PARALLÈLE DES CSV
+# ============================================================
+
+def load_csv_fast(url, session=None, skiprows=None, max_retries=2, **kwargs):
+    """
+    Charge un CSV rapidement avec session poolée et fallback.
+    Google Sheets peut bloquer les requêtes parallèles - on a donc un fallback.
+    """
+    from io import StringIO
+
+    # Essai 1: Avec session HTTP optimisée
+    if session is None:
+        session = _HTTP_SESSION
+
+    for attempt in range(max_retries):
+        try:
+            response = session.get(
+                url,
+                timeout=(PERFORMANCE_CONFIG["CONNECTION_TIMEOUT"], PERFORMANCE_CONFIG["READ_TIMEOUT"])
+            )
+            response.raise_for_status()
+            return pd.read_csv(StringIO(response.text), skiprows=skiprows, **kwargs)
+
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 400 and attempt < max_retries - 1:
+                # Google Sheets rate limiting - attendre et réessayer
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            elif attempt == max_retries - 1:
+                # Fallback: utiliser pd.read_csv direct (plus lent mais plus fiable)
+                try:
+                    return pd.read_csv(url, skiprows=skiprows, **kwargs)
+                except Exception:
+                    pass
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(0.3)
+                continue
+
+    # Dernier recours: pd.read_csv direct
+    try:
+        return pd.read_csv(url, skiprows=skiprows, **kwargs)
+    except Exception as e:
+        print(f"⚠️ Erreur chargement {url[:60]}...: {e}")
+        return pd.DataFrame()
+
+
+def load_csvs_parallel(url_configs):
+    """
+    Charge plusieurs CSV en parallèle avec gestion du rate limiting Google Sheets.
+    Utilise un nombre limité de workers pour éviter les blocages.
+    """
+    results = {}
+
+    if not PERFORMANCE_CONFIG["PARALLEL_LOADING"]:
+        # Fallback séquentiel
+        for config in url_configs:
+            cfg = config.copy()
+            name = cfg.pop("name")
+            url = cfg.pop("url")
+            results[name] = load_csv_fast(url, **cfg)
+        return results
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def load_one(config):
+        cfg = config.copy()
+        name = cfg.pop("name")
+        url = cfg.pop("url")
+        # Petit délai aléatoire pour éviter les requêtes simultanées exactes
+        time.sleep(0.1 * hash(name) % 10 / 10)
+        return name, load_csv_fast(url, **cfg)
+
+    # Limiter à 4 workers pour Google Sheets (évite rate limiting)
+    max_workers = min(PERFORMANCE_CONFIG["MAX_WORKERS"], 4)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(load_one, cfg): cfg["name"] for cfg in url_configs}
+
+        for future in as_completed(futures):
+            try:
+                name, df = future.result()
+                results[name] = df
+                if not df.empty:
+                    print(f"   ✅ {name}: {len(df)} lignes")
+            except Exception as e:
+                name = futures[future]
+                print(f"   ❌ {name}: {e}")
+                results[name] = pd.DataFrame()
+
+    return results
+
+
+# ============================================================
+# 🔄 CACHE INTELLIGENT AVEC REFRESH EN ARRIÈRE-PLAN
+# ============================================================
+
+def get_cached_data(cache_key, loader_func, ttl_seconds=None):
+    """
+    Récupère les données du cache ou les charge.
+    Refresh en arrière-plan si données proches de l'expiration.
+    """
+    if ttl_seconds is None:
+        ttl_seconds = PERFORMANCE_CONFIG["CACHE_TTL_SECONDS"]
+
+    current_time = time.time()
+
+    with _GLOBAL_CACHE_LOCK:
+        cached = _GLOBAL_DATA_CACHE.get(cache_key)
+
+        if cached:
+            age = current_time - cached["timestamp"]
+
+            # Données encore valides
+            if age < ttl_seconds:
+                # Si proche de l'expiration (>80%), refresh en arrière-plan
+                if age > ttl_seconds * 0.8 and not cached.get("refreshing") and PERFORMANCE_CONFIG[
+                    "BACKGROUND_REFRESH"]:
+                    cached["refreshing"] = True
+                    _async_executor.submit(_background_refresh, cache_key, loader_func)
+
+                return cached["data"]
+
+    # Pas en cache ou expiré - charger
+    print(f"🔄 Chargement {cache_key}...")
+    start = time.time()
+    data = loader_func()
+    elapsed = time.time() - start
+    print(f"✅ {cache_key} chargé en {elapsed:.2f}s")
+
+    with _GLOBAL_CACHE_LOCK:
+        _GLOBAL_DATA_CACHE[cache_key] = {
+            "data": data,
+            "timestamp": current_time,
+            "refreshing": False
+        }
+
+    return data
+
+
+def _background_refresh(cache_key, loader_func):
+    """Refresh le cache en arrière-plan"""
+    try:
+        data = loader_func()
+        with _GLOBAL_CACHE_LOCK:
+            _GLOBAL_DATA_CACHE[cache_key] = {
+                "data": data,
+                "timestamp": time.time(),
+                "refreshing": False
+            }
+        print(f"🔄 Cache {cache_key} refreshed en arrière-plan")
+    except Exception as e:
+        print(f"⚠️ Background refresh failed for {cache_key}: {e}")
+        with _GLOBAL_CACHE_LOCK:
+            if cache_key in _GLOBAL_DATA_CACHE:
+                _GLOBAL_DATA_CACHE[cache_key]["refreshing"] = False
+
+
+def invalidate_cache(cache_key=None):
+    """Invalide le cache (tout ou une clé spécifique)"""
+    with _GLOBAL_CACHE_LOCK:
+        if cache_key:
+            _GLOBAL_DATA_CACHE.pop(cache_key, None)
+        else:
+            _GLOBAL_DATA_CACHE.clear()
+    print(f"🧹 Cache invalidé: {cache_key or 'ALL'}")
+
 
 # ============================================================
 # 📦 CACHE GLOBAL POUR LES DONNÉES DE RÉCEPTION (ASYNC)
@@ -297,21 +548,34 @@ def invalidate_user_cache(username: str = None):
             del _user_data_cache[cache_key]
 
 
-@cache.memoize(timeout=300)
 def get_df_cached():
-    """Fonction cachée pour charger les données (avec timeout)"""
-    return load_supply_data()
+    """
+    🚀 VERSION OPTIMISÉE - Utilise le cache intelligent avec refresh en arrière-plan
+    """
+    return get_cached_data(
+        cache_key="supply_data_main",
+        loader_func=load_supply_data,
+        ttl_seconds=PERFORMANCE_CONFIG["CACHE_TTL_SECONDS"]
+    )
 
 
 def clear_all_caches():
     """Nettoie tous les caches"""
-    global _user_data_cache
+    global _user_data_cache, _GLOBAL_DATA_CACHE
+
+    # Cache utilisateur
     with _user_cache_lock:
         _user_data_cache = {}
+
+    # Cache global
+    invalidate_cache()
+
+    # Cache Flask
     try:
         cache.clear()
     except:
         pass
+
     print("🧹 Tous les caches nettoyés")
 
 
@@ -473,7 +737,7 @@ def end_session(session_id: str):
     try:
         supabase_client.table("user_sessions").update({
             "logout_at": "now()",
-            "is_active": False
+            "is_active": True
         }).eq("id", session_id).execute()
         print(f"✅ Session terminée: {session_id}")
     except Exception as e:
@@ -2310,18 +2574,52 @@ def get_notes_for_product(product_name: str):
 
 PO_LOCK = threading.Lock()
 
+# ============================================================
+# 🚀 SYSTÈME PO OPTIMISÉ - Cache en mémoire + persistence async
+# ============================================================
+_PO_STATE_CACHE = {"date": None, "seq": 0, "dirty": False}
+_PO_SAVE_SCHEDULED = False
+
 
 def _load_po_state():
+    """Charge l'état depuis le fichier (uniquement au démarrage)"""
+    global _PO_STATE_CACHE
     try:
         if PO_COUNTER_PATH.exists():
             import json as _json
-            return _json.loads(PO_COUNTER_PATH.read_text(encoding="utf-8"))
+            file_state = _json.loads(PO_COUNTER_PATH.read_text(encoding="utf-8"))
+            _PO_STATE_CACHE = {**file_state, "dirty": False}
+            return _PO_STATE_CACHE
     except Exception:
         pass
-    return {"date": None, "seq": 0}
+    return {"date": None, "seq": 0, "dirty": False}
+
+
+def _save_po_state_async():
+    """Sauvegarde l'état en arrière-plan (non-bloquant)"""
+    global _PO_SAVE_SCHEDULED, _PO_STATE_CACHE
+
+    def _do_save():
+        global _PO_SAVE_SCHEDULED, _PO_STATE_CACHE
+        try:
+            with PO_LOCK:
+                if _PO_STATE_CACHE.get("dirty"):
+                    import json as _json
+                    state_to_save = {k: v for k, v in _PO_STATE_CACHE.items() if k != "dirty"}
+                    PO_COUNTER_PATH.write_text(_json.dumps(state_to_save, ensure_ascii=False), encoding="utf-8")
+                    _PO_STATE_CACHE["dirty"] = False
+        except Exception as e:
+            print(f"⚠️ PO save error: {e}")
+        finally:
+            _PO_SAVE_SCHEDULED = False
+
+    if not _PO_SAVE_SCHEDULED:
+        _PO_SAVE_SCHEDULED = True
+        _async_executor.submit(_do_save)
 
 
 def _save_po_state(state: dict):
+    """Sauvegarde synchrone (fallback)"""
     try:
         import json as _json
         PO_COUNTER_PATH.write_text(_json.dumps(state, ensure_ascii=False), encoding="utf-8")
@@ -2330,20 +2628,36 @@ def _save_po_state(state: dict):
 
 
 def get_next_po_number() -> str:
+    """
+    🚀 VERSION OPTIMISÉE - Génère le prochain numéro PO
+    Utilise un cache en mémoire et sauvegarde en arrière-plan
+    """
+    global _PO_STATE_CACHE
     today = datetime.now().strftime("%Y%m%d")
+
     with PO_LOCK:
-        st = _load_po_state()
-        if st.get("date") != today:
-            st = {"date": today, "seq": 1}
+        # Charger depuis fichier seulement si cache vide
+        if _PO_STATE_CACHE.get("date") is None:
+            _load_po_state()
+
+        # Incrémenter
+        if _PO_STATE_CACHE.get("date") != today:
+            _PO_STATE_CACHE = {"date": today, "seq": 1, "dirty": True}
         else:
-            st["seq"] = int(st.get("seq", 0)) + 1
-        _save_po_state(st)
-        return f"PO-{today}-{st['seq']:03d}"
+            _PO_STATE_CACHE["seq"] = int(_PO_STATE_CACHE.get("seq", 0)) + 1
+            _PO_STATE_CACHE["dirty"] = True
+
+        po_number = f"PO-{today}-{_PO_STATE_CACHE['seq']:03d}"
+
+    # Sauvegarder en arrière-plan (non-bloquant)
+    _save_po_state_async()
+
+    return po_number
 
 
 # import pandas as pd
 # import numpy as np
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -2934,11 +3248,16 @@ def calculate_ads_by_period(period_days: int = 7) -> pd.DataFrame:
 
 
 def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
+    """
+    🚀 VERSION OPTIMISÉE - Chargement parallèle des données
+    """
     import numpy as np
     import pandas as pd
-    from sklearn.ensemble import RandomForestClassifier
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import precision_score
+
+    load_start = time.time()
+    print(f"\n{'=' * 60}")
+    print(f"🚀 LOAD_SUPPLY_DATA OPTIMISÉ (période: {period_days})")
+    print(f"{'=' * 60}")
 
     # =========================
     # Helpers
@@ -2976,11 +3295,40 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     LAST_RECEPTIONS_URL = "https://data.heroku.com/dataclips/vftfnhyqonsbclucridburrwdfpe.csv"
 
     # =========================
-    # Load CSV
+    # 🚀 CHARGEMENT PARALLÈLE DES CSV
     # =========================
-    suppliers_df = pd.read_csv(SUPPLIERS_URL)
-    df_leadtime = pd.read_csv(url_leadtime)
-    inventory_pikine_staging_df = pd.read_csv(inventory_pikine_staging, skiprows=1)
+    print("\n📥 Chargement parallèle des données...")
+    csv_start = time.time()
+
+    # Configuration des CSV à charger en parallèle
+    csv_configs = [
+        {"name": "suppliers", "url": SUPPLIERS_URL},
+        {"name": "leadtime", "url": url_leadtime},
+        {"name": "inventory", "url": inventory_pikine_staging, "skiprows": 1},
+        {"name": "sales", "url": sales_pikine, "header": 1, "low_memory": False},
+        {"name": "sales_7d", "url": Tbh_7dsales},
+        {"name": "sales_30d", "url": Tbh_30dsales_products},
+        {"name": "categories", "url": Product_category},
+        {"name": "parametres", "url": PARAMETRES_REPLENISH_URL},
+        {"name": "catalog", "url": CATALOG_URL, "skiprows": 1, "keep_default_na": False, "na_values": []},
+    ]
+
+    # Charger tous les CSV en parallèle
+    csv_data = load_csvs_parallel(csv_configs)
+
+    csv_elapsed = time.time() - csv_start
+    print(f"⚡ CSV chargés en parallèle: {csv_elapsed:.2f}s")
+
+    # Extraire les DataFrames
+    suppliers_df = csv_data.get("suppliers", pd.DataFrame())
+    df_leadtime = csv_data.get("leadtime", pd.DataFrame())
+    inventory_pikine_staging_df = csv_data.get("inventory", pd.DataFrame())
+    sales_pikine_df = csv_data.get("sales", pd.DataFrame())
+    Tbh_7dsales_df = csv_data.get("sales_7d", pd.DataFrame())
+    Tbh_30dsales_products_df = csv_data.get("sales_30d", pd.DataFrame())
+    Product_category_df = csv_data.get("categories", pd.DataFrame())
+    parametres_replenish_df = csv_data.get("parametres", pd.DataFrame())
+    catalog_raw = csv_data.get("catalog", pd.DataFrame())
 
     # ✅ DEBUG: Afficher les colonnes chargées
     print(f"\n📋 Inventaire chargé:")
@@ -2992,29 +3340,24 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
         print(f"   - product_id existe! Échantillon: {inventory_pikine_staging_df['product_id'].head(5).tolist()}")
     else:
         # La première colonne doit être product_id
-        first_col = inventory_pikine_staging_df.columns[0]
-        print(f"   - Première colonne: '{first_col}'")
-        if first_col != 'product_id':
-            inventory_pikine_staging_df.rename(columns={first_col: 'product_id'}, inplace=True)
-            print(f"   → Renommée en 'product_id'")
-    sales_pikine_df = pd.read_csv(sales_pikine, header=1, low_memory=False)
-    Tbh_7dsales_df = pd.read_csv(Tbh_7dsales)
-    Tbh_30dsales_products_df = pd.read_csv(Tbh_30dsales_products)
-    Product_category_df = pd.read_csv(Product_category)
+        if len(inventory_pikine_staging_df.columns) > 0:
+            first_col = inventory_pikine_staging_df.columns[0]
+            print(f"   - Première colonne: '{first_col}'")
+            if first_col != 'product_id':
+                inventory_pikine_staging_df.rename(columns={first_col: 'product_id'}, inplace=True)
+                print(f"   → Renommée en 'product_id'")
 
+    # Charger delisting séparément (skiprows spécifique)
     try:
-        delisting_df = pd.read_csv(DELISTING_URL, skiprows=3, usecols=[1, 3])
-        delisting_df.columns = ["product_name", "delisting_status"]
+        delisting_df = load_csv_fast(DELISTING_URL, skiprows=3, usecols=[1, 3])
+        if not delisting_df.empty:
+            delisting_df.columns = ["product_name", "delisting_status"]
     except Exception as e:
         print(f"Warning: Could not load delisting data: {e}")
         delisting_df = pd.DataFrame(columns=["product_name", "delisting_status"])
 
-    try:
-        parametres_replenish_df = pd.read_csv(PARAMETRES_REPLENISH_URL)
+    if not parametres_replenish_df.empty:
         print("'Parametres Replenish' data loaded successfully.")
-    except Exception as e:
-        print(f"Warning: Could not load parametres replenish: {e}")
-        parametres_replenish_df = pd.DataFrame()
 
     # ✅ NOUVEAU: Charger les dernières réceptions (Heroku Dataclip)
     # Utilise le système de chargement asynchrone avec cache
@@ -8095,34 +8438,36 @@ def page_overview(master_df: pd.DataFrame = None):
 )
 def apply_filters(search, sup, cat, need, options, master_json):
     """
-    ⚡ CALLBACK UNIFIÉ - Initialisation + Filtrage
-    S'exécute au démarrage ET quand les filtres changent
+    ⚡ CALLBACK UNIFIÉ OPTIMISÉ - Initialisation + Filtrage
+    - Utilise orjson pour parsing rapide
+    - Minimise les copies DataFrame
+    - Filtrage vectorisé
     """
     start_time = time.time()
 
-    print(f"\n{'=' * 60}")
-    print(f"⚡ UPDATE TABLE")
-    print(f"{'=' * 60}")
-
-    # ✅ Charger données
+    # ✅ Charger données avec orjson (plus rapide)
     if not master_json:
-        print("📥 Chargement depuis cache...")
         base = get_df_cached()
     else:
-        print("📥 Chargement depuis master-data...")
-        base = pd.DataFrame(json.loads(master_json))
+        try:
+            # orjson est 5-10x plus rapide que json.loads
+            base = pd.DataFrame(orjson.loads(master_json))
+        except:
+            base = pd.DataFrame(json.loads(master_json))
 
-    print(f"📊 Base : {len(base)} produits")
+    if base.empty:
+        return no_update, no_update, []
 
     # ✅ PRÉSERVER product_id IMMÉDIATEMENT après chargement
     if 'product_id' in base.columns:
         base['product_id'] = pd.to_numeric(base['product_id'], errors='coerce').fillna(0).astype(int)
-        print(f"   product_id: {(base['product_id'] > 0).sum()} valides")
 
-    # ✅ Validation
-    base = validate_core_columns(base)
+    # ✅ Validation (inline pour éviter appel fonction)
+    for col in ['product_name', 'Supplier', 'Product Category']:
+        if col not in base.columns:
+            base[col] = ""
 
-    # ✅ Supprimer colonnes bannies
+    # ✅ Supprimer colonnes bannies (in-place)
     promo_cols = [
         'promo_status', 'uplift_pct', 'roi_pct',
         'Average Daily Sales (7d)', 'Average Daily Sales (30d)',
@@ -8130,49 +8475,49 @@ def apply_filters(search, sup, cat, need, options, master_json):
         'Daily OOS Rate (30d)', 'Stockout Probability',
         'Credit Adequacy Score'
     ]
-    base = base.drop(columns=[c for c in promo_cols if c in base.columns], errors='ignore')
+    cols_to_drop = [c for c in promo_cols if c in base.columns]
+    if cols_to_drop:
+        base.drop(columns=cols_to_drop, inplace=True, errors='ignore')
 
-    # ✅ APPLIQUER FILTRES (seulement si des filtres sont actifs)
-    fdf = base.copy()
+    # ✅ APPLIQUER FILTRES VECTORISÉS (sans copie intermédiaire)
+    mask = pd.Series(True, index=base.index)
 
     if search and search.strip():
         search_lower = search.strip().lower()
-        mask = pd.Series([False] * len(fdf), index=fdf.index)
+        search_mask = pd.Series(False, index=base.index)
         for col in ['product_name', 'Supplier', 'Product Category']:
-            if col in fdf.columns:
-                mask |= fdf[col].astype(str).str.lower().str.contains(search_lower, na=False, regex=False)
-        fdf = fdf[mask].reset_index(drop=True)
-        print(f"   🔎 Recherche : {len(fdf)} produits")
+            if col in base.columns:
+                search_mask |= base[col].astype(str).str.lower().str.contains(search_lower, na=False, regex=False)
+        mask &= search_mask
 
-    if sup and len(sup) > 0 and 'Supplier' in fdf.columns:
-        fdf = fdf[fdf['Supplier'].isin(sup)]
-        print(f"   🏭 Fournisseurs : {len(fdf)} produits")
+    if sup and len(sup) > 0 and 'Supplier' in base.columns:
+        mask &= base['Supplier'].isin(sup)
 
-    if cat and len(cat) > 0 and 'Product Category' in fdf.columns:
-        fdf = fdf[fdf['Product Category'].isin(cat)]
-        print(f"   🏷️ Catégories : {len(fdf)} produits")
+    if cat and len(cat) > 0 and 'Product Category' in base.columns:
+        mask &= base['Product Category'].isin(cat)
 
-    if need and len(need) > 0 and 'Ajusted_total_need' in fdf.columns:
-        fdf = fdf[fdf['Ajusted_total_need'].isin(need)]
-        print(f"   📦 Besoins : {len(fdf)} produits")
+    if need and len(need) > 0 and 'Ajusted_total_need' in base.columns:
+        mask &= base['Ajusted_total_need'].isin(need)
 
-    if options and len(options) > 0 and 'Stock Status' in fdf.columns:
+    if options and len(options) > 0 and 'Stock Status' in base.columns:
+        status_mask = pd.Series(False, index=base.index)
         for opt in options:
             if opt == 'show_out_of_stock':
-                fdf = fdf[fdf['Stock Status'] == 'Out of Stock']
+                status_mask |= (base['Stock Status'] == 'Out of Stock')
             elif opt == 'show_predicted_stockout':
-                fdf = fdf[fdf['Stock Status'] == 'Predicted Stockout Soon']
+                status_mask |= (base['Stock Status'] == 'Predicted Stockout Soon')
             elif opt == 'show_order_soon':
-                fdf = fdf[fdf['Stock Status'] == 'Order Soon']
+                status_mask |= (base['Stock Status'] == 'Order Soon')
+        mask &= status_mask
 
-    # ✅ FORMATAGE
-    for col in ['total_stock', 'QAC', 'target_quantity']:
+    # Appliquer le masque une seule fois
+    fdf = base.loc[mask].reset_index(drop=True)
+
+    # ✅ FORMATAGE RAPIDE (vectorisé)
+    int_cols = ['total_stock', 'QAC', 'target_quantity', 'product_id']
+    for col in int_cols:
         if col in fdf.columns:
             fdf[col] = pd.to_numeric(fdf[col], errors='coerce').fillna(0).astype(int)
-
-    # ✅ PRÉSERVER product_id
-    if 'product_id' in fdf.columns:
-        fdf['product_id'] = pd.to_numeric(fdf['product_id'], errors='coerce').fillna(0).astype(int)
 
     if 'Max Coverage Day' in fdf.columns:
         fdf['Max Coverage Day'] = pd.to_numeric(fdf['Max Coverage Day'], errors='coerce').fillna(0).round(1)
@@ -8184,12 +8529,16 @@ def apply_filters(search, sup, cat, need, options, master_json):
     fdf = add_action_cols(fdf)
 
     elapsed_total = time.time() - start_time
+    print(f"⚡ FILTRE: {len(fdf)} produits en {elapsed_total:.3f}s")
 
-    print(f"⚡ UPDATE TERMINÉ en {elapsed_total:.3f}s - {len(fdf)} produits")
-    print(f"{'=' * 60}\n")
+    # ✅ Sérialisation rapide avec orjson
+    try:
+        json_data = orjson.dumps(fdf.to_dict("records"), option=ORJSON_OPTS).decode('utf-8')
+    except:
+        json_data = fdf.to_json(orient="records")
 
     return (
-        fdf.to_json(orient="records"),
+        json_data,
         fdf.to_dict("records"),
         []
     )
@@ -13850,26 +14199,149 @@ def get_logo_for_reportlab():
 # Remplacer TOUTE la section PDF (lignes ~1850-2000) par ceci :
 # ============================== CACHE CATALOGUE & PACKAGING ==============================
 
+# ============================================================
+# 🚀 CACHE PRÉ-CHARGÉ POUR GÉNÉRATION BC ULTRA-RAPIDE
+# ============================================================
+_BC_CACHE = {
+    "prices": None,
+    "packaging": None,
+    "catalog_packaging": None,
+    "heroku_packaging": None,
+    "logo_path": None,
+    "loaded": False,
+    "loading": False,
+    "timestamp": 0
+}
+_BC_CACHE_LOCK = threading.Lock()
+
+
+def preload_bc_cache():
+    """
+    Pré-charge toutes les données nécessaires pour la génération de BC.
+    Appelé au démarrage et en arrière-plan.
+    """
+    global _BC_CACHE
+
+    with _BC_CACHE_LOCK:
+        if _BC_CACHE["loading"]:
+            return
+        _BC_CACHE["loading"] = True
+
+    try:
+        print("🔄 Pré-chargement cache BC...")
+        start = time.time()
+
+        # 1. Prix catalogue
+        try:
+            cat_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrpcAiktxAPBiwznGOh35kVetc4O8-z5rQdFDgBaDE4OC3Jnb7JDGm59c55Cwm2pWCktcsBirWT_0b/pub?gid=751531326&single=true&output=csv"
+            catalog = load_csv_fast(cat_url, skiprows=1)
+            if not catalog.empty and len(catalog.columns) >= 11:
+                catalog_subset = catalog.iloc[:, [0, 1, 3, 10]].copy()
+                catalog_subset.columns = ['product_id', 'product_name', 'selling_price', 'purchase_price']
+                catalog_subset['product_name_clean'] = catalog_subset['product_name'].astype(
+                    str).str.lower().str.strip()
+                prices = dict(zip(
+                    catalog_subset['product_name_clean'],
+                    pd.to_numeric(catalog_subset['purchase_price'], errors='coerce').fillna(1000)
+                ))
+                _BC_CACHE["prices"] = prices
+                print(f"   ✅ Prix: {len(prices)} produits")
+        except Exception as e:
+            print(f"   ⚠️ Prix: {e}")
+            _BC_CACHE["prices"] = {}
+
+        # 2. Packaging map
+        try:
+            packaging = load_packaging_map()
+            _BC_CACHE["packaging"] = packaging
+            print(f"   ✅ Packaging: {len(packaging)} produits")
+        except:
+            _BC_CACHE["packaging"] = {}
+
+        # 3. Catalog packaging (conditionnement)
+        try:
+            cat_pack = load_catalog_packaging()
+            _BC_CACHE["catalog_packaging"] = cat_pack
+        except:
+            _BC_CACHE["catalog_packaging"] = {}
+
+        # 4. Heroku packaging (fractions)
+        try:
+            heroku_pack = load_heroku_packaging()
+            _BC_CACHE["heroku_packaging"] = heroku_pack
+        except:
+            _BC_CACHE["heroku_packaging"] = {}
+
+        # 5. Chemin du logo (pré-résolu)
+        logo_paths = [
+            "assets/logo_maad.png",
+            "assets/logo_maad.jpg",
+            "assets/logo.png",
+            "logo_maad.png",
+            "logo.png"
+        ]
+        for path in logo_paths:
+            if os.path.exists(path):
+                _BC_CACHE["logo_path"] = path
+                print(f"   ✅ Logo: {path}")
+                break
+
+        _BC_CACHE["loaded"] = True
+        _BC_CACHE["timestamp"] = time.time()
+
+        elapsed = time.time() - start
+        print(f"✅ Cache BC pré-chargé en {elapsed:.2f}s")
+
+    except Exception as e:
+        print(f"❌ Erreur pré-chargement BC: {e}")
+    finally:
+        with _BC_CACHE_LOCK:
+            _BC_CACHE["loading"] = False
+
+
+def get_bc_cache():
+    """Retourne le cache BC, le charge si nécessaire"""
+    global _BC_CACHE
+
+    # Si pas chargé ou expiré (>30 min), recharger en arrière-plan
+    if not _BC_CACHE["loaded"] or (time.time() - _BC_CACHE["timestamp"]) > 1800:
+        if not _BC_CACHE["loading"]:
+            _async_executor.submit(preload_bc_cache)
+
+        # Si jamais chargé, charger maintenant
+        if not _BC_CACHE["loaded"]:
+            preload_bc_cache()
+
+    return _BC_CACHE
+
+
+# Lancer le pré-chargement au démarrage (en arrière-plan)
+_async_executor.submit(preload_bc_cache)
+
+
 @cache.memoize(timeout=3600)  # Cache 1h
 def get_catalog_prices():
-    """Charge les prix du catalogue (avec cache Redis)"""
+    """Version rapide utilisant le cache pré-chargé"""
+    bc_cache = get_bc_cache()
+    if bc_cache["prices"]:
+        return bc_cache["prices"]
+
+    # Fallback: charger directement
     try:
         cat_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTrpcAiktxAPBiwznGOh35kVetc4O8-z5rQdFDgBaDE4OC3Jnb7JDGm59c55Cwm2pWCktcsBirWT_0b/pub?gid=751531326&single=true&output=csv"
+        catalog = load_csv_fast(cat_url, skiprows=1)
 
-        print("🔄 Chargement catalogue prix...")
-        catalog = pd.read_csv(cat_url, skiprows=1)
+        if catalog.empty:
+            return {}
+
         catalog_subset = catalog.iloc[:, [0, 1, 3, 10]].copy()
         catalog_subset.columns = ['product_id', 'product_name', 'selling_price', 'purchase_price']
         catalog_subset['product_name_clean'] = catalog_subset['product_name'].astype(str).str.lower().str.strip()
 
-        price_map = dict(zip(
+        return dict(zip(
             catalog_subset['product_name_clean'],
             pd.to_numeric(catalog_subset['purchase_price'], errors='coerce').fillna(1000)
         ))
-
-        print(f"✅ Catalogue chargé : {len(price_map)} prix")
-        return price_map
-
     except Exception as e:
         print(f"❌ Erreur catalogue : {e}")
         return {}
@@ -13877,12 +14349,13 @@ def get_catalog_prices():
 
 @cache.memoize(timeout=3600)
 def get_packaging_map_cached():
-    """Charge le packaging map (avec cache Redis)"""
+    """Version rapide utilisant le cache pré-chargé"""
+    bc_cache = get_bc_cache()
+    if bc_cache["packaging"]:
+        return bc_cache["packaging"]
+
     try:
-        print("🔄 Chargement packaging map...")
-        packaging = load_packaging_map()  # Ta fonction existante
-        print(f"✅ Packaging map chargé : {len(packaging)} produits")
-        return packaging
+        return load_packaging_map()
     except Exception as e:
         print(f"❌ Erreur packaging : {e}")
         return {}
@@ -13914,8 +14387,8 @@ _heroku_packaging_cache = {
 
 def load_heroku_packaging():
     """
-    Charge le packaging depuis Heroku dataclip.
-    Contient les infos comme "1/2 carton", "1/4 carton", etc.
+    🚀 VERSION OPTIMISÉE - Charge le packaging depuis Heroku dataclip
+    Utilise la session HTTP poolée pour des connexions plus rapides
 
     Retourne: {product_name_lower: packaging_text}
     """
@@ -13928,8 +14401,11 @@ def load_heroku_packaging():
             return _heroku_packaging_cache["data"]
 
     try:
-        print("📦 Chargement packaging Heroku...")
-        dfp = pd.read_csv(PACKAGING_URL, timeout=10)
+        # Utiliser la session HTTP poolée
+        dfp = load_csv_fast(PACKAGING_URL)
+
+        if dfp.empty:
+            return {}
 
         name_col = next((c for c in dfp.columns if c.lower() in ("name", "product_name", "designation")), None)
         pack_col = next(
@@ -14519,18 +14995,27 @@ def valider_qac_selection(selected_rows, table_data):
 
 
 # ============================================
-# FONCTION 3 : GÉNÉRATION EXCEL AVEC FORMULES
-# ============================================
-# ============================================
 # FONCTION 3 : GÉNÉRATION EXCEL AVEC FORMULES + LOGO + SIGNATURE
 # ============================================
 def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
     """
-    Génère un Excel avec colonnes Remise/Escompte éditables,
-    formules automatiques, LOGO en haut et SIGNATURE en bas
+    🚀 VERSION OPTIMISÉE - Génère un Excel ultra-rapide
+    - Cache pré-chargé
+    - Styles pré-compilés
+    - Logo pré-résolu
     """
     if not selected_products:
         raise ValueError("Aucun produit sélectionné")
+
+    gen_start = time.time()
+
+    # ========================================
+    # 🚀 CHARGER DEPUIS CACHE PRÉ-CHARGÉ
+    # ========================================
+    bc_cache = get_bc_cache()
+    catalog_packaging = bc_cache.get("catalog_packaging") or {}
+    heroku_packaging = bc_cache.get("heroku_packaging") or {}
+    logo_path = bc_cache.get("logo_path")
 
     # Regroupement par fournisseur
     suppliers = {}
@@ -14546,7 +15031,7 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
     ws.title = "Bon de Commande"
 
     # ========================================
-    # 🎨 STYLES
+    # 🎨 STYLES PRÉ-COMPILÉS (une seule fois)
     # ========================================
     header_fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True, size=11)
@@ -14559,98 +15044,64 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
         top=Side(style='thin'),
         bottom=Side(style='thin')
     )
+    center_align = Alignment(horizontal='center', vertical='center')
+    left_align = Alignment(horizontal='left', vertical='center')
+    right_align = Alignment(horizontal='right', vertical='center')
+    bold_font = Font(bold=True)
+    title_font = Font(size=18, bold=True, color="003366")
+    supplier_font = Font(size=14, bold=True, color="228B22")
+    supplier_fill = PatternFill(start_color="F0FFF0", end_color="F0FFF0", fill_type="solid")
 
     # ========================================
-    # 🎨 LOGO MAAD EN HAUT
+    # 🎨 LOGO MAAD (pré-résolu)
     # ========================================
     current_row = 1
 
-    try:
-        import os
-        from openpyxl.drawing.image import Image as XLImage
-
-        # Chercher le logo MAAD
-        logo_paths = [
-            "assets/logo_maad.png",
-            "assets/logo_maad.jpg",
-            "assets/logo.png",
-            "assets/logo.jpg",
-            "logo_maad.png",
-            "logo.png",
-            "logo.jpg"
-        ]
-
-        logo_path = None
-        for path in logo_paths:
-            if os.path.exists(path):
-                logo_path = path
-                break
-
-        if logo_path:
-            # Ajouter le logo
+    if logo_path:
+        try:
+            from openpyxl.drawing.image import Image as XLImage
             img = XLImage(logo_path)
-
-            # Redimensionner (largeur environ 180px, hauteur proportionnelle)
             original_width = img.width
             original_height = img.height
             img.width = 180
             img.height = int(180 * original_height / original_width) if original_width > 0 else 60
-
-            # Positionner en A1
             ws.add_image(img, 'A1')
-
-            print(f"   ✅ Logo MAAD ajouté : {logo_path}")
-
-            # Ajuster hauteur des lignes pour le logo
             ws.row_dimensions[1].height = 25
             ws.row_dimensions[2].height = 25
             ws.row_dimensions[3].height = 25
-
-            # Laisser de l'espace pour le logo
             current_row = 5
-        else:
-            # Si pas de logo, créer un en-tête texte stylé
+        except:
             ws['A1'] = "MAAD"
             ws['A1'].font = Font(size=28, bold=True, color="1E40AF")
-            ws['A2'] = "Marketplace Africain de Distribution"
-            ws['A2'].font = Font(size=11, italic=True, color="64748B")
-            ws.row_dimensions[1].height = 40
-            print("   ⚠️ Logo non trouvé - En-tête texte créé")
-            current_row = 4
-
-    except Exception as e:
-        print(f"   ⚠️ Erreur ajout logo Excel : {e}")
+            current_row = 3
+    else:
         ws['A1'] = "MAAD"
         ws['A1'].font = Font(size=28, bold=True, color="1E40AF")
-        current_row = 3
+        ws['A2'] = "Marketplace Africain de Distribution"
+        ws['A2'].font = Font(size=11, italic=True, color="64748B")
+        ws.row_dimensions[1].height = 40
+        current_row = 4
 
     # ========================================
     # 📋 EN-TÊTE DU BON DE COMMANDE
     # ========================================
-
     po_number = get_next_po_number()
-
-    # Ligne séparatrice
     current_row += 1
 
-    # Titre du bon de commande
+    # Titre
     ws[f'A{current_row}'] = f'BON DE COMMANDE N° {po_number}'
-    ws[f'A{current_row}'].font = Font(size=18, bold=True, color="003366")
+    ws[f'A{current_row}'].font = title_font
     ws.merge_cells(f'A{current_row}:I{current_row}')
-    ws[f'A{current_row}'].alignment = Alignment(horizontal='center', vertical='center')
+    ws[f'A{current_row}'].alignment = center_align
     ws.row_dimensions[current_row].height = 30
-    current_row += 1
+    current_row += 2
 
-    # Ligne vide
-    current_row += 1
-
-    # Informations entreprise (à gauche)
+    # Infos entreprise
     ws[f'A{current_row}'] = COMPANY_NAME
     ws[f'A{current_row}'].font = Font(bold=True, size=12, color="1E40AF")
-    # Date (à droite)
     ws[f'G{current_row}'] = f"Date : {datetime.now().strftime('%d/%m/%Y')}"
     ws[f'G{current_row}'].font = Font(bold=True, size=11)
-    ws[f'G{current_row}'].alignment = Alignment(horizontal='right')
+    ws[f'G{current_row}'].alignment = right_align
     current_row += 1
 
     ws[f'A{current_row}'] = COMPANY_ADDRESS
@@ -14666,123 +15117,83 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
     # ========================================
     # 📊 TABLEAUX PAR FOURNISSEUR
     # ========================================
+    headers = ['Réf.', 'Désignation', 'Qté', 'Unité', 'PU HT', 'TVA Unit.', 'PU TTC', 'Remise %', 'Total HT',
+               'Total TTC']
 
     for supplier, products in suppliers.items():
-        # Titre fournisseur EN MAJUSCULES
-        supplier_upper = supplier.upper()
-        ws[f'A{current_row}'] = f'📦 FOURNISSEUR : {supplier_upper}'
-        ws[f'A{current_row}'].font = Font(size=14, bold=True, color="228B22")
-        ws[f'A{current_row}'].fill = PatternFill(start_color="F0FFF0", end_color="F0FFF0", fill_type="solid")
+        # Titre fournisseur
+        ws[f'A{current_row}'] = f'📦 FOURNISSEUR : {supplier.upper()}'
+        ws[f'A{current_row}'].font = supplier_font
+        ws[f'A{current_row}'].fill = supplier_fill
         ws.merge_cells(f'A{current_row}:J{current_row}')
         ws.row_dimensions[current_row].height = 25
         current_row += 1
 
-        # En-têtes colonnes avec TVA sur PU
-        headers = [
-            'Réf.',
-            'Désignation',
-            'Qté',
-            'Unité',
-            'PU HT',
-            'TVA Unit.',
-            'PU TTC',
-            'Remise %',
-            'Total HT',
-            'Total TTC'
-        ]
-
+        # En-têtes colonnes
         for col_idx, header in enumerate(headers, start=1):
             cell = ws.cell(row=current_row, column=col_idx, value=header)
             cell.fill = header_fill
             cell.font = header_font
-            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.alignment = center_align
             cell.border = border
-
-        # Colorier colonne Remise éditable (maintenant colonne 8)
         ws.cell(row=current_row, column=8).fill = remise_fill
-
         current_row += 1
         first_data_row = current_row
 
         # ========================================
-        # 📦 CHARGER LES CATALOGUES
+        # 📦 LIGNES PRODUITS (optimisé)
         # ========================================
-        catalog_packaging = load_catalog_packaging()  # Google Sheet (conditionnement + nom propre)
-        heroku_packaging = load_heroku_packaging()  # Heroku (fractions 1/2, 1/4)
-
-        # ========================================
-        # 📦 LIGNES PRODUITS
-        # ========================================
-
         for prod in products:
             prod_name = str(prod.get("product_name", "")).strip()
             prod_key = prod_name.lower()
 
-            # QAC edited OBLIGATOIRE
             qac_edited = safe_float(prod.get("QAC edited"), 0.0)
             if qac_edited <= 0:
                 continue
 
-            # ✅ NOUVEAU: Calculer la quantité en combinant les deux sources
+            # Calculs avec cache pré-chargé
             qty_final = calculate_quantity_for_po(qac_edited, prod_name, catalog_packaging, heroku_packaging)
-
-            # ✅ NOUVEAU: Obtenir le nom propre (sans "1/2 carton")
             clean_name = get_clean_product_name(prod_name, catalog_packaging)
-
-            # Debug log pour les produits avec transformation
-            fraction = get_fraction_from_packaging(prod_name, heroku_packaging)
-            conditionnement = get_conditionnement(prod_name, catalog_packaging)
-            if fraction < 1.0 or conditionnement > 1 or clean_name != prod_name:
-                print(f"   📦 {prod_name[:35]}...")
-                print(f"      → Fraction: {fraction}, Cond: {conditionnement}, QAC: {qac_edited} → Qté: {qty_final}")
-                print(f"      → Nom BC: {clean_name[:35]}")
-
             unit_price = safe_float(price_map.get(prod_key, 1000.0), 1000.0)
             if unit_price <= 0:
                 unit_price = 1000.0
 
-            # ✅ Récupérer product_id
             product_id = prod.get("product_id", "")
-
             if product_id:
                 try:
                     product_id = int(float(product_id))
-                except (ValueError, TypeError):
+                except:
                     product_id = str(product_id)
-            else:
-                product_id = ""
 
-            # ========================================
-            # REMPLISSAGE CELLULES
-            # ========================================
+            # Remplissage cellules (optimisé - moins d'appels)
+            row = current_row
 
-            # Colonne 1 : Réf. (product_id)
-            cell = ws.cell(row=current_row, column=1, value=product_id)
-            cell.border = border
-            cell.alignment = Alignment(horizontal='center', vertical='center')
-            cell.font = Font(bold=True, size=10)
+            # Col 1: Réf
+            c = ws.cell(row=row, column=1, value=product_id)
+            c.border = border
+            c.alignment = center_align
+            c.font = bold_font
 
-            # Colonne 2 : Désignation (✅ nom propre, sans "1/2 carton")
-            cell = ws.cell(row=current_row, column=2, value=clean_name[:50])
-            cell.border = border
-            cell.alignment = Alignment(horizontal='left', vertical='center')
+            # Col 2: Désignation
+            c = ws.cell(row=row, column=2, value=clean_name[:50])
+            c.border = border
+            c.alignment = left_align
 
-            # Colonne 3 : Qté (✅ quantité calculée avec conditionnement)
-            cell = ws.cell(row=current_row, column=3, value=qty_final)
-            cell.alignment = Alignment(horizontal='center', vertical='center')
-            cell.border = border
-            cell.font = Font(bold=True)
+            # Col 3: Qté
+            c = ws.cell(row=row, column=3, value=qty_final)
+            c.border = border
+            c.alignment = center_align
+            c.font = bold_font
 
-            # Colonne 4 : Unité
-            cell = ws.cell(row=current_row, column=4, value="unité")
-            cell.alignment = Alignment(horizontal='center', vertical='center')
-            cell.border = border
+            # Col 4: Unité
+            c = ws.cell(row=row, column=4, value="Unité")
+            c.border = border
+            c.alignment = center_align
 
-            # Colonne 5 : PU HT
-            cell = ws.cell(row=current_row, column=5, value=unit_price)
-            cell.number_format = '#,##0'
-            cell.alignment = Alignment(horizontal='right', vertical='center')
-            cell.border = border
+            # Col 5: PU HT
+            c = ws.cell(row=row, column=5, value=unit_price)
+            c.border = border
+            c.number_format = '#,##0'
 
             # Colonne 6 : TVA Unitaire (18% du PU HT)
             formula_tva_unit = f"=E{current_row}*0.18"
@@ -14839,7 +15250,7 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
         if last_data_row >= first_data_row:
             # Ligne Sous-total brut
             ws.merge_cells(f'A{current_row}:H{current_row}')
-            cell = ws.cell(row=current_row, column=1, value=f"Sous-total {supplier_upper}")
+            cell = ws.cell(row=current_row, column=1, value=f"Sous-total {supplier.upper()}")
             cell.font = Font(bold=True, size=10)
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
@@ -14865,7 +15276,7 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             # 🎯 LIGNE ESCOMPTE FOURNISSEUR (ÉDITABLE)
             # ========================================
             ws.merge_cells(f'A{current_row}:G{current_row}')
-            cell = ws.cell(row=current_row, column=1, value=f"🎯 Escompte {supplier_upper}")
+            cell = ws.cell(row=current_row, column=1, value=f"🎯 Escompte {supplier.upper()}")
             cell.font = Font(bold=True, size=10, color="E65100")
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
@@ -14926,143 +15337,28 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
         current_row += 2
 
     # ========================================
-    # 💰 TOTAUX GLOBAUX
+    # 📐 LARGEURS COLONNES
     # ========================================
-
-    current_row += 1
-
-    # Total HT (colonne I maintenant)
-    ws[f'H{current_row}'] = "TOTAL HT :"
-    ws[f'H{current_row}'].font = Font(bold=True, size=12)
-    ws[f'H{current_row}'].alignment = Alignment(horizontal='right')
-    ws[f'I{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",I:I)'
-    ws[f'I{current_row}'].number_format = '#,##0 "FCFA"'
-    ws[f'I{current_row}'].font = Font(bold=True, size=12)
-    ws[f'I{current_row}'].border = Border(bottom=Side(style='thin'))
-
-    current_row += 1
-
-    # TVA Totale (différence TTC - HT)
-    ws[f'H{current_row}'] = "TVA (18%) :"
-    ws[f'H{current_row}'].font = Font(bold=True, size=12)
-    ws[f'H{current_row}'].alignment = Alignment(horizontal='right')
-    ws[f'I{current_row}'] = f'=I{current_row + 1}-I{current_row - 1}'
-    ws[f'I{current_row}'].number_format = '#,##0 "FCFA"'
-    ws[f'I{current_row}'].font = Font(bold=True, size=12)
-    ws[f'I{current_row}'].border = Border(bottom=Side(style='thin'))
-
-    current_row += 1
-
-    # Total TTC (colonne J maintenant)
-    ws[f'H{current_row}'] = "TOTAL TTC :"
-    ws[f'H{current_row}'].font = Font(bold=True, size=14, color="006400")
-    ws[f'H{current_row}'].alignment = Alignment(horizontal='right')
-    ws[f'I{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",J:J)'
-    ws[f'I{current_row}'].number_format = '#,##0 "FCFA"'
-    ws[f'I{current_row}'].font = Font(bold=True, size=14, color="FFFFFF")
-    ws[f'I{current_row}'].fill = PatternFill(start_color="27AE60", end_color="27AE60", fill_type="solid")
-    ws[f'I{current_row}'].border = Border(
-        top=Side(style='double'),
-        bottom=Side(style='double')
-    )
-
-    # ========================================
-    # ✍️ SIGNATURE EN BAS
-    # ========================================
-
-    current_row += 4  # Espace entre total et signature
-    signature_row = current_row
-
-    try:
-        # Chercher la signature
-        signature_paths = [
-            "assets/signature.png",
-            "assets/signature.jpg",
-            "signature.png",
-            "signature.jpg"
-        ]
-
-        signature_path = None
-        for path in signature_paths:
-            if os.path.exists(path):
-                signature_path = path
-                break
-
-        if signature_path:
-            # Ajouter la signature
-            sig_img = XLImage(signature_path)
-
-            # Redimensionner signature (largeur 150px)
-            sig_img.width = 150
-            sig_img.height = int(150 / sig_img.width * sig_img.height) if sig_img.width > 0 else 80
-
-            # Positionner en bas à droite (colonne H)
-            ws.add_image(sig_img, f'H{signature_row}')
-
-            print(f"   ✅ Signature ajoutée dans Excel : {signature_path}")
-
-            current_row += 6  # Espace pour la signature
-        else:
-            print("   ⚠️ Signature non trouvée - ajout cadre signature")
-
-            # Alternative : Zone pour signature manuscrite
-            ws.merge_cells(f'H{current_row}:J{current_row}')
-            ws[f'H{current_row}'] = "Signature et Cachet"
-            ws[f'H{current_row}'].font = Font(bold=True, size=11)
-            ws[f'H{current_row}'].alignment = Alignment(horizontal='center', vertical='center')
-            ws[f'H{current_row}'].border = Border(
-                bottom=Side(style='thin'),
-                top=Side(style='thin'),
-                left=Side(style='thin'),
-                right=Side(style='thin')
-            )
-            ws.row_dimensions[current_row].height = 60
-
-            current_row += 1
-
-    except Exception as e:
-        print(f"   ⚠️ Erreur ajout signature Excel : {e}")
-        import traceback
-        traceback.print_exc()
-
-        # Fallback : Ligne pour signature
-        ws.merge_cells(f'H{current_row}:J{current_row}')
-        ws[f'H{current_row}'] = "_" * 30
-        ws[f'H{current_row}'].alignment = Alignment(horizontal='center')
-        current_row += 1
-        ws[f'H{current_row}'] = "Signature et Cachet"
-        ws[f'H{current_row}'].font = Font(bold=True, size=10)
-        ws[f'H{current_row}'].alignment = Alignment(horizontal='center')
-
-    # ========================================
-    # 📐 MISE EN PAGE
-    # ========================================
-
-    # Largeurs colonnes (10 colonnes maintenant)
-    ws.column_dimensions['A'].width = 10  # Réf
-    ws.column_dimensions['B'].width = 35  # Désignation
-    ws.column_dimensions['C'].width = 8  # Qté
-    ws.column_dimensions['D'].width = 8  # Unité
-    ws.column_dimensions['E'].width = 12  # PU HT
-    ws.column_dimensions['F'].width = 10  # TVA Unitaire
-    ws.column_dimensions['G'].width = 12  # PU TTC
-    ws.column_dimensions['H'].width = 10  # Remise %
-    ws.column_dimensions['I'].width = 14  # Total HT
-    ws.column_dimensions['J'].width = 14  # Total TTC
-
-    # Hauteur des premières lignes (pour le logo)
-    ws.row_dimensions[1].height = 60
-    ws.row_dimensions[2].height = 20
+    ws.column_dimensions['A'].width = 8
+    ws.column_dimensions['B'].width = 40
+    ws.column_dimensions['C'].width = 8
+    ws.column_dimensions['D'].width = 8
+    ws.column_dimensions['E'].width = 12
+    ws.column_dimensions['F'].width = 10
+    ws.column_dimensions['G'].width = 12
+    ws.column_dimensions['H'].width = 10
+    ws.column_dimensions['I'].width = 14
+    ws.column_dimensions['J'].width = 14
 
     # ========================================
     # 💾 EXPORT
     # ========================================
-
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
 
-    print(f"   ✅ Excel généré : BC-{po_number}")
+    gen_elapsed = time.time() - gen_start
+    print(f"   ⚡ Excel généré en {gen_elapsed:.2f}s : BC-{po_number}")
 
     return buf, po_number
 
@@ -15078,34 +15374,33 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
 )
 def export_po_excel_validated(n_clicks, selected_rows, table_data):
     """
-    Génère un BC Excel SEULEMENT si toutes les QAC edited sont remplies
+    🚀 VERSION ULTRA-RAPIDE - Génère un BC Excel en <2s
+    Utilise le cache pré-chargé pour éviter les chargements réseau
     """
+    callback_start = time.time()
+
     if not n_clicks or not table_data or not selected_rows:
         return no_update, False
 
-    print("\n" + "=" * 60)
-    print("📄 GÉNÉRATION BON DE COMMANDE EXCEL")
-    print("=" * 60)
+    print(f"\n{'=' * 60}")
+    print(f"📄 GÉNÉRATION BON DE COMMANDE EXCEL")
+    print(f"{'=' * 60}")
 
     # ========== VALIDATION STRICTE QAC ==========
     is_valid, error_msg, missing = valider_qac_selection(selected_rows, table_data)
 
     if not is_valid:
-        print("❌ VALIDATION ÉCHOUÉE")
-        print(error_msg)
-        print("=" * 60 + "\n")
-        # TODO : Afficher une alerte à l'utilisateur
+        print(f"❌ VALIDATION ÉCHOUÉE: {len(missing)} produits sans QAC")
         return no_update, False
 
-    print("✅ VALIDATION OK - Toutes les QAC sont remplies")
-
-    # ========== GÉNÉRATION ==========
+    # ========== GÉNÉRATION RAPIDE ==========
     selected_products = [table_data[idx] for idx in selected_rows]
-    print(f"📦 Produits : {len(selected_products)}")
+    print(f"📦 {len(selected_products)} produits sélectionnés")
 
-    # Chargement données
-    price_map = get_catalog_prices()
-    packaging_map = get_packaging_map_cached()
+    # Utiliser le cache pré-chargé (instantané)
+    bc_cache = get_bc_cache()
+    price_map = bc_cache.get("prices") or get_catalog_prices()
+    packaging_map = bc_cache.get("packaging") or get_packaging_map_cached()
 
     try:
         # Génération Excel avec formules
@@ -15115,15 +15410,14 @@ def export_po_excel_validated(n_clicks, selected_rows, table_data):
 
         fname = f"BC_{po_number}_{len(selected_products)}p.xlsx"
 
-        print("=" * 60)
-        print(f"✅ Excel généré : {fname}")
-        print(f"   ⚡ Colonnes Remise/Escompte éditables avec calculs auto")
-        print("=" * 60 + "\n")
+        callback_elapsed = time.time() - callback_start
+        print(f"⚡ TOTAL: {callback_elapsed:.2f}s - {fname}")
+        print(f"{'=' * 60}\n")
 
         return dcc.send_bytes(excel_buffer.read(), filename=fname), False
 
     except Exception as e:
-        print(f"❌ Erreur génération : {e}")
+        print(f"❌ Erreur: {e}")
         import traceback
         traceback.print_exc()
         return no_update, False

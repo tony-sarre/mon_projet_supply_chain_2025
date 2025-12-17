@@ -104,5 +104,65 @@
     ],
     "timestamp": "2025-12-04T14:09:16.662018",
     "read_by": []
+  },
+  {
+    "id": "note_20251211_171323",
+    "product_name": "1/2 carton biscuits chico miko chocolat gm 125g x12",
+    "author": "arame",
+    "message": "hello @tony",
+    "mentions": [
+      "tony"
+    ],
+    "timestamp": "2025-12-11T17:13:23.239107"
+  },
+  {
+    "id": "note_20251211_171341",
+    "product_name": "1/2 carton biscuits chico miko chocolat gm 125g x12",
+    "author": "tony",
+    "message": "salut test @Arame",
+    "mentions": [
+      "Arame"
+    ],
+    "timestamp": "2025-12-11T17:13:41.682158"
+  },
+  {
+    "id": "note_20251211_171502",
+    "product_name": "1/2 carton biscuits chico miko chocolat gm 125g x12",
+    "author": "tony",
+    "message": "je teste la fonctionalité note que j'ai intégrer @Fallou",
+    "mentions": [
+      "Fallou"
+    ],
+    "timestamp": "2025-12-11T17:15:02.732217"
+  },
+  {
+    "id": "note_20251211_171633",
+    "product_name": "1/2 carton biscuits chico miko chocolat gm 125g x12",
+    "author": "tony",
+    "message": "je teste la fonctionalité note que j'ai intégrer @Fallou",
+    "mentions": [
+      "Fallou"
+    ],
+    "timestamp": "2025-12-11T17:16:33.277494"
+  },
+  {
+    "id": "note_20251211_172940",
+    "product_name": "1/2 carton biscuits chico miko chocolat gm 125g x12",
+    "author": "tony",
+    "message": "je teste la fonctionalité note que j'ai intégrer @Fallou",
+    "mentions": [
+      "Fallou"
+    ],
+    "timestamp": "2025-12-11T17:29:40.222270"
+  },
+  {
+    "id": "note_20251211_173001",
+    "product_name": "1/2 carton biscuits chico miko chocolat gm 125g x12",
+    "author": "tony",
+    "message": "je teste la fonctionalité note que j'ai intégrer @seydouna",
+    "mentions": [
+      "seydouna"
+    ],
+    "timestamp": "2025-12-11T17:30:01.463368"
   }
 ]

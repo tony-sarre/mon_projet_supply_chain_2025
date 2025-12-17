@@ -16,40 +16,38 @@
 
 import csv
 import os, sys
+import uuid
 from functools import lru_cache
 import hashlib  # ✅ NOUVEAU: Pour l'authentification
 import gzip
 from io import BytesIO
 
 from dash.exceptions import PreventUpdate
-from sklearn.metrics import precision_score
-from sklearn.model_selection import train_test_split
 
 # ============================================================
 # 🔧 CONFIGURATION PERFORMANCE GLOBALE
 # ============================================================
 PERFORMANCE_CONFIG = {
-    "PARALLEL_LOADING": True,  # Chargement CSV en parallèle
-    "MAX_WORKERS": 6,  # Threads pour chargement parallèle
-    "CACHE_TTL_SECONDS": 600,  # Cache 10 minutes
-    "BACKGROUND_REFRESH": True,  # Refresh cache en arrière-plan
-    "COMPRESS_RESPONSES": True,  # Compression gzip
-    "CONNECTION_TIMEOUT": 15,  # Timeout connexions HTTP
-    "READ_TIMEOUT": 30,  # Timeout lecture HTTP
-    "CHUNK_SIZE": 50000,  # Taille des chunks pour gros DataFrames
-    "DEBOUNCE_MS": 300,  # Debounce pour callbacks UI
+    "PARALLEL_LOADING": True,           # Chargement CSV en parallèle
+    "MAX_WORKERS": 6,                   # Threads pour chargement parallèle
+    "CACHE_TTL_SECONDS": 600,           # Cache 10 minutes
+    "BACKGROUND_REFRESH": True,         # Refresh cache en arrière-plan
+    "COMPRESS_RESPONSES": True,         # Compression gzip
+    "CONNECTION_TIMEOUT": 15,           # Timeout connexions HTTP
+    "READ_TIMEOUT": 30,                 # Timeout lecture HTTP
+    "CHUNK_SIZE": 50000,                # Taille des chunks pour gros DataFrames
+    "DEBOUNCE_MS": 300,                 # Debounce pour callbacks UI
 }
 
 # ✅ NOUVEAU: Import Supabase pour tracking utilisateurs
 try:
     from supabase import create_client, Client
-
     SUPABASE_AVAILABLE = True
 except ImportError:
     SUPABASE_AVAILABLE = False
     print("⚠️ Supabase non installé. Exécuter: pip install supabase")
 
-# import MATCH
+#import MATCH
 
 print("CWD:", os.getcwd())
 print("Dir files:", os.listdir("."))
@@ -63,8 +61,7 @@ import orjson
 
 ORJSON_OPTS = orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY
 
-app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP],
-           prevent_initial_callbacks='initial_duplicate')
+app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP], prevent_initial_callbacks='initial_duplicate')
 
 # ⚠️ Très important pour Render/Gunicorn
 server = app.server
@@ -79,7 +76,6 @@ server.secret_key = os.getenv("SECRET_KEY", "maad-supply-chain-secret-key-change
 # Compression gzip des réponses
 try:
     from flask_compress import Compress
-
     Compress(server)
     print("✅ Compression gzip activée")
 except ImportError:
@@ -96,7 +92,7 @@ import re
 from dotenv import load_dotenv
 import io
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import threading
 from pathlib import Path
@@ -122,7 +118,6 @@ from reportlab.platypus import Image
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-
 # --- Word / python-docx (import paresseux & sûr) ---
 DOCX_AVAILABLE = False
 DOCX_IMPORT_ERROR = None
@@ -132,13 +127,12 @@ try:
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml.ns import qn
     from docx.oxml import OxmlElement
-
     DOCX_AVAILABLE = True
 except Exception as _e:
     DOCX_AVAILABLE = False
     DOCX_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
 # Imports existants + ces nouveaux
-# import anthropic
+#import anthropic
 import json
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -153,7 +147,6 @@ import threading
 from queue import Queue
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
 # ============================================================
@@ -169,7 +162,6 @@ _GLOBAL_CACHE_LOCK = threading.Lock()
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-
 
 def create_http_session():
     """Crée une session HTTP optimisée avec pooling et retry"""
@@ -196,7 +188,6 @@ def create_http_session():
     session.mount("https://", adapter)
     return session
 
-
 # Session globale réutilisable
 _HTTP_SESSION = create_http_session()
 
@@ -220,7 +211,6 @@ _data_lock = threading.Lock()
 # Cache des données par utilisateur (évite les conflits)
 _user_data_cache = {}
 _user_cache_lock = threading.Lock()
-
 
 # ============================================================
 # 🚀 SYSTÈME DE CHARGEMENT PARALLÈLE DES CSV
@@ -339,8 +329,7 @@ def get_cached_data(cache_key, loader_func, ttl_seconds=None):
             # Données encore valides
             if age < ttl_seconds:
                 # Si proche de l'expiration (>80%), refresh en arrière-plan
-                if age > ttl_seconds * 0.8 and not cached.get("refreshing") and PERFORMANCE_CONFIG[
-                    "BACKGROUND_REFRESH"]:
+                if age > ttl_seconds * 0.8 and not cached.get("refreshing") and PERFORMANCE_CONFIG["BACKGROUND_REFRESH"]:
                     cached["refreshing"] = True
                     _async_executor.submit(_background_refresh, cache_key, loader_func)
 
@@ -389,7 +378,6 @@ def invalidate_cache(cache_key=None):
         else:
             _GLOBAL_DATA_CACHE.clear()
     print(f"🧹 Cache invalidé: {cache_key or 'ALL'}")
-
 
 # ============================================================
 # 📦 CACHE GLOBAL POUR LES DONNÉES DE RÉCEPTION (ASYNC)
@@ -509,7 +497,6 @@ def get_cached_receptions():
 
 def preload_receptions_background(url: str):
     """Lance le chargement des réceptions en arrière-plan (non-bloquant)"""
-
     def _bg_load():
         load_receptions_async(url, timeout=15)
 
@@ -578,7 +565,6 @@ def clear_all_caches():
 
     print("🧹 Tous les caches nettoyés")
 
-
 RENDER_ENV = os.getenv("RENDER", False)
 DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
 
@@ -586,8 +572,7 @@ DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
 # 🗄️ CONFIGURATION SUPABASE
 # ============================================================
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://tvaxxzkilrsgfqjswtkt.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY",
-                         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR2YXh4emtpbHJzZ2ZxanN3dGt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ3Mzc1NzksImV4cCI6MjA4MDMxMzU3OX0.uIbLmOm2z9YlD5bxh8nXMY2JjqJr8Qj12hmBc7hBPy0")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR2YXh4emtpbHJzZ2ZxanN3dGt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ3Mzc1NzksImV4cCI6MjA4MDMxMzU3OX0.uIbLmOm2z9YlD5bxh8nXMY2JjqJr8Qj12hmBc7hBPy0")
 
 # Initialiser le client Supabase
 supabase_client = None
@@ -600,6 +585,39 @@ if SUPABASE_AVAILABLE:
         supabase_client = None
 else:
     print("⚠️ Supabase non disponible - tracking désactivé")
+
+# ============================================================
+# 📝 SQL SUPABASE - TABLES REQUISES
+# ============================================================
+# Exécuter ce SQL dans Supabase pour créer les tables nécessaires:
+#
+# -- Table de tracking des commandes agents
+# CREATE TABLE IF NOT EXISTS agent_orders (
+#     id SERIAL PRIMARY KEY,
+#     agent_username TEXT NOT NULL,
+#     supplier TEXT NOT NULL,
+#     order_total DECIMAL(15,2) DEFAULT 0,
+#     products_count INTEGER DEFAULT 0,
+#     po_number TEXT,
+#     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+# );
+#
+# -- Index pour les requêtes par agent
+# CREATE INDEX idx_agent_orders_username ON agent_orders(agent_username);
+# CREATE INDEX idx_agent_orders_created ON agent_orders(created_at);
+#
+# -- Table des notes produits (si pas encore créée)
+# CREATE TABLE IF NOT EXISTS product_notes (
+#     id SERIAL PRIMARY KEY,
+#     product_name TEXT NOT NULL,
+#     user_id TEXT,
+#     note_text TEXT,
+#     mentions JSONB DEFAULT '[]',
+#     is_deleted BOOLEAN DEFAULT FALSE,
+#     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+# );
+# ============================================================
+
 
 # ============================================================
 # 📊 FONCTIONS DE TRACKING SUPABASE - ASYNCHRONE
@@ -697,7 +715,6 @@ def get_or_create_user(username: str) -> dict:
 # Flag global pour désactiver le tracking si RLS bloque
 SUPABASE_TRACKING_ENABLED = True
 
-
 def create_session(user_id: str, ip_address: str = None, user_agent: str = None) -> str:
     """Crée une nouvelle session utilisateur"""
     global SUPABASE_TRACKING_ENABLED
@@ -737,7 +754,7 @@ def end_session(session_id: str):
     try:
         supabase_client.table("user_sessions").update({
             "logout_at": "now()",
-            "is_active": True
+            "is_active": False
         }).eq("id", session_id).execute()
         print(f"✅ Session terminée: {session_id}")
     except Exception as e:
@@ -766,6 +783,36 @@ def track_activity(user_id: str, session_id: str, action_type: str, page: str = 
     })
 
 
+def track_stock_stats(total_skus: int, active_skus: int, out_of_stock: int, at_risk: int, suppliers: int):
+    """
+    🚀 Tracking des stats de stock dans Supabase (asynchrone)
+    Appelé à chaque chargement de données pour historique
+    """
+    if not supabase_client or not SUPABASE_TRACKING_ENABLED:
+        return
+
+    details = {
+        "total_skus": total_skus,
+        "active_skus": active_skus,
+        "out_of_stock": out_of_stock,
+        "at_risk": at_risk,
+        "suppliers": suppliers,
+        "timestamp": datetime.now().isoformat()
+    }
+
+    _tracking_queue.put({
+        "type": "activity",
+        "data": {
+            "user_id": None,
+            "session_id": None,
+            "action_type": "stock_stats_snapshot",
+            "page": "overview",
+            "details": details
+        }
+    })
+    print(f"📊 Stock stats trackées: {active_skus} SKUs actifs, {out_of_stock} ruptures")
+
+
 def _do_track_activity(user_id: str, session_id: str, action_type: str, page: str = None, details: dict = None):
     """Exécution réelle du tracking activité"""
     global SUPABASE_TRACKING_ENABLED
@@ -791,8 +838,7 @@ def _do_track_activity(user_id: str, session_id: str, action_type: str, page: st
             print(f"⚠️ Erreur track_activity: {e}")
 
 
-def track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: int, new_value: int,
-                   supplier: str = None):
+def track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: int, new_value: int, supplier: str = None):
     """Enregistre une modification QAC (asynchrone)"""
     if not supabase_client or not SUPABASE_TRACKING_ENABLED:
         return
@@ -810,8 +856,7 @@ def track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: 
     })
 
 
-def _do_track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: int, new_value: int,
-                       supplier: str = None):
+def _do_track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: int, new_value: int, supplier: str = None):
     """Exécution réelle du tracking QAC edit"""
     global SUPABASE_TRACKING_ENABLED
 
@@ -841,8 +886,7 @@ def _do_track_qac_edit(user_id: str, session_id: str, product_name: str, old_val
 # 📊 NOUVELLES FONCTIONS DE TRACKING - ACTIONS AGENTS
 # ============================================================
 
-def track_po_generated(user_id: str, session_id: str, supplier: str, products_count: int, total_amount: float,
-                       po_type: str = "excel"):
+def track_po_generated(user_id: str, session_id: str, supplier: str, products_count: int, total_amount: float, po_type: str = "excel"):
     """Track la génération d'un bon de commande"""
     if not supabase_client or not SUPABASE_TRACKING_ENABLED:
         return
@@ -860,8 +904,7 @@ def track_po_generated(user_id: str, session_id: str, supplier: str, products_co
     })
 
 
-def _do_track_po_generated(user_id: str, session_id: str, supplier: str, products_count: int, total_amount: float,
-                           po_type: str = "excel"):
+def _do_track_po_generated(user_id: str, session_id: str, supplier: str, products_count: int, total_amount: float, po_type: str = "excel"):
     """Exécution réelle du tracking PO"""
     global SUPABASE_TRACKING_ENABLED
 
@@ -1214,8 +1257,7 @@ def get_dashboard_analytics() -> dict:
         # Stats récentes
         analytics["recent_stats"] = get_daily_stats(7)
 
-        print(
-            f"📊 Analytics dashboard: {analytics['total_users']} users, {analytics['active_sessions']} sessions actives")
+        print(f"📊 Analytics dashboard: {analytics['total_users']} users, {analytics['active_sessions']} sessions actives")
         return analytics
 
     except Exception as e:
@@ -1334,14 +1376,15 @@ def get_product_notes(product_name: str) -> list:
 # Variable globale pour stocker la session active
 ACTIVE_SESSIONS = {}  # {username: {"user_id": ..., "session_id": ...}}
 
+
 if RENDER_ENV:
-    print("\n" + "=" * 60)
+    print("\n" + "="*60)
     print("🚀 DÉMARRAGE SUR RENDER")
-    print("=" * 60)
+    print("="*60)
     print(f"Python version: {sys.version}")
     print(f"Working directory: {os.getcwd()}")
     print(f"Files: {os.listdir('.')[:10]}")
-    print("=" * 60 + "\n")
+    print("="*60 + "\n")
 
 
 # ==========================================
@@ -1393,8 +1436,6 @@ def run_with_timeout(func, args=(), kwargs=None, timeout_seconds=30):
         raise exception[0]
 
     return result[0]
-
-
 # ------------- OpenAI client (clé hardcodée à ta demande) ----------------
 # OPENAI_API_KEY_HARDCODED = "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"
 # Ligne ~45 dans votre code
@@ -1784,7 +1825,6 @@ Cet email a été envoyé automatiquement.
         traceback.print_exc()
         return False
 
-
 # ==================== VÉRIFIER LA CONFIGURATION EMAIL ====================
 # Vers ligne 200-250, vérifie que ces variables existent :
 
@@ -1798,12 +1838,490 @@ TEAM_MEMBERS = {
     "samuel": {"name": "Samuel Essodeke", "email": "essodeke@maad.io"},
     "maimouna": {"name": "Maimouna Dagois", "email": "maimouna@maad.io"},
     "seydouna": {"name": "Seydouna Oumar Niang", "email": "seydouna@maad.io"},
-    "Arame": {"name": "Arame Toure", "email": "arame.toure@maad.io"},
-    "Coumba": {"name": "Coumba Cisse", "email": "ndeyecoumba.cisse@maad.io"},
-    "Fallou": {"name": "Fallou Diop", "email": "serigne.diop@maad.io"},
-    "Ravane": {"name": "Ravane Diop", "email": "pr.diop@maad.io"},
-    "Insa": {"name": "Insa Niang", "email": "insa.niang@maad.io"},
+    "arame": {"name": "Arame Toure", "email": "arame.toure@maad.io"},
+    "coumba": {"name": "Coumba Cisse", "email": "ndeyecoumba.cisse@maad.io"},
+    "fallou": {"name": "Fallou Diop", "email": "serigne.diop@maad.io"},
+    "ravane": {"name": "Ravane Diop", "email": "pr.diop@maad.io"},
+    "insa": {"name": "Insa Niang", "email": "insa.niang@maad.io"},
 }
+
+
+# ============================================================
+# 👤 SYSTÈME DE GESTION DES AGENTS - SIMPLE ET PERFORMANT
+# ============================================================
+# AUCUN CSV externe - Utilise UNIQUEMENT initial_df
+
+MANAGER_ROLES = ["admin", "manager"]
+
+# ============================================================
+# 📊 TRACKING SUPABASE - COMPATIBLE AVEC SCHÉMA EXISTANT
+# ============================================================
+# Tables utilisées: users, user_sessions, user_activities, qac_edits_history
+
+# Cache des user_id pour éviter les requêtes répétées
+_user_id_cache = {}
+
+# Sessions actives en mémoire
+ACTIVE_SESSIONS = {}
+
+
+def get_user_id_from_db(username: str) -> str:
+    """Récupère l'UUID de l'utilisateur depuis Supabase"""
+    if not supabase_client:
+        return None
+
+    username_lower = username.lower().strip()
+
+    # Vérifier le cache
+    if username_lower in _user_id_cache:
+        return _user_id_cache[username_lower]
+
+    try:
+        result = supabase_client.table("users").select("id").eq("username", username_lower).execute()
+        if result.data and len(result.data) > 0:
+            user_id = result.data[0]["id"]
+            _user_id_cache[username_lower] = user_id
+            return user_id
+    except Exception as e:
+        print(f"⚠️ Erreur get_user_id: {e}")
+
+    return None
+
+
+def create_session(username: str, ip_address: str = None, user_agent: str = None) -> str:
+    """Crée une nouvelle session dans Supabase et retourne son ID"""
+    if not supabase_client:
+        return None
+
+    user_id = get_user_id_from_db(username)
+    if not user_id:
+        return None
+
+    try:
+        data = {
+            "user_id": user_id,
+            "ip_address": ip_address,
+            "user_agent": user_agent,
+            "is_active": True
+        }
+        result = supabase_client.table("user_sessions").insert(data).execute()
+
+        if result.data and len(result.data) > 0:
+            session_id = result.data[0]["id"]
+
+            # Stocker en mémoire
+            ACTIVE_SESSIONS[username.lower()] = {
+                "session_id": session_id,
+                "user_id": user_id
+            }
+
+            print(f"   📊 Session créée: {session_id[:8]}...")
+            return session_id
+    except Exception as e:
+        print(f"⚠️ Erreur create_session: {e}")
+
+    return None
+
+
+def end_session(session_id: str):
+    """Termine une session"""
+    if not supabase_client or not session_id:
+        return
+
+    try:
+        supabase_client.table("user_sessions").update({
+            "logout_at": datetime.now().isoformat(),
+            "is_active": False
+        }).eq("id", session_id).execute()
+        print(f"   📊 Session terminée: {session_id[:8]}...")
+    except Exception as e:
+        print(f"⚠️ Erreur end_session: {e}")
+
+
+def track_activity(username: str, action_type: str, page: str = None, details: dict = None):
+    """
+    Enregistre une activité dans user_activities (schéma existant).
+
+    action_type: 'login', 'logout', 'page_view', 'filter', 'search',
+                 'export_pdf', 'export_excel', 'edit_qac', 'save_qac',
+                 'add_note', 'generate_bc', 'agent_ia', 'ai_chat'
+    """
+    if not supabase_client:
+        return False
+
+    username_lower = username.lower().strip()
+    user_id = get_user_id_from_db(username_lower)
+
+    if not user_id:
+        print(f"⚠️ Track: user_id non trouvé pour {username}")
+        return False
+
+    # Récupérer session_id si disponible
+    session_id = None
+    if username_lower in ACTIVE_SESSIONS:
+        session_id = ACTIVE_SESSIONS[username_lower].get("session_id")
+
+    try:
+        data = {
+            "user_id": user_id,
+            "session_id": session_id,
+            "action_type": action_type,
+            "page": page,
+            "action_details": details or {}
+        }
+
+        supabase_client.table("user_activities").insert(data).execute()
+        print(f"   📊 TRACK: {username} → {action_type} ({page or '-'})")
+        return True
+    except Exception as e:
+        print(f"⚠️ Erreur track_activity: {e}")
+        return False
+
+
+def track_login(username: str, success: bool, ip: str = None, user_agent: str = None):
+    """Enregistre une connexion et crée une session"""
+    if success:
+        session_id = create_session(username, ip, user_agent)
+        track_activity(username, "login", "login", {"success": True, "session_id": session_id})
+    else:
+        track_activity(username, "login", "login", {"success": False})
+
+
+def track_logout(username: str):
+    """Enregistre une déconnexion et termine la session"""
+    username_lower = username.lower().strip()
+
+    # Terminer la session
+    if username_lower in ACTIVE_SESSIONS:
+        session_id = ACTIVE_SESSIONS[username_lower].get("session_id")
+        if session_id:
+            end_session(session_id)
+        del ACTIVE_SESSIONS[username_lower]
+
+    track_activity(username, "logout", "logout", {})
+
+
+def track_page_view(username: str, page: str):
+    """Enregistre une visite de page"""
+    track_activity(username, "page_view", page, {"timestamp": datetime.now().isoformat()})
+
+
+def track_filter_action(username: str, filters: dict):
+    """Enregistre un changement de filtre"""
+    track_activity(username, "filter", "overview", {"filters": filters})
+
+
+def track_bc_generated(username: str, supplier: str, products_count: int, total_amount: float, po_number: str):
+    """Enregistre la génération d'un bon de commande"""
+    track_activity(username, "generate_bc", "overview", {
+        "supplier": supplier,
+        "products_count": products_count,
+        "total_amount": total_amount,
+        "po_number": po_number
+    })
+
+
+def track_agent_ia(username: str, products_selected: int, total_qac: float):
+    """Enregistre l'utilisation de l'Agent IA"""
+    track_activity(username, "agent_ia", "overview", {
+        "products_selected": products_selected,
+        "total_qac": total_qac
+    })
+
+
+def track_qac_edit(username: str, product_name: str, product_id: int, supplier: str, old_value: int, new_value: int):
+    """Enregistre une modification QAC dans qac_edits_history"""
+    if not supabase_client:
+        return
+
+    user_id = get_user_id_from_db(username)
+    session_id = ACTIVE_SESSIONS.get(username.lower(), {}).get("session_id")
+
+    try:
+        data = {
+            "user_id": user_id,
+            "session_id": session_id,
+            "product_name": product_name,
+            "product_id": product_id,
+            "supplier": supplier,
+            "old_qac_value": old_value,
+            "new_qac_value": new_value
+        }
+        supabase_client.table("qac_edits_history").insert(data).execute()
+        print(f"   📊 QAC Edit: {product_name} ({old_value} → {new_value})")
+    except Exception as e:
+        print(f"⚠️ Erreur track_qac_edit: {e}")
+
+
+def get_user_stats_summary(username: str) -> dict:
+    """Résumé des stats d'un utilisateur depuis Supabase"""
+    if not supabase_client:
+        return {"logins": 0, "bc_count": 0, "bc_total": 0, "pages_viewed": 0}
+
+    user_id = get_user_id_from_db(username)
+    if not user_id:
+        return {"logins": 0, "bc_count": 0, "bc_total": 0, "pages_viewed": 0}
+
+    try:
+        # Récupérer les activités des 30 derniers jours
+        result = supabase_client.table("user_activities") \
+            .select("action_type, action_details") \
+            .eq("user_id", user_id) \
+            .gte("created_at", (datetime.now() - timedelta(days=30)).isoformat()) \
+            .execute()
+
+        activities = result.data if result.data else []
+
+        logins = len([a for a in activities if a.get("action_type") == "login"])
+        page_views = len([a for a in activities if a.get("action_type") == "page_view"])
+
+        bc_activities = [a for a in activities if a.get("action_type") == "generate_bc"]
+        bc_count = len(bc_activities)
+        bc_total = sum(
+            (a.get("action_details") or {}).get("total_amount", 0)
+            for a in bc_activities
+        )
+
+        return {
+            "logins": logins,
+            "bc_count": bc_count,
+            "bc_total": bc_total,
+            "pages_viewed": page_views
+        }
+    except Exception as e:
+        print(f"⚠️ Erreur get_user_stats: {e}")
+        return {"logins": 0, "bc_count": 0, "bc_total": 0, "pages_viewed": 0}
+
+
+# ============================================================
+# 🎯 OBJECTIFS ET FOURNISSEURS AGENTS
+# ============================================================
+
+def get_agent_targets(username: str) -> dict:
+    """
+    Retourne les objectifs mensuels d'un agent.
+    Les objectifs sont définis par rôle ou personnalisés par agent.
+    """
+    # Objectifs par défaut selon le rôle
+    user_info = get_user_info(username) or {}
+    user_role = user_info.get("role", "user")
+
+    # Objectifs différenciés par rôle
+    targets_by_role = {
+        "admin": {"target_monthly": 50_000_000, "target_orders": 30},      # 50M / 30 BC
+        "manager": {"target_monthly": 30_000_000, "target_orders": 20},    # 30M / 20 BC
+        "user": {"target_monthly": 15_000_000, "target_orders": 15},       # 15M / 15 BC
+    }
+
+    # Objectifs personnalisés par agent (optionnel)
+    custom_targets = {
+        "arame": {"target_monthly": 20_000_000, "target_orders": 18},
+        "fallou": {"target_monthly": 18_000_000, "target_orders": 16},
+        "coumba": {"target_monthly": 15_000_000, "target_orders": 14},
+        "ravane": {"target_monthly": 15_000_000, "target_orders": 14},
+        "insa": {"target_monthly": 12_000_000, "target_orders": 12},
+    }
+
+    username_lower = username.lower().strip()
+
+    # Priorité aux objectifs personnalisés
+    if username_lower in custom_targets:
+        return custom_targets[username_lower]
+
+    # Sinon objectifs par rôle
+    return targets_by_role.get(user_role, targets_by_role["user"])
+
+
+def get_agent_suppliers(username: str, user_role: str) -> list:
+    """
+    Retourne la liste des fournisseurs assignés à un agent.
+    - Admin/Manager: voit TOUS les fournisseurs (retourne None)
+    - User: voit uniquement SES fournisseurs assignés
+    """
+    # Admin et Manager voient tout
+    if user_role in MANAGER_ROLES:
+        return None  # None = pas de filtre = tout visible
+
+    username_lower = username.lower().strip()
+
+    # Charger le mapping agents → fournisseurs depuis Google Sheets
+    try:
+        agents_df = load_agents_suppliers()
+
+        if agents_df.empty:
+            print(f"   ⚠️ DataFrame agents vide pour {username}")
+            return None
+
+        # Trouver la colonne Owner
+        owner_col = None
+        supplier_col = None
+
+        for col in agents_df.columns:
+            col_lower = col.lower().strip()
+            if 'owner' in col_lower or 'agent' in col_lower:
+                owner_col = col
+            if 'fournisseur' in col_lower or 'supplier' in col_lower:
+                supplier_col = col
+
+        if not owner_col or not supplier_col:
+            print(f"   ⚠️ Colonnes Owner/Supplier non trouvées: {agents_df.columns.tolist()}")
+            return None
+
+        # Filtrer par agent
+        agents_df[owner_col] = agents_df[owner_col].astype(str).str.lower().str.strip()
+        agent_rows = agents_df[agents_df[owner_col] == username_lower]
+
+        if agent_rows.empty:
+            # Essayer avec le prénom seulement
+            user_info = get_user_info(username) or {}
+            first_name = user_info.get("name", "").split()[0].lower() if user_info.get("name") else ""
+
+            if first_name:
+                agent_rows = agents_df[agents_df[owner_col].str.contains(first_name, na=False)]
+
+        if agent_rows.empty:
+            print(f"   ⚠️ Aucun fournisseur trouvé pour {username}")
+            return None
+
+        # Extraire les fournisseurs uniques
+        suppliers = agent_rows[supplier_col].dropna().unique().tolist()
+        suppliers = [s.strip() for s in suppliers if s and str(s).strip()]
+
+        print(f"   🔐 Agent {username}: {len(suppliers)} fournisseurs assignés")
+        return suppliers if suppliers else None
+
+    except Exception as e:
+        print(f"   ⚠️ Erreur get_agent_suppliers: {e}")
+        return None
+
+def track_agent_order(username: str, supplier: str, order_total: float, products_count: int, po_number: str):
+    """
+    Enregistre une commande dans l'historique de l'agent.
+    """
+    if not supabase_client:
+        return False
+
+    try:
+        data = {
+            "agent_username": username.lower().strip(),
+            "supplier": supplier,
+            "order_total": order_total,
+            "products_count": products_count,
+            "po_number": po_number,
+            "created_at": datetime.now().isoformat()
+        }
+
+        result = supabase_client.table("agent_orders").insert(data).execute()
+        print(f"   📊 Commande trackée: {username} → {supplier} ({order_total:,.0f} FCFA)")
+        return True
+    except Exception as e:
+        print(f"   ⚠️ Erreur tracking commande: {e}")
+        return False
+
+
+def get_agent_stats(username: str, period_days: int = 30) -> dict:
+    """
+    Récupère les statistiques d'un agent sur une période.
+    """
+    if not supabase_client:
+        return _get_default_agent_stats()
+
+    try:
+        # Date de début de la période
+        start_date = (datetime.now() - timedelta(days=period_days)).isoformat()
+
+        result = supabase_client.table("agent_orders") \
+            .select("*") \
+            .eq("agent_username", username.lower().strip()) \
+            .gte("created_at", start_date) \
+            .execute()
+
+        if not result.data:
+            return _get_default_agent_stats()
+
+        orders = result.data
+
+        # Calculs
+        total_amount = sum(o.get("order_total", 0) for o in orders)
+        total_orders = len(orders)
+        total_products = sum(o.get("products_count", 0) for o in orders)
+
+        # Par fournisseur
+        by_supplier = {}
+        for o in orders:
+            sup = o.get("supplier", "N/A")
+            if sup not in by_supplier:
+                by_supplier[sup] = {"orders": 0, "amount": 0, "products": 0}
+            by_supplier[sup]["orders"] += 1
+            by_supplier[sup]["amount"] += o.get("order_total", 0)
+            by_supplier[sup]["products"] += o.get("products_count", 0)
+
+        return {
+            "total_amount": total_amount,
+            "total_orders": total_orders,
+            "total_products": total_products,
+            "avg_order_value": total_amount / total_orders if total_orders > 0 else 0,
+            "by_supplier": by_supplier,
+            "period_days": period_days,
+            "orders_list": orders[-10:]  # 10 dernières commandes
+        }
+
+    except Exception as e:
+        print(f"   ⚠️ Erreur récupération stats agent: {e}")
+        return _get_default_agent_stats()
+
+
+def _get_default_agent_stats() -> dict:
+    """Stats par défaut si pas de données"""
+    return {
+        "total_amount": 0,
+        "total_orders": 0,
+        "total_products": 0,
+        "avg_order_value": 0,
+        "by_supplier": {},
+        "period_days": 30,
+        "orders_list": []
+    }
+
+
+def get_agent_performance_kpis(username: str) -> dict:
+    """
+    Calcule les indicateurs de performance d'un agent.
+    """
+    stats = get_agent_stats(username, period_days=30)
+    targets = get_agent_targets(username)
+
+    # Calcul des % d'atteinte
+    amount_pct = (stats["total_amount"] / targets["target_monthly"] * 100) if targets["target_monthly"] > 0 else 0
+    orders_pct = (stats["total_orders"] / targets["target_orders"] * 100) if targets["target_orders"] > 0 else 0
+
+    # Score global (moyenne pondérée)
+    score = (amount_pct * 0.6 + orders_pct * 0.4)
+
+    # Niveau de performance
+    if score >= 100:
+        level = "🏆 Excellent"
+        color = "#22c55e"
+    elif score >= 80:
+        level = "✅ Bon"
+        color = "#3b82f6"
+    elif score >= 60:
+        level = "⚠️ À améliorer"
+        color = "#f59e0b"
+    else:
+        level = "🔴 En difficulté"
+        color = "#ef4444"
+
+    return {
+        "stats": stats,
+        "targets": targets,
+        "amount_pct": round(amount_pct, 1),
+        "orders_pct": round(orders_pct, 1),
+        "score": round(score, 1),
+        "level": level,
+        "level_color": color
+    }
+
 
 # ============================================================
 # 🔐 SYSTÈME D'AUTHENTIFICATION
@@ -1860,7 +2378,7 @@ AUTH_USERS = {
         "name": "Ravane Diop",
         "email": "pr.diop@maad.io",
         "password_hash": DEFAULT_PASSWORD_HASH,
-        "role": "manager"
+        "role": "user"
     },
     "insa": {
         "name": "Insa Niang",
@@ -1872,13 +2390,14 @@ AUTH_USERS = {
 
 
 def verify_password(username: str, password: str) -> bool:
-    """Vérifie le mot de passe d'un utilisateur"""
+    """Vérifie le mot de passe d'un utilisateur et track la connexion"""
     username = username.lower().strip()
     print(f"   🔍 DEBUG verify_password: username='{username}'")
 
     if username not in AUTH_USERS:
         print(f"   ❌ Utilisateur '{username}' non trouvé dans AUTH_USERS")
         print(f"   📋 Utilisateurs disponibles: {list(AUTH_USERS.keys())}")
+        track_login(username, success=False)  # Track tentative échouée
         return False
 
     password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -1889,9 +2408,11 @@ def verify_password(username: str, password: str) -> bool:
 
     if password_hash == expected_hash:
         print(f"   ✅ Mot de passe correct!")
+        track_login(username, success=True)  # Track connexion réussie
         return True
     else:
         print(f"   ❌ Mot de passe incorrect")
+        track_login(username, success=False)  # Track tentative échouée
         return False
 
 
@@ -2190,125 +2711,62 @@ def create_login_layout():
                         "marginBottom": "20px"
                     }),
                     html.H1("Supply Chain Analytics", style={
-                        "fontSize": "28px",
-                        "fontWeight": "800",
-                        "background": "linear-gradient(135deg, #0ea5e9 0%, #1e40af 100%)",
-                        "WebkitBackgroundClip": "text",
-                        "WebkitTextFillColor": "transparent",
-                        "marginBottom": "8px"
+                        "fontSize": "24px",
+                        "fontWeight": "700",
+                        "color": "#0f172a",
+                        "marginBottom": "6px"
                     }),
                     html.P("Connectez-vous pour accéder au dashboard", style={
-                        "color": "#475569",
-                        "fontSize": "14px",
-                        "fontWeight": "500"
+                        "color": "#64748b",
+                        "fontSize": "13px"
                     })
                 ]),
 
-                # Zone d'erreur (cachée par défaut)
+                # Zone d'erreur
                 html.Div(id="login-error", style={"display": "none"}),
 
                 # Formulaire
-                html.Div(className="login-form", style={"marginTop": "24px"}, children=[
+                html.Div(className="login-form", style={"marginTop": "20px"}, children=[
 
-                    # Label Identifiant
                     html.Label("Identifiant", style={
-                        "display": "block",
-                        "marginBottom": "8px",
-                        "color": "#1e293b",
-                        "fontWeight": "600",
-                        "fontSize": "14px"
+                        "display": "block", "marginBottom": "6px", "color": "#374151",
+                        "fontWeight": "500", "fontSize": "13px"
                     }),
 
-                    # Champ identifiant - FOND BLANC, TEXTE NOIR
-                    html.Div(style={"position": "relative", "marginBottom": "20px"}, children=[
-                        html.Span("👤", style={
-                            "position": "absolute",
-                            "left": "16px",
-                            "top": "50%",
-                            "transform": "translateY(-50%)",
-                            "fontSize": "18px",
-                            "zIndex": "10"
-                        }),
-                        dcc.Input(
-                            id="login-username",
-                            type="text",
-                            placeholder="Entrez votre identifiant",
-                            style={
-                                "width": "100%",
-                                "padding": "16px 16px 16px 48px",
-                                "background": "#ffffff",
-                                "border": "2px solid #e2e8f0",
-                                "borderRadius": "12px",
-                                "color": "#1e293b",
-                                "fontSize": "15px",
-                                "fontWeight": "500",
-                                "boxSizing": "border-box",
-                                "outline": "none",
-                                "transition": "border-color 0.2s"
-                            },
-                            autoComplete="username"
-                        )
-                    ]),
-
-                    # Label Mot de passe
-                    html.Label("Mot de passe", style={
-                        "display": "block",
-                        "marginBottom": "8px",
-                        "color": "#1e293b",
-                        "fontWeight": "600",
-                        "fontSize": "14px"
-                    }),
-
-                    # Champ mot de passe - FOND BLANC, TEXTE NOIR
-                    html.Div(style={"position": "relative", "marginBottom": "24px"}, children=[
-                        html.Span("🔒", style={
-                            "position": "absolute",
-                            "left": "16px",
-                            "top": "50%",
-                            "transform": "translateY(-50%)",
-                            "fontSize": "18px",
-                            "zIndex": "10"
-                        }),
-                        dcc.Input(
-                            id="login-password",
-                            type="password",
-                            placeholder="Entrez votre mot de passe",
-                            style={
-                                "width": "100%",
-                                "padding": "16px 16px 16px 48px",
-                                "background": "#ffffff",
-                                "border": "2px solid #e2e8f0",
-                                "borderRadius": "12px",
-                                "color": "#1e293b",
-                                "fontSize": "15px",
-                                "fontWeight": "500",
-                                "boxSizing": "border-box",
-                                "outline": "none",
-                                "transition": "border-color 0.2s"
-                            },
-                            autoComplete="current-password"
-                        )
-                    ]),
-
-                    # Bouton de connexion
-                    dbc.Button(
-                        "🚀 Se connecter",
-                        id="login-button",
-                        n_clicks=0,
-                        color="primary",
-                        className="w-100",
+                    dcc.Input(
+                        id="login-username", type="text", placeholder="Votre identifiant",
                         style={
-                            "padding": "16px",
-                            "background": "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)",
-                            "border": "none",
-                            "borderRadius": "12px",
-                            "color": "#ffffff",
-                            "fontSize": "16px",
-                            "fontWeight": "700",
-                            "textTransform": "uppercase",
-                            "letterSpacing": "1px",
-                            "cursor": "pointer",
-                            "boxShadow": "0 4px 14px rgba(14, 165, 233, 0.4)"
+                            "width": "100%", "padding": "12px 14px", "background": "#fff",
+                            "border": "1px solid #d1d5db", "borderRadius": "8px",
+                            "color": "#1e293b", "fontSize": "14px", "boxSizing": "border-box",
+                            "marginBottom": "16px"
+                        },
+                        autoComplete="username"
+                    ),
+
+                    html.Label("Mot de passe", style={
+                        "display": "block", "marginBottom": "6px", "color": "#374151",
+                        "fontWeight": "500", "fontSize": "13px"
+                    }),
+
+                    dcc.Input(
+                        id="login-password", type="password", placeholder="Votre mot de passe",
+                        style={
+                            "width": "100%", "padding": "12px 14px", "background": "#fff",
+                            "border": "1px solid #d1d5db", "borderRadius": "8px",
+                            "color": "#1e293b", "fontSize": "14px", "boxSizing": "border-box",
+                            "marginBottom": "20px"
+                        },
+                        autoComplete="current-password"
+                    ),
+
+                    dbc.Button(
+                        "Se connecter",
+                        id="login-button", n_clicks=0, color="primary", className="w-100",
+                        style={
+                            "padding": "12px", "background": "#0ea5e9", "border": "none",
+                            "borderRadius": "8px", "color": "#fff", "fontSize": "14px",
+                            "fontWeight": "600", "cursor": "pointer"
                         }
                     )
                 ]),
@@ -2319,9 +2777,9 @@ def create_login_layout():
                         "Mot de passe oublié? Contactez ",
                         html.A("l'administrateur", href="mailto:tony.sarre@maad.io",
                                style={"color": "#0ea5e9", "textDecoration": "none"})
-                    ], style={"color": "#64748b", "fontSize": "12px", "textAlign": "center", "marginTop": "32px"}),
-                    html.P("© 2024 MAAD - Supply Chain Analytics",
-                           style={"color": "#475569", "fontSize": "11px", "textAlign": "center", "marginTop": "8px"})
+                    ], style={"color": "#64748b", "fontSize": "11px", "textAlign": "center", "marginTop": "24px"}),
+                    html.P("© 2024 MAAD",
+                           style={"color": "#94a3b8", "fontSize": "10px", "textAlign": "center", "marginTop": "6px"})
                 ])
             ])
         ])
@@ -2329,80 +2787,84 @@ def create_login_layout():
 
 
 def create_user_navbar(username: str):
-    """Crée la barre utilisateur connecté"""
+    """Navbar horizontale professionnelle."""
     if not username or username.lower() not in AUTH_USERS:
         return html.Div()
 
     user = AUTH_USERS[username.lower()]
     initials = "".join([n[0].upper() for n in user["name"].split()[:2]])
+    first_name = user["name"].split()[0] if user["name"] else username
+    user_role = user.get("role", "user")
 
     role_colors = {"admin": "#ef4444", "manager": "#f59e0b", "user": "#0ea5e9"}
     role_labels = {"admin": "Admin", "manager": "Manager", "user": "User"}
 
-    # Prénom seulement pour gagner de la place
-    first_name = user["name"].split()[0] if user["name"] else username
+    nav_items = [
+        {"label": "Overview", "href": "/"},
+        {"label": "Mon Espace", "href": "/myspace"},
+        {"label": "Analytics", "href": "/analytics"},
+        {"label": "Prédictions", "href": "/predictions"},
+        {"label": "Promos", "href": "/promotions"},
+        {"label": "About", "href": "/about"},
+    ]
 
     return html.Div([
-        html.Div(style={
-            "position": "fixed",
-            "top": "8px",
-            "right": "12px",
-            "zIndex": "9999",
-            "display": "flex",
-            "alignItems": "center",
-            "gap": "8px",
-            "padding": "6px 12px",
-            "background": "rgba(30, 41, 59, 0.95)",
-            "backdropFilter": "blur(10px)",
-            "borderRadius": "50px",
-            "border": "1px solid #334155",
-            "boxShadow": "0 4px 20px rgba(0, 0, 0, 0.3)",
-            "maxWidth": "180px"
+        html.Nav(style={
+            "position": "fixed", "top": "0", "left": "0", "right": "0",
+            "height": "50px", "background": "#0f172a",
+            "borderBottom": "1px solid #1e293b",
+            "display": "flex", "alignItems": "center", "justifyContent": "space-between",
+            "padding": "0 16px", "zIndex": "9999"
         }, children=[
-            # Avatar (plus petit)
-            html.Div(initials, style={
-                "width": "30px",
-                "height": "30px",
-                "minWidth": "30px",
-                "background": f"linear-gradient(135deg, {role_colors.get(user['role'], '#0ea5e9')}, #7c3aed)",
-                "borderRadius": "50%",
-                "display": "flex",
-                "alignItems": "center",
-                "justifyContent": "center",
-                "fontWeight": "700",
-                "color": "#0f172a",
-                "fontSize": "12px"
-            }),
 
-            # Infos (prénom seulement + rôle court)
-            html.Div([
-                html.Div(first_name, style={
-                    "color": "#1e293b",
-                    "fontWeight": "600",
-                    "fontSize": "12px",
-                    "whiteSpace": "nowrap",
-                    "overflow": "hidden",
-                    "textOverflow": "ellipsis",
-                    "maxWidth": "80px"
-                }),
-                html.Div(role_labels.get(user["role"], "User"), style={
-                    "color": role_colors.get(user["role"], "#64748b"),
-                    "fontSize": "9px",
-                    "textTransform": "uppercase",
-                    "letterSpacing": "0.5px"
-                })
+            # Logo + Brand
+            html.Div(style={"display": "flex", "alignItems": "center", "gap": "10px"}, children=[
+                html.Img(src=LOGO_DATA_URI, style={"height": "32px"}) if LOGO_DATA_URI else html.Div(),
+                html.Div([
+                    html.Div(APP_BRAND, style={"color": "#f8fafc", "fontWeight": "600", "fontSize": "14px"}),
+                    html.Div("Supply Chain", style={"color": "#64748b", "fontSize": "9px", "textTransform": "uppercase"})
+                ])
             ]),
 
-            # Bouton déconnexion (plus petit)
-            html.Button("🚪", id="logout-button", n_clicks=0, style={
-                "background": "rgba(239, 68, 68, 0.2)",
-                "border": "1px solid rgba(239, 68, 68, 0.4)",
-                "borderRadius": "6px",
-                "padding": "5px 8px",
-                "cursor": "pointer",
-                "fontSize": "14px",
-                "color": "#f87171"
-            }, title="Se déconnecter")
+            # Navigation
+            html.Div(style={"display": "flex", "alignItems": "center", "gap": "2px"}, children=[
+                dcc.Link(
+                    html.Div(item["label"], style={
+                        "padding": "6px 12px", "borderRadius": "4px", "color": "#94a3b8",
+                        "fontSize": "12px", "fontWeight": "500"
+                    }),
+                    href=item["href"],
+                    style={"textDecoration": "none"},
+                    className="nav-link-hover"
+                ) for item in nav_items
+            ]),
+
+            # User Info
+            html.Div(style={"display": "flex", "alignItems": "center", "gap": "8px"}, children=[
+                html.Div(style={
+                    "display": "flex", "alignItems": "center", "gap": "8px",
+                    "padding": "4px 10px", "background": "rgba(255,255,255,0.05)",
+                    "borderRadius": "6px", "border": "1px solid #334155"
+                }, children=[
+                    html.Div(initials, style={
+                        "width": "28px", "height": "28px",
+                        "background": f"linear-gradient(135deg, {role_colors.get(user_role, '#0ea5e9')}, #7c3aed)",
+                        "borderRadius": "50%", "display": "flex", "alignItems": "center",
+                        "justifyContent": "center", "fontWeight": "600", "color": "#fff", "fontSize": "11px"
+                    }),
+                    html.Div([
+                        html.Div(first_name, style={"color": "#f1f5f9", "fontWeight": "500", "fontSize": "12px"}),
+                        html.Div(role_labels.get(user_role, "User"), style={
+                            "color": role_colors.get(user_role, "#64748b"), "fontSize": "9px", "textTransform": "uppercase"
+                        })
+                    ])
+                ]),
+                html.Button("Déconnexion", id="logout-button", n_clicks=0, style={
+                    "background": "rgba(239, 68, 68, 0.1)", "border": "1px solid rgba(239, 68, 68, 0.3)",
+                    "borderRadius": "4px", "padding": "4px 8px", "cursor": "pointer",
+                    "fontSize": "11px", "color": "#f87171"
+                })
+            ])
         ])
     ])
 
@@ -2549,27 +3011,79 @@ def _save_notes(notes_list: list):
         print(f"Erreur sauvegarde notes: {e}")
 
 
-def add_note(product_name: str, author: str, message: str, mentions: list = None):
-    """Ajoute une nouvelle note"""
+def get_notes_for_product(product_name: str):
+    """
+    🚀 VERSION OPTIMISÉE - Récupère les notes d'un produit
+    Priorité: Supabase > Fichier local
+    """
+    # 1. Essayer Supabase d'abord (persistant)
+    if supabase_client:
+        try:
+            result = supabase_client.table("product_notes") \
+                .select("*") \
+                .ilike("product_name", product_name) \
+                .eq("is_deleted", False) \
+                .order("created_at", desc=True) \
+                .limit(50) \
+                .execute()
+
+            if result.data:
+                # Convertir au format attendu
+                notes = []
+                for n in result.data:
+                    notes.append({
+                        "id": n.get("id"),
+                        "product_name": n.get("product_name"),
+                        "author": n.get("user_id", "Utilisateur"),
+                        "message": n.get("note_text", ""),
+                        "mentions": n.get("mentions", []),
+                        "timestamp": n.get("created_at", datetime.now().isoformat())
+                    })
+                return notes
+        except Exception as e:
+            print(f"⚠️ Supabase notes error: {e}")
+
+    # 2. Fallback: fichier local
     notes = _load_notes()
+    return [n for n in notes if n.get("product_name", "").lower() == product_name.lower()]
+
+
+def add_note(product_name: str, author: str, message: str, mentions: list = None):
+    """
+    🚀 VERSION OPTIMISÉE - Ajoute une note
+    Sauvegarde dans Supabase + fichier local (backup)
+    """
     new_note = {
-        "id": f"note_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(notes)}",
+        "id": f"note_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
         "product_name": product_name,
         "author": author,
         "message": message,
         "mentions": mentions or [],
-        "timestamp": datetime.now().isoformat(),
-        "read_by": []
+        "timestamp": datetime.now().isoformat()
     }
+
+    # 1. Sauvegarder dans Supabase
+    if supabase_client:
+        try:
+            supabase_data = {
+                "product_name": product_name,
+                "user_id": author,
+                "note_text": message,
+                "mentions": mentions or [],
+                "supplier": None
+            }
+            result = supabase_client.table("product_notes").insert(supabase_data).execute()
+            if result.data:
+                print(f"✅ Note sauvegardée dans Supabase pour: {product_name}")
+        except Exception as e:
+            print(f"⚠️ Supabase note save error: {e}")
+
+    # 2. Backup local
+    notes = _load_notes()
     notes.append(new_note)
     _save_notes(notes)
+
     return new_note
-
-
-def get_notes_for_product(product_name: str):
-    """Récupère toutes les notes d'un produit"""
-    notes = _load_notes()
-    return [n for n in notes if n.get("product_name", "").lower() == product_name.lower()]
 
 
 PO_LOCK = threading.Lock()
@@ -2655,15 +3169,16 @@ def get_next_po_number() -> str:
     return po_number
 
 
-# import pandas as pd
-# import numpy as np
+#import pandas as pd
+#import numpy as np
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
-
-# import warnings
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_score, f1_score, mean_absolute_error, r2_score
+#import warnings
 
 warnings.filterwarnings('ignore')
 
@@ -3246,7 +3761,6 @@ def calculate_ads_by_period(period_days: int = 7) -> pd.DataFrame:
         traceback.print_exc()
         return pd.DataFrame(columns=['product_name', f'Average Daily Sales ({period_days}d)'])
 
-
 def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     """
     🚀 VERSION OPTIMISÉE - Chargement parallèle des données
@@ -3255,9 +3769,9 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     import pandas as pd
 
     load_start = time.time()
-    print(f"\n{'=' * 60}")
+    print(f"\n{'='*60}")
     print(f"🚀 LOAD_SUPPLY_DATA OPTIMISÉ (période: {period_days})")
-    print(f"{'=' * 60}")
+    print(f"{'='*60}")
 
     # =========================
     # Helpers
@@ -3503,8 +4017,7 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
             catalog_df.columns = [str(c).lower().strip() for c in catalog_df.columns]
 
             # Vérifier si on a des colonnes avec de vrais noms (pas "unnamed")
-            named_cols = [c for c in catalog_df.columns if
-                          'unnamed' not in c.lower() and c != '' and '#n/a' not in c.lower()]
+            named_cols = [c for c in catalog_df.columns if 'unnamed' not in c.lower() and c != '' and '#n/a' not in c.lower()]
             print(f"   Colonnes nommées: {len(named_cols)} -> {named_cols[:8]}")
 
             # Chercher product_id et product_name
@@ -3538,8 +4051,7 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                 print(f"   🎯 SUCCÈS avec skiprows={skip}")
 
                 catalog_subset = pd.DataFrame()
-                catalog_subset['product_id'] = pd.to_numeric(catalog_df[col_product_id], errors='coerce').fillna(
-                    0).astype(int)
+                catalog_subset['product_id'] = pd.to_numeric(catalog_df[col_product_id], errors='coerce').fillna(0).astype(int)
                 catalog_subset['product_name'] = catalog_df[col_product_name].astype(str).str.lower().str.strip()
 
                 if col_is_active:
@@ -3555,9 +4067,15 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
 
                 product_map = catalog_subset.drop_duplicates(subset=['product_name'])
 
+                # Compter actifs/inactifs
+                active_count = product_map['is_active'].sum()
+                inactive_count = len(product_map) - active_count
+
                 print(f"\n✅ Catalogue traité (skiprows={skip}):")
                 print(f"   - Total produits : {len(product_map)}")
                 print(f"   - Avec product_id > 0 : {(product_map['product_id'] > 0).sum()}")
+                print(f"   - ✅ Actifs (is_active=True) : {active_count}")
+                print(f"   - ❌ Inactifs (is_active=False) : {inactive_count}")
                 print(f"   - Échantillon:")
                 print(product_map.head(3).to_string())
 
@@ -3612,8 +4130,7 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
             })
         )
         # Convertir product_id en int
-        total_stock_df['product_id'] = pd.to_numeric(total_stock_df['product_id'], errors='coerce').fillna(0).astype(
-            int)
+        total_stock_df['product_id'] = pd.to_numeric(total_stock_df['product_id'], errors='coerce').fillna(0).astype(int)
         inv_valid = (total_stock_df['product_id'] > 0).sum()
         print(f"   ✅ Après groupby: {len(total_stock_df)} produits, {inv_valid} avec product_id de l'inventaire")
     else:
@@ -3677,8 +4194,7 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
             total_stock_df.drop(columns=['catalog_product_id'], errors='ignore', inplace=True)
 
         # Remplir les valeurs manquantes
-        total_stock_df['product_id'] = pd.to_numeric(total_stock_df['product_id'], errors='coerce').fillna(0).astype(
-            int)
+        total_stock_df['product_id'] = pd.to_numeric(total_stock_df['product_id'], errors='coerce').fillna(0).astype(int)
         total_stock_df['is_active'] = total_stock_df['is_active'].fillna(True)
 
         print(f"\n✅ Merge catalogue effectué:")
@@ -3722,8 +4238,7 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
 
     # ✅ DEBUG: Vérifier product_id après premier merge
     if 'product_id' in final_stock_sales_df.columns:
-        print(
-            f"✅ product_id présent dans final_stock_sales_df: {(final_stock_sales_df['product_id'] > 0).sum()} valeurs valides")
+        print(f"✅ product_id présent dans final_stock_sales_df: {(final_stock_sales_df['product_id'] > 0).sum()} valeurs valides")
     else:
         print(f"⚠️ product_id ABSENT de final_stock_sales_df - colonnes: {final_stock_sales_df.columns.tolist()[:8]}")
 
@@ -4343,8 +4858,7 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                 final_stock_sales_df['days_since_reception'] = (
                         pd.Timestamp.now() - final_stock_sales_df['last_reception_date']
                 ).dt.days
-                final_stock_sales_df['last_reception_date'] = final_stock_sales_df['last_reception_date'].dt.strftime(
-                    '%d/%m/%Y')
+                final_stock_sales_df['last_reception_date'] = final_stock_sales_df['last_reception_date'].dt.strftime('%d/%m/%Y')
             except Exception as e:
                 print(f"   ⚠️ Erreur formatage date: {e}")
 
@@ -4354,8 +4868,7 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                 final_stock_sales_df['last_reception_qty'], 0
             ).astype(int)
 
-        matched = final_stock_sales_df[
-            'last_reception_qty'].notna().sum() if 'last_reception_qty' in final_stock_sales_df.columns else 0
+        matched = final_stock_sales_df['last_reception_qty'].notna().sum() if 'last_reception_qty' in final_stock_sales_df.columns else 0
         print(f"   ✅ {matched}/{before_merge} produits avec données de réception")
     else:
         # ℹ️ Les données de réception ne sont pas disponibles (timeout ou erreur)
@@ -4382,14 +4895,12 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
 
     # ✅ DEBUG: Vérifier product_id après déduplication
     if 'product_id' in final_stock_sales_df.columns:
-        final_stock_sales_df['product_id'] = pd.to_numeric(final_stock_sales_df['product_id'], errors='coerce').fillna(
-            0).astype(int)
+        final_stock_sales_df['product_id'] = pd.to_numeric(final_stock_sales_df['product_id'], errors='coerce').fillna(0).astype(int)
         valid = (final_stock_sales_df['product_id'] > 0).sum()
         print(f"   🔍 product_id après dédup: {valid}/{len(final_stock_sales_df)} valides")
     else:
         # Dernier recours : créer product_id à 0
-        print(
-            f"   ⚠️ product_id toujours absent après corrections! Colonnes: {final_stock_sales_df.columns.tolist()[:8]}...")
+        print(f"   ⚠️ product_id toujours absent après corrections! Colonnes: {final_stock_sales_df.columns.tolist()[:8]}...")
         final_stock_sales_df['product_id'] = 0
 
     # =========================
@@ -4478,8 +4989,7 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
         print("Entraînement modèle supervisé...")
 
         # ✅ DEBUG: Vérifier product_id AVANT ML
-        before_ml_valid = (final_stock_sales_df[
-                               'product_id'] > 0).sum() if 'product_id' in final_stock_sales_df.columns else 'ABSENT'
+        before_ml_valid = (final_stock_sales_df['product_id'] > 0).sum() if 'product_id' in final_stock_sales_df.columns else 'ABSENT'
         print(f"   🔍 product_id AVANT ML: {before_ml_valid}")
 
         final_stock_sales_df, ml_model = create_supervised_target_from_sales(
@@ -4488,8 +4998,7 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
         )
 
         # ✅ DEBUG: Vérifier product_id APRÈS ML
-        after_ml_valid = (final_stock_sales_df[
-                              'product_id'] > 0).sum() if 'product_id' in final_stock_sales_df.columns else 'ABSENT'
+        after_ml_valid = (final_stock_sales_df['product_id'] > 0).sum() if 'product_id' in final_stock_sales_df.columns else 'ABSENT'
         print(f"   🔍 product_id APRÈS ML: {after_ml_valid}")
         if after_ml_valid == 'ABSENT' and before_ml_valid != 'ABSENT':
             print(f"   ⚠️⚠️⚠️ product_id PERDU dans create_supervised_target_from_sales! ⚠️⚠️⚠️")
@@ -4683,41 +5192,112 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     print(f"• Produits delisted: {(final_stock_sales_df['delisting_status'].str.lower() == 'delisted').sum()}")
 
     # =========================
-    # ML: Stockout Probability
+    # 🤖 ML AMÉLIORÉ: Stockout Probability
     # =========================
     try:
+        # Features étendues pour meilleure prédiction
         feature_cols = [
             "total_stock", "Average Daily Sales",
             "Max Daily Sales (Pikine)", "optimal stock",
             "ADJUSTED_LEADTIME", "MAX_CREDIT_BUFFER", "AJUSTER_BUFFER"
         ]
         feature_cols = [c for c in feature_cols if c in final_stock_sales_df.columns]
+
+        # Ajouter features calculées
+        if "total_stock" in final_stock_sales_df.columns and "Average Daily Sales" in final_stock_sales_df.columns:
+            stock = pd.to_numeric(final_stock_sales_df["total_stock"], errors="coerce").fillna(0)
+            ads = pd.to_numeric(final_stock_sales_df["Average Daily Sales"], errors="coerce").fillna(0.01).replace(0, 0.01)
+
+            # Coverage ratio (jours de stock)
+            final_stock_sales_df["_coverage_ratio"] = stock / ads
+
+            # Stock health score (0-1)
+            optimal = pd.to_numeric(final_stock_sales_df.get("optimal stock", stock), errors="coerce").fillna(stock)
+            final_stock_sales_df["_stock_health"] = (stock / optimal.replace(0, 1)).clip(0, 2)
+
+            # Velocity score (ventes rapides = plus à risque)
+            max_sales = pd.to_numeric(final_stock_sales_df.get("Max Daily Sales (Pikine)", ads), errors="coerce").fillna(ads)
+            final_stock_sales_df["_velocity"] = max_sales / ads.replace(0, 0.01)
+
+            feature_cols.extend(["_coverage_ratio", "_stock_health", "_velocity"])
+
+        feature_cols = [c for c in feature_cols if c in final_stock_sales_df.columns]
+
         if feature_cols and "Predicted Stockout" in final_stock_sales_df.columns:
             df_train = final_stock_sales_df.dropna(subset=feature_cols + ["Predicted Stockout"]).copy()
             X = df_train[feature_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
             y = df_train["Predicted Stockout"].astype(int)
+
             if len(df_train) > 50 and y.nunique() > 1:
                 X_train, X_test, y_train, y_test = train_test_split(
                     X, y, test_size=0.2, random_state=42, stratify=y
                 )
+
+                # Random Forest optimisé
                 model = RandomForestClassifier(
-                    n_estimators=200, max_depth=8, class_weight="balanced", random_state=42, n_jobs=-1
+                    n_estimators=150,  # Réduit pour rapidité
+                    max_depth=10,
+                    min_samples_split=5,
+                    min_samples_leaf=2,
+                    class_weight="balanced",
+                    random_state=42,
+                    n_jobs=-1
                 )
                 model.fit(X_train, y_train)
+
                 y_pred = model.predict(X_test)
                 prec = precision_score(y_test, y_pred)
-                print(f"[ML Stockout] Modèle entraîné, précision test = {prec:.2f}")
+                f1 = f1_score(y_test, y_pred)
+
+                print(f"🤖 [ML Stockout] Modèle entraîné:")
+                print(f"   - Précision: {prec:.2%}")
+                print(f"   - F1-Score: {f1:.2%}")
+                print(f"   - Features: {len(feature_cols)}")
+
+                # Prédire probabilités
                 X_all = final_stock_sales_df[feature_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
                 probs = model.predict_proba(X_all)[:, 1]
                 final_stock_sales_df["Stockout Probability"] = probs
+
+                # Feature importance
+                importances = dict(zip(feature_cols, model.feature_importances_))
+                top_features = sorted(importances.items(), key=lambda x: x[1], reverse=True)[:3]
+                print(f"   - Top features: {', '.join([f'{k}({v:.2f})' for k,v in top_features])}")
+
+            else:
+                # Fallback: règles métier simples
+                print("🤖 [ML Stockout] Pas assez de données → utilisation règles métier")
+                if "_coverage_ratio" in final_stock_sales_df.columns:
+                    cov = final_stock_sales_df["_coverage_ratio"]
+                    # Probabilité basée sur couverture
+                    final_stock_sales_df["Stockout Probability"] = np.where(
+                        cov <= 0, 1.0,
+                        np.where(cov <= 3, 0.9,
+                                 np.where(cov <= 7, 0.7,
+                                          np.where(cov <= 14, 0.4,
+                                                   np.where(cov <= 21, 0.2, 0.1))))
+                    )
+                else:
+                    final_stock_sales_df["Stockout Probability"] = 0.0
+        else:
+            # Règles métier si pas de target
+            print("🤖 [ML Stockout] Colonnes ML absentes → règles métier")
+            if "total_stock" in final_stock_sales_df.columns and "Average Daily Sales" in final_stock_sales_df.columns:
+                stock = pd.to_numeric(final_stock_sales_df["total_stock"], errors="coerce").fillna(0)
+                ads = pd.to_numeric(final_stock_sales_df["Average Daily Sales"], errors="coerce").fillna(0.01).replace(0, 0.01)
+                coverage = stock / ads
+
+                final_stock_sales_df["Stockout Probability"] = np.where(
+                    stock <= 0, 1.0,
+                    np.where(coverage <= 3, 0.85,
+                             np.where(coverage <= 7, 0.6,
+                                      np.where(coverage <= 14, 0.3, 0.1)))
+                )
             else:
                 final_stock_sales_df["Stockout Probability"] = 0.0
-                print("[ML Stockout] Pas assez de données variées pour entraîner le modèle.")
-        else:
-            final_stock_sales_df["Stockout Probability"] = 0.0
-            print("[ML Stockout] Colonnes nécessaires absentes ou Predicted Stockout manquant.")
+
     except Exception as e:
-        print(f"[ML Stockout] Erreur lors du calcul ML: {e}")
+        print(f"🤖 [ML Stockout] Erreur: {e}")
         final_stock_sales_df["Stockout Probability"] = 0.0
 
     # =========================
@@ -4780,30 +5360,57 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     print("========================================================\n")
 
     # =========================
-    # ℹ️ INFO : Produits actifs/inactifs (SANS FILTRE)
+    # ✅ FILTRE 1 : Exclure les produits INACTIFS (is_active = False)
     # =========================
-    # NOTE: Le filtre is_active a été DÉSACTIVÉ pour afficher TOUS les produits
-    # Les produits inactifs seront affichés mais marqués visuellement
     if 'is_active' in final_stock_sales_df.columns:
-        active_count = final_stock_sales_df['is_active'].sum()
-        inactive_count = len(final_stock_sales_df) - active_count
+        before_filter = len(final_stock_sales_df)
+
+        # Convertir is_active en booléen
+        def parse_active(x):
+            if pd.isna(x):
+                return True
+            if isinstance(x, bool):
+                return x
+            return str(x).lower() in ('true', '1', 'yes', 'oui', 'actif')
+
+        final_stock_sales_df['is_active'] = final_stock_sales_df['is_active'].apply(parse_active)
+
+        # FILTRER : garder uniquement les actifs
+        final_stock_sales_df = final_stock_sales_df[final_stock_sales_df['is_active'] == True].copy()
+
+        after_filter = len(final_stock_sales_df)
+        excluded_inactive = before_filter - after_filter
 
         print(f"\n{'=' * 60}")
-        print(f"ℹ️ STATUT PRODUITS (PAS DE FILTRE)")
+        print(f"✅ FILTRE PRODUITS INACTIFS")
         print(f"{'=' * 60}")
-        print(f"   Total : {len(final_stock_sales_df)} produits")
-        print(f"   Actifs : {active_count}")
-        print(f"   Inactifs : {inactive_count}")
+        print(f"   Avant : {before_filter} produits")
+        print(f"   Exclus (inactifs) : {excluded_inactive}")
+        print(f"   Après : {after_filter} produits actifs")
         print(f"{'=' * 60}\n")
-
-        # S'assurer que is_active est bien défini pour tous
-        final_stock_sales_df['is_active'] = final_stock_sales_df['is_active'].fillna(True)
     else:
         print("\n⚠️ Colonne 'is_active' absente - TOUS les produits sont affichés")
         final_stock_sales_df['is_active'] = True
 
     # =========================
-    # ✅ FILTRE : Exclure les produits "cadeau"
+    # ✅ FILTRE 2 : Exclure les produits DELISTED
+    # =========================
+    if 'delisting_status' in final_stock_sales_df.columns:
+        before_delist = len(final_stock_sales_df)
+
+        # FILTRER : exclure les delisted
+        delist_mask = final_stock_sales_df['delisting_status'].astype(str).str.lower() == 'delisted'
+        final_stock_sales_df = final_stock_sales_df[~delist_mask].copy()
+
+        after_delist = len(final_stock_sales_df)
+        excluded_delisted = before_delist - after_delist
+
+        if excluded_delisted > 0:
+            print(f"✅ FILTRE DELISTED : {excluded_delisted} produits exclus")
+        print(f"   → Reste : {after_delist} produits")
+
+    # =========================
+    # ✅ FILTRE 3 : Exclure les produits "cadeau"
     # =========================
     if 'product_name' in final_stock_sales_df.columns:
         before_cadeau = len(final_stock_sales_df)
@@ -4984,8 +5591,6 @@ def get_preloaded_data(period_days="7d"):
         return DATA_30D.copy()
     else:
         return DATA_7D.copy()
-
-
 # ==================== CALLBACK ROTATION ADS ====================
 '''
 @app.callback(
@@ -5254,8 +5859,6 @@ def update_rotation_period(period_value):
         # ✅ RETOUR EN CAS D'ERREUR (4 valeurs)
         return no_update, no_update, no_update, error_indicator
 '''
-
-
 # Utility: add Actions columns
 def add_action_cols(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
@@ -5278,11 +5881,12 @@ def recalculate_product_metrics(row: pd.Series) -> pd.Series:
         pd.Series avec toutes les métriques recalculées
     """
 
+
     row = row.copy()
 
     # === VALIDATION & NETTOYAGE ===
     numeric_cols = {
-        # 'total_stock': 0,
+        #'total_stock': 0,
         'Average Daily Sales': 0.1,
         'Max Daily Sales (Pikine)': 0,
         'QAC': 0,
@@ -5291,8 +5895,8 @@ def recalculate_product_metrics(row: pd.Series) -> pd.Series:
         'credit_days': 0,
         'ADJUSTED_LEADTIME': 7,
         'AJUSTER_BUFFER': 0,
-        # 'target_quantity': 0,
-        # 'optimal stock': 0,
+        #'target_quantity': 0,
+        #'optimal stock': 0,
         'Max Coverage Day': 0
     }
 
@@ -5560,9 +6164,9 @@ def train_optimal_order_quantity_model(df: pd.DataFrame) -> tuple:
 
 
 # ----------------------------- App & Cache ---------------------------------------
-# app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
-# server = app.server
-# cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
+#app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
+#server = app.server
+#cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
 
 # ------------------------------ Custom CSS & JS ----------------------------------
 app.index_string = """
@@ -6331,20 +6935,137 @@ app.index_string = """
             }
 
             /* ========================================
+               NAVBAR NAVIGATION LINKS
+               ======================================== */
+            .nav-link-hover:hover > div {
+                background: rgba(14, 165, 233, 0.15) !important;
+                color: #0ea5e9 !important;
+            }
+
+            .nav-link-hover:active > div {
+                background: rgba(14, 165, 233, 0.25) !important;
+            }
+
+            /* ========================================
+               SIDEBAR - DROPDOWNS VISIBLES
+               ======================================== */
+            .sidebar {
+                background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%) !important;
+                width: 240px !important;
+            }
+
+            .sidebar label {
+                color: #e2e8f0 !important;
+                font-weight: 500 !important;
+            }
+
+            /* Tous les dropdowns dans le sidebar */
+            .sidebar .Select-control,
+            .sidebar .Select--single > .Select-control,
+            .sidebar .Select--multi > .Select-control,
+            .sidebar div[class*="control"] {
+                background-color: #1e293b !important;
+                border: 1px solid #475569 !important;
+                border-radius: 6px !important;
+                min-height: 32px !important;
+            }
+
+            /* Texte dans les dropdowns */
+            .sidebar .Select-value-label,
+            .sidebar .Select-placeholder,
+            .sidebar div[class*="singleValue"],
+            .sidebar div[class*="placeholder"],
+            .sidebar input[class*="Input"],
+            .sidebar .Select-input > input {
+                color: #1e293b !important;
+            }
+
+            /* Menu déroulant */
+            .sidebar .Select-menu-outer,
+            .sidebar div[class*="menu"] {
+                background-color: #fff !important;
+                border: 1px solid #e2e8f0 !important;
+                border-radius: 6px !important;
+                z-index: 9999 !important;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+            }
+
+            /* Options dans le menu */
+            .sidebar .Select-option,
+            .sidebar div[class*="option"] {
+                background-color: #fff !important;
+                color: #1e293b !important;
+                padding: 8px 12px !important;
+            }
+
+            .sidebar .Select-option:hover,
+            .sidebar .Select-option.is-focused,
+            .sidebar div[class*="option"]:hover {
+                background-color: #f1f5f9 !important;
+                color: #0f172a !important;
+            }
+
+            /* Tags sélectionnés (multi-select) */
+            .sidebar .Select-value,
+            .sidebar div[class*="multiValue"] {
+                background-color: #0ea5e9 !important;
+                border-color: #0ea5e9 !important;
+                color: #fff !important;
+                border-radius: 4px !important;
+            }
+
+            .sidebar .Select-value-label,
+            .sidebar div[class*="multiValue"] span {
+                color: #fff !important;
+            }
+
+            /* Flèche et clear */
+            .sidebar .Select-arrow-zone,
+            .sidebar .Select-clear-zone,
+            .sidebar div[class*="indicator"] {
+                color: #64748b !important;
+            }
+
+            /* Input recherche sidebar */
+            .sidebar input[type="text"],
+            .sidebar .form-control {
+                background: #334155 !important;
+                border: 1px solid #475569 !important;
+                color: #f8fafc !important;
+            }
+
+            .sidebar input[type="text"]::placeholder,
+            .sidebar .form-control::placeholder {
+                color: #94a3b8 !important;
+            }
+
+            /* Switch sidebar */
+            .sidebar .form-check-label {
+                color: #e2e8f0 !important;
+            }
+
+            /* ========================================
                RESPONSIVE
                ======================================== */
-            @media (max-width: 768px) {
-                .content {
-                    margin-left: 0;
-                    padding: 12px;
-                }
-
+            @media (max-width: 992px) {
                 .sidebar {
-                    display: none;
+                    width: 200px !important;
                 }
+                #page-container {
+                    margin-left: 200px !important;
+                }
+            }
 
-                #search-input {
-                    font-size: 16px !important; /* Évite le zoom sur mobile */
+            @media (max-width: 768px) {
+                .sidebar {
+                    display: none !important;
+                }
+                #page-container {
+                    margin-left: 0 !important;
+                    padding: 12px !important;
+                }
+                nav > div:nth-child(2) {
+                    display: none !important; /* Cacher nav links sur mobile */
                 }
             }
         </style>
@@ -6382,7 +7103,6 @@ app.index_string = """
 </html>
 """
 
-
 # ------------------------------ Data cache layer ---------------------------------
 
 # NOTE: get_df_cached est défini au début du fichier (ligne ~294) avec @cache.memoize
@@ -6390,6 +7110,10 @@ app.index_string = """
 
 # ------------------------------ Sidebar ------------------------------------------
 def make_sidebar():
+    """
+    Sidebar simplifié - Filtres uniquement.
+    La navigation est dans la navbar horizontale.
+    """
     df = get_df_cached()
 
     # Extraction des valeurs uniques pour les dropdowns
@@ -6415,113 +7139,115 @@ def make_sidebar():
     except Exception as e:
         print(f"⚠️ Erreur chargement agents pour sidebar: {e}")
 
-    return html.Div(className="sidebar", children=[
-        html.Div([
-            html.Div([
-                html.Img(src=LOGO_DATA_URI,
-                         style={"height": "42px", "marginRight": "8px"}) if LOGO_DATA_URI else html.Div(),
-                html.Div(APP_BRAND, className="brand"),
-            ], style={"display": "flex", "alignItems": "center", "gap": "10px"}),
-            html.Div("Supply Chain Command Center", className="muted")
-        ]),
-        html.Hr(),
-        # html.Div(className="banner-risk", id="risk-banner", children="Chargement..."),
-        html.Div(className="section-title", children="Recherche"),
-        dbc.InputGroup(className="search-input", children=[
-            dbc.Input(id="search-input", placeholder="Rechercher un produit...", type="text", debounce=True)
-        ]),
-        html.Br(),
-        html.Div(className="section-title", children="Filtres"),
-        html.Div(className="pill", children=[
-            html.Small("Supplier"),
-            dcc.Dropdown(
-                id="filter-supplier",
-                options=[{"label": s, "value": s} for s in suppliers],
-                multi=True,
-                placeholder="Tous",
-                persistence=True
-            ),
-            html.Br(),
-            html.Small("Catégorie"),
-            dcc.Dropdown(
-                id="filter-category",
-                options=[{"label": c, "value": c} for c in cats],
-                multi=True,
-                placeholder="Toutes",
-                persistence=True
-            ),
-            html.Br(),
-            html.Small("Besoin d'achat"),
-            dcc.Dropdown(
-                id="filter-need",
-                options=[
-                    {"label": "ORDER NOW", "value": "ORDER NOW"},
-                    {"label": "ORDER NOT URGENT", "value": "ORDER NOT URGENT"},
-                    {"label": "NO NEED", "value": "NO NEED"}
-                ],
-                multi=True,
-                placeholder="Tous",
-                persistence=True
-            ),
-            html.Br(),
-            html.Small(" Agent"),
-            dcc.Dropdown(
-                id="filter-agent",
-                options=[{"label": "Tous", "value": "all"}] + [{"label": a, "value": a} for a in agents_list],
-                value="all",
-                placeholder="Tous les agents",
-                persistence=True
-            ),
-            html.Br(),
-            dbc.Checklist(
-                options=[
-                    {"label": "Regrouper par produit (dé-dup)", "value": "by_product"},
-                ],
-                value=[],
-                id="toggle-options",
-                switch=True
-            )
-        ]),
+    return html.Div(className="sidebar", style={
+        "position": "fixed",
+        "top": "50px",
+        "left": "0",
+        "width": "240px",
+        "height": "calc(100vh - 56px)",
+        "background": "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
+        "borderRight": "1px solid #334155",
+        "padding": "16px",
+        "overflowY": "auto",
+        "zIndex": "100"
+    }, children=[
 
-        html.Br(),
+        # Recherche
         html.Div([
-            html.Span(" "),
-            dbc.Button("📄 Bon de commande", id="btn-po-pdf", className="btn-primary", size="sm", disabled=True),
-            # Le bouton est désactivé par défaut
-            # ✅ AJOUTER : Modal de chargement
-            dbc.Modal(
-                [
-                    dbc.ModalBody([
-                        html.Div([
-                            dbc.Spinner(color="primary", size="lg"),
-                            html.H5("Génération du bon de commande...", className="mt-3", style={"color": "#0ea5e9"}),
-                            html.P("Veuillez patienter (5-10 secondes)", style={"color": "#9ca3af"})
-                        ], style={"textAlign": "center", "padding": "30px"})
-                    ], style={"background": "#f8fafc"})
-                ],
-                id="po-loading-overlay",
-                is_open=False,
-                centered=True,
-                backdrop="static",  # ✅ Empêche fermeture manuelle
-                keyboard=False
-            ),
-            dcc.Download(id="download-data"),
-            dcc.Download(id="download-po"),
-        ]),
-        html.Br(),
+            html.Div("RECHERCHE", style={
+                "color": "#94a3b8", "fontSize": "10px", "fontWeight": "600",
+                "textTransform": "uppercase", "letterSpacing": "1px", "marginBottom": "6px"
+            }),
+            dbc.Input(
+                id="search-input", placeholder="Rechercher...", type="text", debounce=True,
+                style={"background": "#334155", "border": "1px solid #475569", "color": "#f8fafc",
+                       "fontSize": "12px", "borderRadius": "6px", "padding": "8px 10px"}
+            )
+        ], style={"marginBottom": "16px"}),
+
+        # Filtres
         html.Div([
-            dbc.Nav([
-                dbc.NavLink("Overview", href="/", id="nav-overview", active="exact"),
-                dbc.NavLink("Analyses", href="/analytics", id="nav-analytics", active="exact"),
-                dbc.NavLink("Prédictions", href="/predictions", id="nav-pred", active="exact"),
-                dbc.NavLink(" Agents", href="/agents", id="nav-agents", active="exact"),
-                dbc.NavLink(" Promotions", href="/promotions", active="exact"),
-                dbc.NavLink("About", href="/about", id="nav-about", active="exact"),
-            ], vertical=True, pills=True)
-        ]),
-        html.Br(),
-        html.Small(f"© {datetime.now().year} • {AUTHOR}"),
-        html.Div(id="debug-info", style={"marginTop": "20px", "fontSize": "10px", "color": "#6b7280"})  # Pour debug
+            html.Div("FILTRES", style={
+                "color": "#94a3b8", "fontSize": "10px", "fontWeight": "600",
+                "textTransform": "uppercase", "letterSpacing": "1px", "marginBottom": "10px"
+            }),
+
+            # Fournisseur
+            html.Div([
+                html.Label("Fournisseur", style={"color": "#e2e8f0", "fontSize": "11px", "fontWeight": "500", "marginBottom": "4px", "display": "block"}),
+                dcc.Dropdown(
+                    id="filter-supplier",
+                    options=[{"label": s, "value": s} for s in suppliers],
+                    multi=True, placeholder="Tous", persistence=True,
+                    style={"fontSize": "11px"}
+                )
+            ], style={"marginBottom": "10px"}),
+
+            # Catégorie
+            html.Div([
+                html.Label("Catégorie", style={"color": "#e2e8f0", "fontSize": "11px", "fontWeight": "500", "marginBottom": "4px", "display": "block"}),
+                dcc.Dropdown(
+                    id="filter-category",
+                    options=[{"label": c, "value": c} for c in cats],
+                    multi=True, placeholder="Toutes", persistence=True,
+                    style={"fontSize": "11px"}
+                )
+            ], style={"marginBottom": "10px"}),
+
+            # Besoin
+            html.Div([
+                html.Label("Besoin", style={"color": "#e2e8f0", "fontSize": "11px", "fontWeight": "500", "marginBottom": "4px", "display": "block"}),
+                dcc.Dropdown(
+                    id="filter-need",
+                    options=[
+                        {"label": "ORDER NOW", "value": "ORDER NOW"},
+                        {"label": "ORDER NOT URGENT", "value": "ORDER NOT URGENT"},
+                        {"label": "NO NEED", "value": "NO NEED"}
+                    ],
+                    multi=True, placeholder="Tous", persistence=True,
+                    style={"fontSize": "11px"}
+                )
+            ], style={"marginBottom": "10px"}),
+
+            # Agent
+            html.Div([
+                html.Label("Agent", style={"color": "#e2e8f0", "fontSize": "11px", "fontWeight": "500", "marginBottom": "4px", "display": "block"}),
+                dcc.Dropdown(
+                    id="filter-agent",
+                    options=[{"label": "Tous", "value": "all"}] + [{"label": a, "value": a} for a in agents_list],
+                    value="all", placeholder="Tous", persistence=True,
+                    style={"fontSize": "11px"}
+                )
+            ], style={"marginBottom": "10px"}),
+
+            # Regroupement
+            dbc.Checklist(
+                options=[{"label": " Regrouper par produit", "value": "by_product"}],
+                value=[], id="toggle-options", switch=True,
+                style={"fontSize": "11px", "color": "#cbd5e1"}
+            )
+        ], style={"marginBottom": "14px"}),
+
+        html.Hr(style={"borderColor": "#334155", "margin": "12px 0"}),
+
+        # Footer
+        html.Div([
+            html.Small(f"© {datetime.now().year} • {AUTHOR}", style={"color": "#64748b", "fontSize": "9px"})
+        ], style={"position": "absolute", "bottom": "12px", "left": "16px", "right": "16px"}),
+
+        html.Div(id="debug-info", style={"display": "none"}),
+        dcc.Download(id="download-data"),
+        dcc.Download(id="download-po"),
+
+        dbc.Modal([
+            dbc.ModalBody([
+                html.Div([
+                    dbc.Spinner(color="primary", size="lg"),
+                    html.H5("Génération du BC...", className="mt-3", style={"color": "#0ea5e9"}),
+                    html.P("Patientez...", style={"color": "#9ca3af", "fontSize": "11px"})
+                ], style={"textAlign": "center", "padding": "16px"})
+            ], style={"background": "#f8fafc"})
+        ], id="po-loading-overlay", is_open=False, centered=True, backdrop="static", keyboard=False),
     ])
 
 
@@ -6664,6 +7390,7 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
     return grouped
 
 
+
 # ============================================================
 # FONCTION CENTRALE DE CALCUL DES KPIS - COHÉRENCE GARANTIE
 # ============================================================
@@ -6673,6 +7400,7 @@ def calculate_stock_kpis(df: pd.DataFrame) -> dict:
     Utilisée par Overview ET Agents pour garantir la cohérence ABSOLUE.
 
     DÉFINITIONS STRICTES:
+    - SKUs: Produits ACTIFS uniquement (is_active = True)
     - Rupture (Out of Stock): stock actuel <= 0
     - À risque de rupture: produits avec proba ML >= 0.5 OU couverture < 7 jours
 
@@ -6689,15 +7417,36 @@ def calculate_stock_kpis(df: pd.DataFrame) -> dict:
             'method_prediction': 'N/A'
         }
 
-    # Filtrer les produits delisted
-    if 'delisting_status' in df.columns:
-        delist = df['delisting_status'].astype(str).str.lower()
-        mask_valid = delist != 'delisted'
-        df_clean = df.loc[mask_valid].copy()
-    else:
-        df_clean = df.copy()
+    df_clean = df.copy()
 
-    # KPI 1 : SKUs uniques
+    # ========================================
+    # 🔍 FILTRAGE 1: Exclure les produits delisted
+    # ========================================
+    if 'delisting_status' in df_clean.columns:
+        delist = df_clean['delisting_status'].astype(str).str.lower()
+        mask_valid = delist != 'delisted'
+        df_clean = df_clean.loc[mask_valid].copy()
+
+    # ========================================
+    # 🔍 FILTRAGE 2: Produits ACTIFS uniquement (is_active = True)
+    # ========================================
+    if 'is_active' in df_clean.columns:
+        # Convertir en booléen de façon robuste
+        def parse_is_active(x):
+            if pd.isna(x):
+                return True  # Par défaut actif si non spécifié
+            if isinstance(x, bool):
+                return x
+            return str(x).lower() in ('true', '1', 'yes', 'oui', 'actif')
+
+        df_clean['_is_active'] = df_clean['is_active'].apply(parse_is_active)
+        total_before = len(df_clean)
+        df_clean = df_clean[df_clean['_is_active'] == True].copy()
+        total_after = len(df_clean)
+        if total_before != total_after:
+            print(f"   🔍 Filtre is_active: {total_before} → {total_after} produits actifs")
+
+    # KPI 1 : SKUs uniques (ACTIFS uniquement)
     total_skus = df_clean['product_name'].nunique() if 'product_name' in df_clean.columns else len(df_clean)
 
     # KPI 2 : RUPTURES RÉELLES (Out of Stock) - stock <= 0
@@ -6754,8 +7503,14 @@ def calculate_stock_kpis(df: pd.DataFrame) -> dict:
     # KPI 4 : Fournisseurs
     suppliers = df_clean['Supplier'].nunique() if 'Supplier' in df_clean.columns else 0
 
-    print(
-        f"   📊 calculate_stock_kpis: SKUs={total_skus}, Ruptures={out_of_stock}, À risque={at_risk}, Fournisseurs={suppliers}")
+    print(f"   📊 KPIs: {total_skus} SKUs actifs | {out_of_stock} ruptures | {at_risk} à risque | {suppliers} fournisseurs")
+
+    # 🚀 Tracking Supabase (asynchrone, non-bloquant)
+    try:
+        total_in_df = len(df) if df is not None else 0
+        track_stock_stats(total_in_df, total_skus, out_of_stock, at_risk, suppliers)
+    except:
+        pass  # Ne jamais bloquer sur le tracking
 
     return {
         'total_skus': total_skus,
@@ -7086,8 +7841,6 @@ def make_kpis(df: pd.DataFrame):
     )
 
     return cards, bell
-
-
 '''
 def make_kpis(df: pd.DataFrame):
     """Calcule les KPIs (SKUs, ruptures, fournisseurs) + alerte dropdown produits à risque (ML)."""
@@ -7321,8 +8074,6 @@ def make_kpis(df: pd.DataFrame):
 
     return cards, bell
 '''
-
-
 @app.callback(
     Output("risk-alert-collapse", "is_open"),
     Input("risk-alert-toggle", "n_clicks"),
@@ -7382,12 +8133,33 @@ def navigate_to_risk_product(n_clicks_list, product_names):
     raise dash.exceptions.PreventUpdate
 
 
-def page_overview(master_df: pd.DataFrame = None):
+def page_overview(master_df: pd.DataFrame = None, username: str = None, user_role: str = None):
     # Charger les données
-
-    print(master_df.head())
     df = master_df if master_df is not None else get_df_cached()
     df = df.copy()
+
+    # ============================================
+    # 🔐 FILTRAGE PAR AGENT (si pas admin/manager)
+    # ============================================
+    agent_suppliers = None
+    if username and user_role:
+        agent_suppliers = get_agent_suppliers(username, user_role)
+
+        if agent_suppliers and 'Supplier' in df.columns:
+            # Normaliser pour comparaison
+            df_suppliers_upper = df['Supplier'].str.upper().str.strip()
+            agent_suppliers_upper = [s.upper().strip() for s in agent_suppliers]
+
+            before_filter = len(df)
+            df = df[df_suppliers_upper.isin(agent_suppliers_upper)].copy()
+            after_filter = len(df)
+
+            print(f"   🔐 Filtre agent {username}: {before_filter} → {after_filter} produits")
+            print(f"      Fournisseurs: {agent_suppliers}")
+
+    print(df.head())
+
+
 
     # === UI HARDENING (garantir présence + valeurs non vides) ===
     def _ui_harden(df):
@@ -7457,7 +8229,7 @@ def page_overview(master_df: pd.DataFrame = None):
     # ✅ 1. DÉFINIR colonnes prioritaires overview
     cols_priority_overview = [
 
-        # "delete",
+        #"delete",
         "product_id",
         "product_name",
         "Supplier",
@@ -7549,8 +8321,7 @@ def page_overview(master_df: pd.DataFrame = None):
     if len(product_id_variants) > 1:
         print(f"⚠️ page_overview: {len(product_id_variants)} colonnes product_id: {product_id_variants}")
         # Garder celle avec le plus de valeurs valides
-        best_col = max(product_id_variants,
-                       key=lambda c: (pd.to_numeric(df_overview[c], errors='coerce').fillna(0) > 0).sum())
+        best_col = max(product_id_variants, key=lambda c: (pd.to_numeric(df_overview[c], errors='coerce').fillna(0) > 0).sum())
         df_overview['product_id'] = pd.to_numeric(df_overview[best_col], errors='coerce').fillna(0).astype(int)
         cols_to_drop = [c for c in product_id_variants if c != 'product_id']
         df_overview.drop(columns=cols_to_drop, errors='ignore', inplace=True)
@@ -7594,9 +8365,9 @@ def page_overview(master_df: pd.DataFrame = None):
 
     # Insérer les colonnes "edit" et "delete" dans le DataFrame avec un message d'action ou une valeur par défaut
     # df_with_actions.insert(0, "delete", "delete")  # Colonne Delete
-    # df_with_actions.insert(0, "edit", "edit")  # Colonne Edit
+    #df_with_actions.insert(0, "edit", "edit")  # Colonne Edit
     # Appliquer la fonction pour ajouter les colonnes "edit" et "delete"
-    # df_with_actions = add_action_cols(df)
+    #df_with_actions = add_action_cols(df)
 
     # Mettre à jour la liste des colonnes disponibles
     available_cols_with_actions = ["edit", "delete"] + available_cols
@@ -7642,7 +8413,7 @@ def page_overview(master_df: pd.DataFrame = None):
     })
 
     # Ajouter la nouvelle colonne 'QAC edited' dans available_cols
-    available_cols = available_cols  # + ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
+    available_cols = available_cols #+ ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
 
     # Générer dynamiquement les colonnes et rendre 'QAC edited' editable
     columns = [
@@ -8123,44 +8894,51 @@ def page_overview(master_df: pd.DataFrame = None):
                          "selected_rows", "selected_columns", "hidden_columns"],
     )
 
-    # Boutons d'action améliorés
+    # Barre d'actions compacte
     action_buttons = html.Div([
-        dbc.ButtonGroup([
-            dbc.Button("🔄 Actualiser", id="btn-refresh", className="btn-outline-secondary", size="sm",
-                       style={"fontWeight": "600"}, title="Rafraîchir l'interface (rapide)"),
-            dbc.Button("📥 Recharger données", id="btn-reload-data", className="btn-outline-warning", size="sm",
-                       style={"fontWeight": "600"}, title="Recharger depuis Google Sheets (lent)"),
-            dbc.Button("☑️ Tout sélect.", id="btn-select-all", className="btn-outline-primary", size="sm",
-                       style={"fontWeight": "600"}),
-            dbc.Button("➕ Ajouter", id="btn-add-row", className="btn-primary", size="sm",
-                       style={"fontWeight": "600"}),
-            #dbc.Button("💾 Enregistrer QAC", id={'type': 'btn-save-qac', 'index': 'dbc'}, #className="btn-success",
-              #         size="sm",
-               #        style={"fontWeight": "600"}),
-        ], size="sm"),
-        # Compteur de sélection inline
+        html.Div([
+            dbc.Button("Actualiser", id="btn-refresh", color="light", size="sm",
+                       style={"fontSize": "12px", "padding": "4px 10px", "marginRight": "6px"}),
+            dbc.Button("Recharger", id="btn-reload-data", color="warning", size="sm", outline=True,
+                       style={"fontSize": "12px", "padding": "4px 10px", "marginRight": "6px"}),
+            dbc.Button("Tout sélect.", id="btn-select-all", color="secondary", size="sm", outline=True,
+                       style={"fontSize": "12px", "padding": "4px 10px", "marginRight": "6px"}),
+            dbc.Button("+ Ajouter", id="btn-add-row", color="info", size="sm",
+                       style={"fontSize": "12px", "padding": "4px 10px"}),
+        ], style={"display": "flex", "alignItems": "center"}),
+
         html.Span(id="selection-count-inline", style={
-            "marginLeft": "15px",
-            "fontSize": "13px",
-            "color": "#0ea5e9",
-            "fontWeight": "600"
-        })
-    ], style={"display": "flex", "alignItems": "center", "marginBottom": "12px"})
+            "marginLeft": "12px", "marginRight": "auto", "fontSize": "12px", "color": "#64748b"
+        }),
+
+        html.Div([
+            dbc.Button("Agent IA", id="btn-run-agent-ia", color="success", size="sm",
+                       style={"fontSize": "12px", "padding": "4px 12px", "marginRight": "6px"}),
+            dbc.Button("Bon de Commande", id="btn-po-pdf", color="primary", size="sm", disabled=True,
+                       style={"fontSize": "12px", "padding": "4px 12px"}),
+        ], style={"display": "flex", "alignItems": "center"})
+
+    ], style={
+        "display": "flex", "alignItems": "center", "justifyContent": "space-between",
+        "padding": "8px 12px", "background": "#fff", "borderRadius": "8px",
+        "border": "1px solid #e2e8f0", "marginBottom": "12px"
+    })
+
 
     # Dropdown filter-status
-    # dcc.Dropdown(
+    #dcc.Dropdown(
     #   id="filter-status",
     #  options=[
     #     {"label": "Tous", "value": "all"},
     #    {"label": "Stock OK", "value": "ok"},
     #   {"label": "Rupture", "value": "oos"}
-    # ],
-    # value="all",
-    # className="filter-dropdown"
-    # )
+    #],
+    #value="all",
+    #className="filter-dropdown"
+    #)
 
     # Modal édition
-    # edit_modal = dbc.Modal(
+    #edit_modal = dbc.Modal(
     #   [
     #      dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
     #     dbc.ModalBody([
@@ -8169,11 +8947,11 @@ def page_overview(master_df: pd.DataFrame = None):
     #  ]),
     # dbc.ModalFooter(
     #    dbc.Button("Fermer", id="close-edit", className="ms-auto", n_clicks=0)
-    # ),
-    # ],
-    # id="edit-modal",
-    # is_open=False,
-    # )
+    #),
+    #],
+    #id="edit-modal",
+    #is_open=False,
+    #)
 
     # ✅ NOUVEAU : Bouton flottant + Modal amélioré
     notes_fab_button = html.Button(
@@ -8543,7 +9321,6 @@ def apply_filters(search, sup, cat, need, options, master_json):
         []
     )
 
-
 @app.callback(
     Output("master-data", "data", allow_duplicate=True),
     Input("rotation-period", "value"),
@@ -8603,7 +9380,6 @@ def update_rotation_simple(period_value):
         import traceback
         traceback.print_exc()
         return no_update
-
 
 '''
 # Callback 2 : Filtrage (avec allow_duplicate)
@@ -9128,7 +9904,6 @@ def send_note_with_notifications(n_clicks, message, author, product_name):
 
     return notes_display, "", author, feedback
 
-
 @app.callback(
     [Output('main-table', 'data', allow_duplicate=True),
      Output('action-feedback', 'children', allow_duplicate=True),
@@ -9206,9 +9981,9 @@ def reload_data_from_source(n_clicks, auth_state):
         return [no_update] * 5
 
     try:
-        print(f"\n{'=' * 60}")
+        print(f"\n{'='*60}")
         print(f"📥 RECHARGEMENT COMPLET DEPUIS GOOGLE SHEETS")
-        print(f"{'=' * 60}")
+        print(f"{'='*60}")
 
         username = auth_state.get("username", "") if auth_state else ""
 
@@ -9231,7 +10006,7 @@ def reload_data_from_source(n_clicks, auth_state):
         new_page_content = page_overview(updated_df)
 
         print(f"   ✅ {len(updated_df)} produits rechargés")
-        print(f"{'=' * 60}\n")
+        print(f"{'='*60}\n")
 
         feedback = dbc.Alert([
             html.I(className="fas fa-check-circle me-2"),
@@ -9297,7 +10072,6 @@ def update_selection_count(selected_rows, table_data):
         return ""
     count = len(selected_rows)
     return f"✓ {count} produit{'s' if count > 1 else ''} sélectionné{'s' if count > 1 else ''}"
-
 
 @app.callback(
     [Output('edit-modal', 'is_open', allow_duplicate=True),
@@ -9869,7 +10643,6 @@ def update_analytics_charts(supplier_value, category_value, need_value, master_j
         return (empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, error_indicator)
 '''
 
-
 def page_predictive(master_df: pd.DataFrame = None):
     """Page Prédictions avec filtres dynamiques"""
     df = master_df if master_df is not None else get_df_cached()
@@ -10246,7 +11019,6 @@ def update_predictive_charts(supplier_value, category_value, need_value, master_
         indicator
     )
 '''
-
 
 def page_analytics(master_df: pd.DataFrame = None):
     df = master_df if master_df is not None else get_df_cached()
@@ -10634,7 +11406,6 @@ def create_hidden_table_placeholder():
         style_table={"display": "none"}
     )
 '''
-
 
 def page_analytics(master_df: pd.DataFrame = None):
     """Page Analytics avec filtres sidebar et graphiques dynamiques"""
@@ -11409,8 +12180,6 @@ def update_predictive_all_charts(supplier_filter, category_filter, need_filter, 
         fig_risk,
         df.to_dict("records")
     )
-
-
 def page_about():
     return html.Div(className="content", children=[
         html.H2("À propos", className="page-title"),
@@ -11434,6 +12203,231 @@ def page_about():
             ),
         ])
     ])
+
+
+# ============================================================
+# 👤 PAGE MON ESPACE - DASHBOARD AGENT COMPACT
+# ============================================================
+# Layout compact - Données EXACTES - Pas de débordement
+
+def page_my_space(username: str, master_df: pd.DataFrame = None):
+    """Page Mon Espace - Dashboard de l'agent."""
+    track_page_view(username, "myspace")
+
+    if master_df is None:
+        master_df = initial_df if 'initial_df' in globals() else pd.DataFrame()
+
+    user_info = get_user_info(username) or {}
+    user_name = user_info.get("name", username.title())
+    user_role = user_info.get("role", "user")
+
+    # Performances depuis Supabase
+    perf = get_user_stats_summary(username)
+    bc_count = perf.get("bc_count", 0)
+    bc_total = perf.get("bc_total", 0)
+    logins = perf.get("logins", 0)
+    pages = perf.get("pages_viewed", 0)
+
+    # Fournisseurs de l'agent
+    agent_suppliers_list = get_agent_suppliers(username, user_role)
+    if agent_suppliers_list is None and 'Supplier' in master_df.columns:
+        agent_suppliers_list = sorted(master_df['Supplier'].dropna().unique().tolist())
+
+    # Stats par fournisseur
+    suppliers_stats = []
+    total_skus = 0
+    total_ruptures = 0
+    total_at_risk = 0
+
+    if not master_df.empty and 'Supplier' in master_df.columns and agent_suppliers_list:
+        for supplier in agent_suppliers_list:
+            if not supplier or str(supplier).strip() == '':
+                continue
+            df_sup = master_df[master_df['Supplier'].str.upper().str.strip() == str(supplier).upper().strip()]
+            if df_sup.empty:
+                continue
+
+            n_products = len(df_sup)
+            total_skus += n_products
+            oos_count = 0
+            at_risk_count = 0
+
+            if 'total_stock' in df_sup.columns:
+                stocks = pd.to_numeric(df_sup['total_stock'], errors='coerce').fillna(0)
+                oos_count = int((stocks <= 0).sum())
+                total_ruptures += oos_count
+                if 'Max Coverage Day' in df_sup.columns:
+                    cov = pd.to_numeric(df_sup['Max Coverage Day'], errors='coerce').fillna(999)
+                    at_risk_count = int(((cov < 7) & (stocks > 0)).sum())
+                    total_at_risk += at_risk_count
+
+            oos_pct = (oos_count / n_products * 100) if n_products > 0 else 0
+            stock_value = 0
+            if 'total_stock' in df_sup.columns and 'Prix Achat TTC' in df_sup.columns:
+                stocks = pd.to_numeric(df_sup['total_stock'], errors='coerce').fillna(0)
+                prices = pd.to_numeric(df_sup['Prix Achat TTC'], errors='coerce').fillna(0)
+                stock_value = (stocks * prices).sum()
+
+            suppliers_stats.append({
+                "supplier": supplier, "products": n_products, "oos": oos_count,
+                "oos_pct": oos_pct, "at_risk": at_risk_count, "stock_value": stock_value
+            })
+
+    suppliers_stats.sort(key=lambda x: x["oos_pct"], reverse=True)
+    supplier_options = [{"label": "Tous mes fournisseurs", "value": "all"}]
+    supplier_options += [{"label": f"{s['supplier']} ({s['oos_pct']:.0f}% OOS)", "value": s['supplier']} for s in suppliers_stats]
+
+    return html.Div([
+        # En-tête
+        html.Div([
+            html.Div([
+                html.H4(user_name, style={"margin": "0", "fontSize": "18px", "color": "#1e293b", "fontWeight": "600"}),
+                html.Span(f"{user_role.upper()} | {datetime.now().strftime('%d/%m/%Y %H:%M')}", style={"fontSize": "11px", "color": "#64748b"})
+            ]),
+            html.Span(f"{len(suppliers_stats)} fournisseurs", style={"fontSize": "11px", "color": "#0ea5e9", "fontWeight": "500"})
+        ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "12px", "paddingBottom": "10px", "borderBottom": "1px solid #e2e8f0"}),
+
+        # Performances (30j)
+        html.Div([
+            html.Div("Mes Performances (30 jours)", style={"fontSize": "12px", "fontWeight": "600", "marginBottom": "8px", "color": "#374151"}),
+            html.Div([
+                html.Div([
+                    html.Div(f"{bc_count}", style={"fontSize": "20px", "fontWeight": "700", "color": "#3b82f6"}),
+                    html.Div("BC Générés", style={"fontSize": "9px", "color": "#6b7280"})
+                ], style={"textAlign": "center", "flex": "1", "padding": "10px", "background": "#eff6ff", "borderRadius": "6px"}),
+                html.Div([
+                    html.Div(f"{bc_total/1e6:.1f}M", style={"fontSize": "20px", "fontWeight": "700", "color": "#22c55e"}),
+                    html.Div("FCFA", style={"fontSize": "9px", "color": "#6b7280"})
+                ], style={"textAlign": "center", "flex": "1", "padding": "10px", "background": "#f0fdf4", "borderRadius": "6px"}),
+                html.Div([
+                    html.Div(f"{logins}", style={"fontSize": "20px", "fontWeight": "700", "color": "#8b5cf6"}),
+                    html.Div("Connexions", style={"fontSize": "9px", "color": "#6b7280"})
+                ], style={"textAlign": "center", "flex": "1", "padding": "10px", "background": "#faf5ff", "borderRadius": "6px"}),
+                html.Div([
+                    html.Div(f"{pages}", style={"fontSize": "20px", "fontWeight": "700", "color": "#06b6d4"}),
+                    html.Div("Pages", style={"fontSize": "9px", "color": "#6b7280"})
+                ], style={"textAlign": "center", "flex": "1", "padding": "10px", "background": "#ecfeff", "borderRadius": "6px"}),
+            ], style={"display": "flex", "gap": "6px"})
+        ], style={"background": "#fff", "padding": "12px", "borderRadius": "8px", "border": "1px solid #e5e7eb", "marginBottom": "12px"}),
+
+        # Résumé Stock
+        html.Div([
+            html.Div("Résumé Stock", style={"fontSize": "12px", "fontWeight": "600", "marginBottom": "8px", "color": "#374151"}),
+            html.Div([
+                html.Div([
+                    html.Div(f"{total_skus:,}", style={"fontSize": "18px", "fontWeight": "700", "color": "#0ea5e9"}),
+                    html.Div("Produits", style={"fontSize": "9px", "color": "#6b7280"})
+                ], style={"textAlign": "center", "flex": "1"}),
+                html.Div([
+                    html.Div(f"{total_ruptures}", style={"fontSize": "18px", "fontWeight": "700", "color": "#ef4444"}),
+                    html.Div("Ruptures", style={"fontSize": "9px", "color": "#6b7280"})
+                ], style={"textAlign": "center", "flex": "1", "padding": "6px", "background": "#fef2f2", "borderRadius": "6px"}),
+                html.Div([
+                    html.Div(f"{total_at_risk}", style={"fontSize": "18px", "fontWeight": "700", "color": "#f59e0b"}),
+                    html.Div("<7j", style={"fontSize": "9px", "color": "#6b7280"})
+                ], style={"textAlign": "center", "flex": "1", "padding": "6px", "background": "#fffbeb", "borderRadius": "6px"}),
+                html.Div([
+                    html.Div(f"{(total_ruptures/total_skus*100) if total_skus > 0 else 0:.1f}%", style={"fontSize": "18px", "fontWeight": "700", "color": "#dc2626"}),
+                    html.Div("OOS", style={"fontSize": "9px", "color": "#6b7280"})
+                ], style={"textAlign": "center", "flex": "1", "padding": "6px", "background": "#fef2f2", "borderRadius": "6px"}),
+            ], style={"display": "flex", "gap": "6px"})
+        ], style={"background": "#fff", "padding": "12px", "borderRadius": "8px", "border": "1px solid #e5e7eb", "marginBottom": "12px"}),
+
+        # Filtre Fournisseur
+        html.Div([
+            html.Div("Filtrer par Fournisseur", style={"fontSize": "12px", "fontWeight": "600", "marginBottom": "6px", "color": "#374151"}),
+            dcc.Dropdown(id="myspace-supplier-filter", options=supplier_options, value="all", clearable=False, style={"fontSize": "12px"})
+        ], style={"background": "#fff", "padding": "10px", "borderRadius": "8px", "border": "1px solid #e5e7eb", "marginBottom": "12px"}),
+
+        # Liste Fournisseurs
+        html.Div([
+            html.Div([
+                html.Span("Mes Fournisseurs", style={"fontSize": "12px", "fontWeight": "600", "color": "#374151"}),
+                html.Span(f" ({len(suppliers_stats)})", style={"fontSize": "11px", "color": "#64748b"})
+            ], style={"marginBottom": "8px"}),
+
+            html.Div([
+                # Header
+                html.Div([
+                    html.Div("Fournisseur", style={"flex": "2", "fontWeight": "500", "fontSize": "10px", "color": "#64748b"}),
+                    html.Div("Produits", style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b", "textAlign": "center"}),
+                    html.Div("OOS", style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b", "textAlign": "center"}),
+                    html.Div("% OOS", style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b", "textAlign": "center"}),
+                    html.Div("Risque", style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b", "textAlign": "center"}),
+                    html.Div("Valeur", style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b", "textAlign": "right"}),
+                ], style={"display": "flex", "padding": "6px 10px", "background": "#f8fafc", "borderRadius": "4px", "marginBottom": "4px"}),
+
+                html.Div([_create_supplier_row(s) for s in suppliers_stats[:15]], id="myspace-suppliers-list", style={"maxHeight": "280px", "overflowY": "auto"})
+            ]) if suppliers_stats else html.Div("Aucun fournisseur", style={"color": "#94a3b8", "textAlign": "center", "padding": "16px"})
+        ], style={"background": "#fff", "padding": "12px", "borderRadius": "8px", "border": "1px solid #e5e7eb", "marginBottom": "12px"}),
+
+        # Actions
+        html.Div([
+            html.Div("Actions Rapides", style={"fontSize": "12px", "fontWeight": "600", "marginBottom": "8px", "color": "#374151"}),
+            html.Div([
+                dcc.Link(dbc.Button("Overview", color="primary", size="sm", outline=True, style={"fontSize": "11px"}), href="/"),
+                dcc.Link(dbc.Button("Analytics", color="info", size="sm", outline=True, style={"fontSize": "11px"}), href="/analytics"),
+                dcc.Link(dbc.Button("Prédictions", color="warning", size="sm", outline=True, style={"fontSize": "11px"}), href="/predictions"),
+            ], style={"display": "flex", "gap": "6px"})
+        ], style={"background": "#f8fafc", "padding": "12px", "borderRadius": "8px", "border": "1px solid #e5e7eb"}),
+
+    ], style={"padding": "12px"})
+
+
+def _create_supplier_row(s: dict) -> html.Div:
+    """Crée une ligne pour un fournisseur"""
+    oos_pct = s["oos_pct"]
+    if oos_pct >= 30:
+        oos_color, oos_bg = "#dc2626", "#fef2f2"
+    elif oos_pct >= 15:
+        oos_color, oos_bg = "#f59e0b", "#fffbeb"
+    elif oos_pct > 0:
+        oos_color, oos_bg = "#eab308", "#fefce8"
+    else:
+        oos_color, oos_bg = "#22c55e", "#f0fdf4"
+
+    return html.Div([
+        html.Div(s["supplier"][:22], style={"flex": "2", "fontSize": "11px", "color": "#1e293b", "overflow": "hidden", "textOverflow": "ellipsis", "whiteSpace": "nowrap"}),
+        html.Div(str(s["products"]), style={"flex": "1", "fontSize": "11px", "color": "#64748b", "textAlign": "center"}),
+        html.Div(str(s["oos"]), style={"flex": "1", "fontSize": "11px", "color": "#ef4444", "textAlign": "center", "fontWeight": "600"}),
+        html.Div(f"{oos_pct:.0f}%", style={"flex": "1", "fontSize": "11px", "color": oos_color, "textAlign": "center", "fontWeight": "600", "background": oos_bg, "borderRadius": "3px", "padding": "1px 0"}),
+        html.Div(str(s["at_risk"]), style={"flex": "1", "fontSize": "11px", "color": "#f59e0b", "textAlign": "center"}),
+        html.Div(f"{s['stock_value']/1e6:.1f}M", style={"flex": "1", "fontSize": "11px", "color": "#22c55e", "textAlign": "right"}),
+    ], style={"display": "flex", "alignItems": "center", "padding": "6px 10px", "borderBottom": "1px solid #f1f5f9"})
+
+
+def _create_orders_history(orders: list) -> html.Div:
+    """Crée l'historique des commandes"""
+    if not orders:
+        return html.P("Aucune commande enregistrée", style={"color": "#64748b", "textAlign": "center"})
+
+    items = []
+    for order in orders[-10:]:  # 10 dernières
+        date_str = order.get("created_at", "")[:10]
+        supplier = order.get("supplier", "N/A")
+        amount = order.get("order_total", 0)
+        products = order.get("products_count", 0)
+        po = order.get("po_number", "N/A")
+
+        items.append(html.Div([
+            html.Div([
+                html.Span(f"📄 {po}", style={"fontWeight": "600", "color": "#1e293b"}),
+                html.Span(f" • {date_str}", style={"color": "#64748b", "fontSize": "13px"})
+            ]),
+            html.Div([
+                html.Span(supplier, style={"color": "#0ea5e9", "fontWeight": "500"}),
+                html.Span(f" • {products} produits • ", style={"color": "#64748b"}),
+                html.Span(f"{amount:,.0f} FCFA", style={"color": "#22c55e", "fontWeight": "600"})
+            ], style={"marginTop": "4px", "fontSize": "13px"})
+        ], style={
+            "padding": "12px",
+            "background": "#f8fafc",
+            "borderRadius": "8px",
+            "marginBottom": "8px",
+            "borderLeft": "4px solid #0ea5e9"
+        }))
+
+    return html.Div(items)
 
 
 def page_promotions():
@@ -11768,8 +12762,7 @@ def calculate_agent_performance(master_df: pd.DataFrame, agents_df: pd.DataFrame
 
             # Produits à risque (couverture < 7 jours)
             if 'rotation_days' in agent_products.columns:
-                agent_products['rotation_days'] = pd.to_numeric(agent_products['rotation_days'],
-                                                                errors='coerce').fillna(999)
+                agent_products['rotation_days'] = pd.to_numeric(agent_products['rotation_days'], errors='coerce').fillna(999)
                 risk_count = int(((agent_products['rotation_days'] < 7) & (agent_products['rotation_days'] > 0)).sum())
                 valid_rotations = agent_products[agent_products['rotation_days'] < 999]['rotation_days']
                 avg_rotation = valid_rotations.mean() if len(valid_rotations) > 0 else 0
@@ -11893,9 +12886,9 @@ def get_agent_for_product(product_supplier, mapping=None):
 def page_agents(master_df: pd.DataFrame = None):
     """Page de suivi de performance des agents - Compacte et adaptée au layout"""
 
-    print("\n" + "=" * 60)
+    print("\n" + "="*60)
     print("👤 CHARGEMENT PAGE AGENTS")
-    print("=" * 60)
+    print("="*60)
 
     # Charger les données
     agents_df = load_agents_suppliers()
@@ -11939,8 +12932,7 @@ def page_agents(master_df: pd.DataFrame = None):
     total_ruptures = stock_kpis['out_of_stock']
     total_at_risk = stock_kpis['at_risk']
 
-    print(
-        f"   📈 KPIs Agents: agents={total_agents}, score={avg_score:.1f}, rupt={total_ruptures}, risk={total_at_risk}")
+    print(f"   📈 KPIs Agents: agents={total_agents}, score={avg_score:.1f}, rupt={total_ruptures}, risk={total_at_risk}")
 
     # ==========================================
     # KPIs AGRANDIS (style cards)
@@ -11952,8 +12944,7 @@ def page_agents(master_df: pd.DataFrame = None):
         "boxShadow": "0 2px 8px rgba(0,0,0,0.06)"
     }
     kpi_value_style = {"fontSize": "28px", "fontWeight": "700", "lineHeight": "1.2"}
-    kpi_label_style = {"color": "#64748b", "fontSize": "11px", "marginTop": "6px", "textTransform": "uppercase",
-                       "letterSpacing": "0.5px"}
+    kpi_label_style = {"color": "#64748b", "fontSize": "11px", "marginTop": "6px", "textTransform": "uppercase", "letterSpacing": "0.5px"}
 
     kpis_row = html.Div([
         html.Div([
@@ -11961,12 +12952,11 @@ def page_agents(master_df: pd.DataFrame = None):
             html.Div(" Agents", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
-            html.Div(f"{avg_score:.0f}",
-                     style={**kpi_value_style, "color": "#34d399" if avg_score >= 60 else "#f87171"}),
+            html.Div(f"{avg_score:.0f}", style={**kpi_value_style, "color": "#34d399" if avg_score >= 60 else "#f87171"}),
             html.Div(" Score Moyen", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
-            html.Div(f"{total_order_value / 1e6:.1f}M", style={**kpi_value_style, "color": "#7c3aed"}),
+            html.Div(f"{total_order_value/1e6:.1f}M", style={**kpi_value_style, "color": "#7c3aed"}),
             html.Div(" Valeur Cmd", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
@@ -12014,7 +13004,7 @@ def page_agents(master_df: pd.DataFrame = None):
                 'rank': idx + 1,
                 'agent': row['agent_name'],
                 'frs': int(row['total_suppliers']),
-                'val': f"{row['total_order_value'] / 1e6:.1f}M",
+                'val': f"{row['total_order_value']/1e6:.1f}M",
                 'ok': int(row['commandes_traitees']),
                 'pend': int(row['commandes_pending']),
                 'pct': f"{row['taux_traitement']:.0f}%",
@@ -12048,8 +13038,7 @@ def page_agents(master_df: pd.DataFrame = None):
             'padding': '10px 8px', 'fontSize': '13px', 'textAlign': 'center', 'minWidth': '70px'
         },
         style_data_conditional=[
-            {'if': {'filter_query': '{rank} = 1'}, 'borderLeft': '3px solid #fbbf24',
-             'backgroundColor': 'rgba(251, 191, 36, 0.05)'},
+            {'if': {'filter_query': '{rank} = 1'}, 'borderLeft': '3px solid #fbbf24', 'backgroundColor': 'rgba(251, 191, 36, 0.05)'},
             {'if': {'filter_query': '{rank} = 2'}, 'borderLeft': '3px solid #94a3b8'},
             {'if': {'filter_query': '{rank} = 3'}, 'borderLeft': '3px solid #b45309'},
             {'if': {'column_id': 'sc'}, 'fontWeight': '700', 'color': '#0ea5e9', 'fontSize': '14px'},
@@ -12085,8 +13074,7 @@ def page_agents(master_df: pd.DataFrame = None):
             risk_df['_stk'] = 0
 
         if 'Average Daily Sales' in risk_df.columns:
-            risk_df['_ads'] = pd.to_numeric(risk_df['Average Daily Sales'], errors='coerce').fillna(0.01).replace(0,
-                                                                                                                  0.01)
+            risk_df['_ads'] = pd.to_numeric(risk_df['Average Daily Sales'], errors='coerce').fillna(0.01).replace(0, 0.01)
         else:
             risk_df['_ads'] = 0.01
 
@@ -12156,8 +13144,7 @@ def page_agents(master_df: pd.DataFrame = None):
         dbc.Col([
             html.Div([
                 html.Span("🚨", style={"fontSize": "18px", "marginRight": "8px"}),
-                html.Span(f"Produits à Risque ({len(risk_products)})",
-                          style={"fontSize": "16px", "fontWeight": "600", "color": "#1e293b"})
+                html.Span(f"Produits à Risque ({len(risk_products)})", style={"fontSize": "16px", "fontWeight": "600", "color": "#1e293b"})
             ], style={"marginBottom": "12px"}),
             risk_table
         ], width=12)
@@ -12169,8 +13156,7 @@ def page_agents(master_df: pd.DataFrame = None):
     detail = html.Div([
         html.Span("🔍 ", style={"marginRight": "8px", "fontSize": "16px"}),
         html.Div(id="agent-suppliers-detail", children=[
-            html.Span("Cliquez sur un agent dans la table pour voir ses fournisseurs",
-                      style={"color": "#64748b", "fontSize": "13px"})
+            html.Span("Cliquez sur un agent dans la table pour voir ses fournisseurs", style={"color": "#64748b", "fontSize": "13px"})
         ], style={"display": "inline"})
     ], style={
         "background": "linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%)",
@@ -12184,10 +13170,8 @@ def page_agents(master_df: pd.DataFrame = None):
     return html.Div(className="content", children=[
         # Header
         html.Div([
-            html.H4(" Performance Agents",
-                    style={"margin": "0", "fontSize": "20px", "fontWeight": "700", "color": "#0ea5e9"}),
-            html.P("Suivi des performances et gestion des risques par agent",
-                   style={"margin": "4px 0 0 0", "color": "#64748b", "fontSize": "13px"})
+            html.H4(" Performance Agents", style={"margin": "0", "fontSize": "20px", "fontWeight": "700", "color": "#0ea5e9"}),
+            html.P("Suivi des performances et gestion des risques par agent", style={"margin": "4px 0 0 0", "color": "#64748b", "fontSize": "13px"})
         ], style={"marginBottom": "20px"}),
 
         # KPIs
@@ -12232,8 +13216,7 @@ def page_agents(master_df: pd.DataFrame = None):
 def show_agent_suppliers_detail(selected_rows, table_data):
     """Affiche les fournisseurs détaillés quand un agent est sélectionné"""
     if not selected_rows or not table_data:
-        return html.Span("Cliquez sur un agent pour voir ses fournisseurs",
-                         style={"color": "#64748b", "fontSize": "10px"})
+        return html.Span("Cliquez sur un agent pour voir ses fournisseurs", style={"color": "#64748b", "fontSize": "10px"})
 
     # Récupérer l'agent sélectionné (colonne renommée en 'agent')
     agent_name = table_data[selected_rows[0]].get('agent', table_data[selected_rows[0]].get('agent_name', ''))
@@ -12276,7 +13259,7 @@ def show_agent_suppliers_detail(selected_rows, table_data):
     suppliers_list = agent_data[supplier_col].dropna().unique().tolist()
     suppliers_str = ", ".join([s[:15] for s in suppliers_list[:8]])
     if len(suppliers_list) > 8:
-        suppliers_str += f"... (+{len(suppliers_list) - 8})"
+        suppliers_str += f"... (+{len(suppliers_list)-8})"
 
     return html.Span([
         html.B(agent_name, style={"color": "#0ea5e9"}),
@@ -12383,8 +13366,6 @@ def display_page(pathname):
         ], className="error-message")
 
 '''
-
-
 # ------------------------------ Chatbot helpers ----------------------------------
 
 # =============================== Chatbot helpers ================================
@@ -12480,154 +13461,149 @@ def ask_ai(prompt: str, stream: bool = False) -> str:
 
 def chatbot_reply(user_text: str, df: pd.DataFrame, history_messages: list) -> str:
     """
-    Version Gemini – conserve toute la logique métier (détection langue, contexte, fallback).
+    🚀 VERSION OPTIMISÉE - Assistant Supply Chain Expert
+    - Réponses rapides et pertinentes
+    - Personnalité chaleureuse et experte
+    - Analyse contextuelle intelligente
     """
     try:
         if not user_text or not str(user_text).strip():
-            return "Je peux analyser tes stocks, les risques de rupture et suggérer des quantités à commander."
+            return "👋 Salut ! Je suis ton assistant Supply Chain. Pose-moi des questions sur tes stocks, ruptures, commandes ou n'importe quel sujet business !"
 
+        # Détection langue rapide
         lang = _detect_lang(user_text)
-        sample = _clean_df_for_advice(df if isinstance(df, pd.DataFrame) else pd.DataFrame())
-        fields = [
-            'product_name_display', 'supplier_name', 'abc_class', 'xyz_class', 'current_stock',
-            'avg_daily_sales', 'coverage_days', 'leadtime_days', 'credit_days', 'rupture_ml',
-            'delisting_product', 'risk'
-        ]
-        view = sample[[c for c in fields if c in sample.columns]].copy() if not sample.empty else pd.DataFrame()
 
-        cov_med = None
-        rows_digest = []
-        try:
-            if not view.empty and 'coverage_days' in view.columns:
-                cov_med = float(view['coverage_days'].median())
-                at_risk = view[
-                    view['rupture_ml'].str.upper() == 'OUI'] if 'rupture_ml' in view.columns else pd.DataFrame()
-                top_list = (
-                    at_risk.sort_values('coverage_days', ascending=True).head(6)
-                    if not at_risk.empty else
-                    view.sort_values('coverage_days', ascending=True).head(6)
-                )
-
-                for _, r in top_list.iterrows():
-                    rows_digest.append({
-                        "name": str(r.get('product_name_display', '')),
-                        "sup": str(r.get('supplier_name', '')),
-                        "cov": float(r.get('coverage_days', 0)),
-                        "lt": int(r.get('leadtime_days', 0)),
-                        "abc": str(r.get('abc_class', '')),
-                        "xyz": str(r.get('xyz_class', '')),
-                        "cred": int(r.get('credit_days', 0)),
-                    })
-        except Exception as e:
-            print(f"[Chatbot] Erreur agrégation: {e}")
-
-        table_json = []
-        try:
-            table_json = view.head(80).to_dict(orient="records")
-        except Exception:
-            pass
-
-        # Détecte si l'utilisateur demande une analyse
-        needs_analysis = any(keyword in user_text.lower() for keyword in [
+        # Préparation données (optimisé - seulement si nécessaire)
+        needs_data = any(kw in user_text.lower() for kw in [
             'analyse', 'recommande', 'conseil', 'rupture', 'commande', 'stock',
             'produit', 'quels', 'combien', 'urgent', 'priorité', 'fournisseur',
-            'risque', 'order', 'achat', 'besoin', 'coverage', 'lead time'
+            'risque', 'order', 'achat', 'besoin', 'coverage', 'lead', 'qac',
+            'commander', 'approvisionnement', 'inventaire', 'ruptures', 'données'
         ])
 
-        if lang == "fr":
-            system_msg = (
-                "Tu es maad_assistante, expert Supply Chain avec 30 ans d'expérience. "
-                "Tu es conversationnel et réponds naturellement aux questions.\n\n"
-                "RÈGLES DE CONVERSATION :\n"
-                "- Si l'utilisateur te salue ou discute, réponds de manière amicale et naturelle\n"
-                "- Si l'utilisateur pose une question générale sur la supply chain, explique clairement sans forcer une analyse de données\n"
-                "- SEULEMENT si l'utilisateur demande explicitement une analyse, recommandation, ou conseil sur ses stocks, utilise les données fournies\n"
-                "- Adapte ton niveau de détail à la question : simple question = réponse courte, analyse demandée = détails avec chiffres\n\n"
-                "QUAND TU ANALYSES LES DONNÉES :\n"
-                "- Cite des SKU concrets du tableau\n"
-                "- Propose des quantités chiffrées\n"
-                "- Mentionne les fournisseurs prioritaires\n"
-                "- Suggère des leviers (crédit, promo déstockage, catégories ABC/XYZ)\n"
-                "- Sois orienté action avec des recommandations précises"
-            )
+        ctx = ""
+        if needs_data and isinstance(df, pd.DataFrame) and not df.empty:
+            # Extraction rapide des KPIs clés
+            try:
+                total_products = len(df)
 
-            if needs_analysis and table_json:
-                ctx = "Données disponibles pour analyse :\n"
-                ctx += f"- Extrait produits (20 premiers) : {json.dumps(table_json[:20], ensure_ascii=False)}\n"
+                # Ruptures
+                ruptures = 0
+                if 'total_stock' in df.columns:
+                    stocks = pd.to_numeric(df['total_stock'], errors='coerce').fillna(0)
+                    ruptures = int((stocks <= 0).sum())
+
+                # Couverture médiane
+                cov_med = None
+                if 'coverage_days' in df.columns:
+                    cov_med = df['coverage_days'].median()
+                elif 'Average Daily Sales' in df.columns and 'total_stock' in df.columns:
+                    ads = pd.to_numeric(df['Average Daily Sales'], errors='coerce').fillna(0.01).replace(0, 0.01)
+                    stock = pd.to_numeric(df['total_stock'], errors='coerce').fillna(0)
+                    cov_med = (stock / ads).median()
+
+                # Fournisseurs
+                suppliers = df['Supplier'].nunique() if 'Supplier' in df.columns else 0
+
+                # Produits à risque (couverture < 7j)
+                at_risk = 0
                 if cov_med is not None:
-                    ctx += f"- KPI global : couverture médiane ≈ {cov_med:.1f} jours\n"
-                if rows_digest:
-                    ctx += "- Produits prioritaires : " + "; ".join(
-                        [
-                            "{name} (fournisseur {sup}, couverture {cov:.1f}j, lead time {lt}j)".format(**d)
-                            for d in rows_digest[:3]
-                        ]
-                    ) + "\n"
+                    at_risk = int(((stock / ads) < 7).sum())
 
-                else:
-                    ctx = "Conversation générale. Données disponibles si besoin d'analyse détaillée.\n"
+                # Top 5 produits critiques
+                top_critical = []
+                if 'product_name' in df.columns and 'total_stock' in df.columns:
+                    df_sorted = df.copy()
+                    df_sorted['_stock'] = pd.to_numeric(df_sorted['total_stock'], errors='coerce').fillna(0)
+                    critical = df_sorted[df_sorted['_stock'] <= 0].head(5)
+                    for _, row in critical.iterrows():
+                        top_critical.append(f"• {row.get('product_name', 'N/A')[:40]} ({row.get('Supplier', 'N/A')})")
 
-            user_q = f"Question : {user_text.strip()}"
+                ctx = f"""
+📊 **DONNÉES ACTUELLES** (temps réel):
+- Total SKUs: {total_products}
+- Ruptures: {ruptures} produits (stock = 0)
+- À risque: {at_risk} produits (couverture < 7j)
+- Couverture médiane: {cov_med:.1f}j
+- Fournisseurs actifs: {suppliers}
+
+🔴 **TOP PRODUITS EN RUPTURE**:
+{chr(10).join(top_critical) if top_critical else '• Aucune rupture détectée ✅'}
+"""
+            except Exception as e:
+                ctx = f"⚠️ Données partiellement disponibles. Erreur: {str(e)[:50]}"
+
+        # Système expert avec personnalité
+        if lang == "fr":
+            system_msg = """Tu es **MAAD Assistant**, expert Supply Chain avec 20+ ans d'expérience chez les plus grands distributeurs africains.
+
+🎯 **TA PERSONNALITÉ**:
+- Chaleureux, dynamique et passionné par la supply chain
+- Tu tutoies l'utilisateur et utilises des emojis avec modération
+- Tu es direct, pragmatique et orienté solutions
+- Tu aimes partager ton expertise avec enthousiasme
+
+💼 **TES COMPÉTENCES**:
+- Gestion des stocks et approvisionnements
+- Analyse ABC/XYZ, prévision de la demande
+- Négociation fournisseurs, lead times, crédits
+- Optimisation des coûts et du BFR
+- Prévention des ruptures et surstock
+
+📋 **COMMENT TU RÉPONDS**:
+- Questions simples → Réponses courtes et percutantes
+- Demandes d'analyse → Données chiffrées + recommandations concrètes
+- Conversations → Échanges naturels et engageants
+- Toujours proposer la prochaine étape ou action"""
 
         else:
-            system_msg = (
-                "You are maad_assistante, a Supply Chain expert with 15 years of experience. "
-                "You're conversational and respond naturally to questions.\n\n"
-                "CONVERSATION RULES:\n"
-                "- If the user greets you or chats, respond in a friendly and natural way\n"
-                "- If the user asks a general supply chain question, explain clearly without forcing data analysis\n"
-                "- ONLY if the user explicitly requests analysis, recommendations, or advice on their inventory, use the provided data\n"
-                "- Adapt your detail level to the question: simple question = short answer, analysis requested = detailed with figures\n\n"
-                "WHEN ANALYZING DATA:\n"
-                "- Cite concrete SKUs from the table\n"
-                "- Propose quantified amounts\n"
-                "- Mention priority suppliers\n"
-                "- Suggest levers (credit, promo clearance, ABC/XYZ categories)\n"
-                "- Be action-oriented with precise recommendations"
-            )
+            system_msg = """You are **MAAD Assistant**, a Supply Chain expert with 20+ years of experience with top African distributors.
 
-            if needs_analysis and table_json:
-                ctx = "Available data for analysis:\n"
-                ctx += f"- Product excerpt (20 first): {json.dumps(table_json[:20], ensure_ascii=False)}\n"
-                if cov_med is not None:
-                    ctx += f"- Global KPI: median coverage ≈ {cov_med:.1f} days\n"
-                if rows_digest:
-                    ctx += "- Produits prioritaires : " + "; ".join(
-                        [
-                            "{name} (fournisseur {sup}, couverture {cov:.1f}j, lead time {lt}j)".format(**d)
-                            for d in rows_digest[:3]
-                        ]
-                    ) + "\n"
+🎯 **YOUR PERSONALITY**:
+- Warm, dynamic and passionate about supply chain
+- You use a friendly tone and emojis sparingly
+- Direct, pragmatic and solution-oriented
+- Love sharing expertise with enthusiasm
 
-            else:
-                ctx = "General conversation. Data available if detailed analysis needed.\n"
+💼 **YOUR SKILLS**:
+- Inventory management and procurement
+- ABC/XYZ analysis, demand forecasting
+- Supplier negotiation, lead times, credits
+- Cost and working capital optimization
+- Stockout and overstock prevention
 
-            user_q = f"Question: {user_text.strip()}"
+📋 **HOW YOU RESPOND**:
+- Simple questions → Short and impactful answers
+- Analysis requests → Hard data + concrete recommendations
+- Conversations → Natural and engaging exchanges
+- Always suggest the next step or action"""
 
-        # ------------------------- Appel Gemini (unique prompt) -------------------------
-        # Historique compact (10 derniers messages)
+        # Historique compact (5 derniers pour rapidité)
         hist_lines = []
-        for m in (history_messages or [])[-10:]:
-            role = "Utilisateur" if m.get("role") == "user" else "Assistant"
-            hist_lines.append(f"{role}: {m.get('text', '').strip()}")
-        history_txt = "\n".join(hist_lines) if hist_lines else "—"
+        for m in (history_messages or [])[-5:]:
+            role = "👤" if m.get("role") == "user" else "🤖"
+            hist_lines.append(f"{role} {m.get('text', '').strip()[:100]}")
+        history_txt = "\n".join(hist_lines) if hist_lines else "Début de conversation"
 
-        prompt_text = (
-            f"[SYSTEM]\n{system_msg}\n\n"
-            f"[CONTEXTE]\n{ctx}\n\n"
-            f"[HISTORIQUE (dernier·e·s 10)]\n{history_txt}\n\n"
-            f"[QUESTION]\n{user_q}\n\n"
-            f"[INSTRUCTIONS DE SORTIE]\n"
-            f"- Réponds en **{'français' if lang == 'fr' else 'anglais'}**.\n"
-            f"- Sois concis, clair, structuré en puces si nécessaire.\n"
-            f"- N'invente pas de calculs : appuie-toi uniquement sur les données fournies dans le CONTEXTE.\n"
-        )
+        # Prompt optimisé (plus court = plus rapide)
+        prompt_text = f"""{system_msg}
 
+{ctx if ctx else '💬 Conversation générale - pas de données demandées'}
+
+📜 **Historique récent**:
+{history_txt}
+
+❓ **Question**: {user_text.strip()}
+
+👉 Réponds en {'français' if lang == 'fr' else 'anglais'}, de façon concise et actionnable."""
+
+        # Appel Gemini
         out = ask_ai(prompt_text).strip()
-        return out if out else _chatbot_fallback(user_text, view)
-        # -------------------------------------------------------------------------------
+        return out if out else _chatbot_fallback(user_text, df)
 
     except Exception as e:
+        print(f"[Chatbot] Erreur: {e}")
+        return _chatbot_fallback(user_text, df)
         import traceback
         print(f"[Chatbot] Erreur _chatbot_reply: {traceback.format_exc()}")
         return f"⚠️ Erreur technique : {type(e).__name__}"
@@ -12726,7 +13702,7 @@ except Exception as e:
     initial_df = pd.DataFrame(columns=['product_name', 'Supplier', 'total_stock'])
 
 initial_df = get_df_cached()
-initial_df['QAC edited'] = ' '
+initial_df['QAC edited']=' '
 
 # ✅ GARANTIR product_id dans le DataFrame initial
 if 'product_id' in initial_df.columns:
@@ -12742,7 +13718,7 @@ try:
 except Exception as e:
     print(f"⚠️ Erreur update_daily_stats_on_load: {e}")
 
-# initial_df['delete']='delete'
+#initial_df['delete']='delete'
 # ==================== LAYOUT CORRIGÉ AVEC AUTHENTIFICATION ====================
 
 app.layout = html.Div([
@@ -12773,8 +13749,34 @@ app.layout = html.Div([
     html.Div(id="action-feedback", style={"position": "fixed", "top": "80px", "right": "20px", "zIndex": 10000}),
     html.Div(id="selection-counter", style={"position": "fixed", "bottom": "20px", "right": "20px", "zIndex": 9999}),
 
-    # ========== COMPOSANTS CACHÉS (pour callbacks) ==========
+    # ========== COMPOSANTS CACHÉS (pour callbacks qui ciblent des éléments dynamiques) ==========
     html.Div(id='edit-product-output', style={"display": "none"}),
+
+    # Table principale cachée (sera remplacée par page_overview)
+    html.Div(style={"display": "none"}, children=[
+        dash_table.DataTable(
+            id="main-table",
+            columns=[{"name": "ID", "id": "product_id"}],
+            data=[],
+            row_selectable="multi",
+            selected_rows=[]
+        ),
+        html.Span(id="selection-count-inline"),
+        dbc.Button(id="btn-refresh"),
+        dbc.Button(id="btn-reload-data"),
+        dbc.Button(id="btn-add-row"),
+        dbc.Button(id="btn-po-pdf"),
+        dbc.Button(id="btn-run-agent-ia"),
+        dbc.Button(id="btn-select-all"),
+        dbc.Button(id="btn-clear-selection"),
+        dbc.Button(id="btn-fill-qac-target"),
+        dbc.Button(id="btn-save-qac"),
+        dcc.Dropdown(id="rotation-period"),
+        dbc.Alert(id="alert-ia-analysis", is_open=False),
+        dbc.Alert(id="alert-bc-error", is_open=False),
+        html.Div(id="qac-save-feedback"),
+    ]),
+
 
     # ========== EDIT MODAL (VISIBLE AU NIVEAU RACINE) ==========
     dbc.Modal(
@@ -12874,16 +13876,8 @@ app.layout = html.Div([
     # Note: page-container est maintenant géré par le callback d'authentification (render_page_content)
     # html.Div(id="page-container", children=page_overview(initial_df)),
 
-    # Dans la page concernée, ajoutez :
-    html.Div([
-        dbc.Button(
-            "🤖 Lancer Agent IA",
-            id="btn-run-agent-ia",
-            color="primary",
-            className="mb-3"
-        ),
-        html.Div(id="agent-ia-output")  # Output du callback
-    ], style={"display": "none"}),  # Caché par défaut, visible après login
+    # Output pour Agent IA (invisible)
+    html.Div(id="agent-ia-output", style={"display": "none"}),
 
     # NOTE: action-feedback et selection-counter sont maintenant au niveau racine (après app-container)
 
@@ -12954,9 +13948,16 @@ def render_page_content(auth_state, pathname):
     page_name = "overview"  # Par défaut
 
     # Sélectionner la page appropriée selon l'URL
+    # Récupérer le rôle de l'utilisateur
+    user_info = get_user_info(username) or {}
+    user_role = user_info.get("role", "user")
+
     if pathname is None or pathname == "/" or pathname == "/overview":
-        page_content = page_overview(initial_df)
+        page_content = page_overview(initial_df, username, user_role)
         page_name = "overview"
+    elif pathname == "/myspace":
+        page_content = page_my_space(username, initial_df)
+        page_name = "myspace"
     elif pathname == "/analytics":
         page_content = page_analytics(initial_df)
         page_name = "analytics"
@@ -12966,9 +13967,6 @@ def render_page_content(auth_state, pathname):
     elif pathname == "/promotions":
         page_content = page_promotions()
         page_name = "promotions"
-    elif pathname == "/agents":
-        page_content = page_agents(initial_df)
-        page_name = "agents"
     elif pathname == "/about":
         page_content = page_about()
         page_name = "about"
@@ -12998,7 +13996,13 @@ def render_page_content(auth_state, pathname):
         sidebar,
         html.Div(
             id="page-container",
-            className="content",  # Utiliser la classe CSS existante
+            style={
+                "marginLeft": "240px",  # Largeur du sidebar
+                "marginTop": "50px",     # Hauteur de la navbar
+                "padding": "20px",
+                "minHeight": "calc(100vh - 56px)",
+                "background": "#f8fafc"
+            },
             children=page_content
         )
     ])
@@ -13015,13 +14019,16 @@ def render_page_content(auth_state, pathname):
     prevent_initial_call=True
 )
 def handle_login(n_clicks, username, password, current_auth):
-    """Gère la tentative de connexion"""
-    print(f"🔐 handle_login: n_clicks={n_clicks}, username={username}")
+    """
+    🚀 VERSION OPTIMISÉE - Login ultra-rapide
+    Le tracking Supabase se fait en arrière-plan pour ne pas bloquer
+    """
+    login_start = time.time()
 
     if not n_clicks or n_clicks == 0:
         raise dash.exceptions.PreventUpdate
 
-    # Validation des champs
+    # Validation des champs (instantané)
     if not username or not password:
         return (
             current_auth or {"authenticated": False, "username": None},
@@ -13040,56 +14047,63 @@ def handle_login(n_clicks, username, password, current_auth):
             {"display": "block"}
         )
 
-    # Vérification des identifiants
+    # Vérification des identifiants (local = instantané)
     username = username.lower().strip()
 
     if verify_password(username, password):
-        # Connexion réussie
-        print(f"   ✅ Connexion réussie pour {username}")
+        # ✅ Connexion réussie - réponse IMMÉDIATE
         user_info = get_user_info(username)
 
-        # ✅ TRACKING SUPABASE: Créer session
-        session_id = None
-        user_id = None
-        if supabase_client:
-            try:
-                # Récupérer ou créer l'utilisateur
-                db_user = get_or_create_user(username)
-                if db_user:
-                    user_id = db_user["id"]
-                    # Créer une session
-                    session_id = create_session(user_id)
-                    # Stocker la session active
-                    ACTIVE_SESSIONS[username] = {
-                        "user_id": user_id,
-                        "session_id": session_id
-                    }
-                    # Tracker l'activité de login
-                    track_activity(user_id, session_id, "login", page="login")
-            except Exception as e:
-                print(f"⚠️ Erreur tracking login: {e}")
+        # Générer un session_id local temporaire
+        import uuid
+        temp_session_id = str(uuid.uuid4())
 
-        return (
-            {
-                "authenticated": True,
-                "username": username,
-                "user_info": user_info,
-                "session_id": session_id,
-                "user_id": user_id
-            },
-            "",
-            {"display": "none"}
-        )
+        auth_data = {
+            "authenticated": True,
+            "username": username,
+            "user_info": user_info,
+            "session_id": temp_session_id,
+            "user_id": None,
+            "login_time": time.time()
+        }
+
+        # 🚀 TRACKING SUPABASE EN ARRIÈRE-PLAN (non-bloquant)
+        def async_supabase_login():
+            try:
+                if supabase_client:
+                    db_user = get_or_create_user(username)
+                    if db_user:
+                        user_id = db_user["id"]
+                        session_id = create_session(user_id)
+                        ACTIVE_SESSIONS[username] = {
+                            "user_id": user_id,
+                            "session_id": session_id
+                        }
+                        track_activity(user_id, session_id, "login", page="login")
+                        print(f"   ✅ Supabase tracking OK pour {username}")
+            except Exception as e:
+                print(f"   ⚠️ Supabase tracking async: {e}")
+
+        # Lancer en arrière-plan
+        _async_executor.submit(async_supabase_login)
+
+        elapsed = time.time() - login_start
+        print(f"🔐 Login {username} réussi en {elapsed:.3f}s")
+
+        return (auth_data, "", {"display": "none"})
     else:
         # Échec de connexion
         print(f"   ❌ Échec de connexion pour {username}")
 
-        # ✅ TRACKING: Logger les tentatives échouées
-        if supabase_client:
+        # Tracking échec en arrière-plan aussi
+        def async_track_failed():
             try:
-                track_activity(None, None, "login_failed", page="login", details={"username_attempted": username})
+                if supabase_client:
+                    track_activity(None, None, "login_failed", page="login", details={"username_attempted": username})
             except:
                 pass
+
+        _async_executor.submit(async_track_failed)
 
         return (
             {"authenticated": False, "username": None},
@@ -13123,25 +14137,12 @@ def handle_logout(n_clicks, current_auth):
 
     print("🔐 Déconnexion utilisateur")
 
-    # ✅ TRACKING SUPABASE: Terminer la session
-    if current_auth and supabase_client:
-        try:
-            username = current_auth.get("username")
-            if username and username in ACTIVE_SESSIONS:
-                session_info = ACTIVE_SESSIONS[username]
-                # Tracker l'activité de logout
-                track_activity(
-                    session_info.get("user_id"),
-                    session_info.get("session_id"),
-                    "logout",
-                    page="logout"
-                )
-                # Terminer la session
-                end_session(session_info.get("session_id"))
-                # Nettoyer
-                del ACTIVE_SESSIONS[username]
-        except Exception as e:
-            print(f"⚠️ Erreur tracking logout: {e}")
+    # ✅ TRACKING SUPABASE: Enregistrer la déconnexion
+    if current_auth:
+        username = current_auth.get("username")
+        if username:
+            track_logout(username)
+            print(f"   📊 Déconnexion trackée: {username}")
 
     return {"authenticated": False, "username": None}
 
@@ -13167,7 +14168,6 @@ def update_feedback(input_value):
     return f"Input value: {input_value}"
 '''
 
-
 @app.callback(
     Output('edit-product-output', 'children'),
     Input('edit-product', 'value'),
@@ -13176,7 +14176,6 @@ def update_product_name(value):
     if value:
         return f"Produit modifié: {value}"
     return no_update
-
 
 # Callback pour stocker les données locales
 @app.callback(
@@ -13251,6 +14250,7 @@ def capture_qac_edits(table_data, stored_edits):
     print(f"💾 [localStorage] {len(stored_edits)} QAC sauvegardés")
     return stored_edits
 '''
+
 
 
 # ==================== CALLBACK 2 : RESTAURER LES QAC AU CHARGEMENT ====================
@@ -13558,10 +14558,9 @@ def load_qac_from_csv_on_startup(pathname):
         return {}
 '''
 
-
 # Callback pour mettre à jour le Store 'selected-product-for-notes'
 @app.callback(
-    Output('selected-product-for-notes', 'data', allow_duplicate=True),
+    Output('selected-product-for-notes', 'data', allow_duplicate = True),
     Input('main-table', 'active_cell'),
     State('main-table', 'data'),
     prevent_initial_call=True
@@ -13575,11 +14574,11 @@ def update_selected_product(active_cell, table_data):
 
 
 # Validation layout
-# app.validation_layout = html.Div([
+#app.validation_layout = html.Div([
 #   dcc.Location(id="url"),
 #  dcc.Store(id="master-data"),
 # dcc.Store(id="filtered-data"),
-# dcc.Dropdown(id="filter-supplier"),
+#dcc.Dropdown(id="filter-supplier"),
 #   dcc.Dropdown(id="filter-category"),
 #  dcc.Dropdown(id="filter-need"),  # ✅ IMPORTANT
 # dcc.Dropdown(
@@ -13587,51 +14586,51 @@ def update_selected_product(active_cell, table_data):
 #   options=[
 #      {'label': 'Status 1', 'value': 'status1'},
 #     {'label': 'Status 2', 'value': 'status2'}
-# ],
+#],
 #       value='status1'
 #  ),
 
 # dcc.Input(id="search-input"),
-# dbc.Checklist(id="toggle-options"),
-# dcc.Store(id="uploaded-csv"),
+#dbc.Checklist(id="toggle-options"),
+#dcc.Store(id="uploaded-csv"),
 #   dcc.Store(id="chat-store"),
 #  dcc.Store(id="chat-open"),
 # make_sidebar(),
-# page_overview(initial_df),
+#page_overview(initial_df),
 #  page_analytics(),
 #  page_predictive(),
 # page_about(),
-# html.Div(id="page-container"),
+#html.Div(id="page-container"),
 #  html.Button(id="chat-fab"),
 # html.Div(id="chat-window"),
-# html.Div(id="chat-messages"),
+#html.Div(id="chat-messages"),
 #  dbc.Textarea(id="chat-input"),
 # dcc.Upload(id="chat-upload"),
 #  html.Small(id="upload-status"),
 # dbc.Button(id="chat-send"),
 #  dbc.Button(id="chat-close"),
 # dcc.Download(id="download-data"),
-# dcc.Download(id="download-po"),
+#dcc.Download(id="download-po"),
 # dbc.Button(id="btn-add-row"),
-# dbc.Modal(id="edit-modal"),
+#dbc.Modal(id="edit-modal"),
 # dbc.Input(id="edit-product"),
-# dbc.Input(id="edit-supplier"),
+#dbc.Input(id="edit-supplier"),
 #  dbc.Input(id="edit-category"),
 # dbc.Input(id="edit-stock"),
-# dbc.Modal(id="notes-modal"),
+#dbc.Modal(id="notes-modal"),
 # html.Div(id="notes-modal-title"),
 # ✅ Ajouter les nouveaux composants
 # html.Button(id="notes-fab"),
 #   dcc.Dropdown(id="note-product-selector"),
 #  dbc.Modal(id="notes-modal-new"),
 # html.Div(id="notes-display-list"),
-# dbc.Textarea(id="note-text-input"),
+#dbc.Textarea(id="note-text-input"),
 #  dbc.Input(id="note-author-input"),
 # html.Div(id="note-feedback-new"),
-# dbc.Button(id="note-modal-send"),
+#dbc.Button(id="note-modal-send"),
 #  dbc.Button(id="note-modal-close"),
 # dcc.Store(id="selected-product-for-notes"),
-# ])
+#])
 # Validation layout
 # Validation layout
 app.validation_layout = html.Div([
@@ -13645,44 +14644,31 @@ app.validation_layout = html.Div([
     dcc.Store(id={'type': 'selected-product-for-notes', 'index': '2'}),
     dcc.Store(id="edit-mode"),
     dcc.Store(id="edit-original-product"),
-    # dcc.Store(id="qac-edits"),
+    #dcc.Store(id="qac-edits"),
     dcc.Store(id="qac-edits-store"),
 
-    # ==================== SIDEBAR COMPONENTS ====================
-    # html.Div(id="risk-banner"),
-    html.Div(id="action-feedback"),  # ✅ AJOUTER
-    html.Div(id="selection-counter"),  # ✅ AJOUTER
-    html.Span(id="selection-count-inline"),  # ✅ AJOUTER
-    dcc.Input(id="search-input"),
-    dcc.Dropdown(id="filter-supplier"),
-    dcc.Dropdown(id="filter-category"),
-    dcc.Dropdown(id="filter-need"),
-    # dcc.Dropdown(id="filter-status", options=[
-    #   {'label': 'Tous', 'value': 'all'},
-    #  {'label': 'Stock OK', 'value': 'ok'},
-    # {'label': 'Rupture', 'value': 'oos'}
-    # ], value='all'),
-    dbc.Checklist(id="toggle-options"),
-    dbc.Button(id="btn-refresh"),
-    dbc.Button(id="btn-reload-data"),  # ✅ AJOUT bouton rechargement
-    dbc.Button(id="btn-add-row"),
-    dbc.Button(id="btn-po-pdf"),
-    dbc.Button(id="btn-save-qac"),  # ✅ AJOUT
+    # ==================== COMPOSANTS CACHÉS (pour callbacks) ====================
+    html.Div(id="action-feedback", style={"display": "none"}),
+    html.Div(id="selection-counter", style={"display": "none"}),
+    html.Span(id="selection-count-inline", style={"display": "none"}),
+    dcc.Input(id="search-input", style={"display": "none"}),
+    dcc.Dropdown(id="filter-supplier", style={"display": "none"}),
+    dcc.Dropdown(id="filter-category", style={"display": "none"}),
+    dcc.Dropdown(id="filter-need", style={"display": "none"}),
+    dbc.Checklist(id="toggle-options", style={"display": "none"}),
+    dbc.Button(id="btn-refresh", style={"display": "none"}),
+    dbc.Button(id="btn-reload-data", style={"display": "none"}),
+    dbc.Button(id="btn-add-row", style={"display": "none"}),
+    dbc.Button(id="btn-po-pdf", style={"display": "none"}),
+    dbc.Button(id="btn-run-agent-ia", style={"display": "none"}),
+    dbc.Button(id="btn-select-all", style={"display": "none"}),
+    dbc.Button(id="btn-clear-selection", style={"display": "none"}),
+    dbc.Button(id="btn-fill-qac-target", style={"display": "none"}),
+    dbc.Button(id="btn-save-qac", style={"display": "none"}),
     dcc.Download(id="download-data"),
     dcc.Download(id="download-po"),
-    html.Div(id="debug-info"),
-    # html.Div(id="action-feedback"),
-    # html.Div(id="selection-counter"),
-    # dbc.Button("✅ Tout sélectionner (vue filtrée)", id="btn-select-all", size="sm", color="secondary", className="me-2"),
-    ## Remplacez votre section boutons par celle-ci :
-    html.Div([
-        dbc.Button("🤖 Lancer Agent IA", id="btn-run-agent-ia", color="success", size="sm", className="me-2"),
-        dbc.Button("📋 Remplir QAC = Target", id="btn-fill-qac-target", color="info", size="sm", className="me-2"),
-        dbc.Button("☑️ Tout sélectionner", id="btn-select-all", color="secondary", size="sm", className="me-2"),
-        dbc.Button("✖️ Désélectionner", id="btn-clear-selection", color="secondary", size="sm", className="me-2"),
-        dbc.Button("📄 Bon de commande", id="btn-po-pdf", color="primary", size="sm", disabled=True),
-        html.Div(id="selection-counter", className="d-inline-block ms-3")
-    ], className="mb-3"),
+    html.Div(id="debug-info", style={"display": "none"}),
+
     # Alertes (pour messages IA)
     dbc.Alert(id="alert-ia-analysis", is_open=False, dismissable=True),
     dbc.Alert(id="alert-bc-error", is_open=False, dismissable=True),
@@ -13828,8 +14814,6 @@ app.validation_layout = html.Div([
     html.Div(id="conflict-alert"),
     dcc.ConfirmDialog(id="confirm-dialog"),
 ])
-
-
 # ------------------------------ Routing ------------------------------------------
 # ⚠️ ANCIEN CALLBACK DÉSACTIVÉ - Remplacé par render_page_content (avec authentification)
 # @app.callback(
@@ -13907,7 +14891,6 @@ def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: li
 
     print(f"[filter_dataframe] ✅ Résultat final: {len(out)} lignes")
     return out
-
 
 def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Garantit que les colonnes critiques existent et sont valides"""
@@ -14085,8 +15068,6 @@ def initial_load_table(pathname, master_json):
 
     return df.to_json(orient="records"), df.to_dict("records"), []
 '''
-
-
 # ------------------------------ Notes System Callbacks ----------------------------
 
 # ------------------------------ Export CSV ---------------------------------------
@@ -14238,8 +15219,7 @@ def preload_bc_cache():
             if not catalog.empty and len(catalog.columns) >= 11:
                 catalog_subset = catalog.iloc[:, [0, 1, 3, 10]].copy()
                 catalog_subset.columns = ['product_id', 'product_name', 'selling_price', 'purchase_price']
-                catalog_subset['product_name_clean'] = catalog_subset['product_name'].astype(
-                    str).str.lower().str.strip()
+                catalog_subset['product_name_clean'] = catalog_subset['product_name'].astype(str).str.lower().str.strip()
                 prices = dict(zip(
                     catalog_subset['product_name_clean'],
                     pd.to_numeric(catalog_subset['purchase_price'], errors='coerce').fillna(1000)
@@ -14359,8 +15339,6 @@ def get_packaging_map_cached():
     except Exception as e:
         print(f"❌ Erreur packaging : {e}")
         return {}
-
-
 # ====== IMPORTS NÉCESSAIRES ======
 
 # ===== Helpers packaging (ROBUSTES) =====
@@ -14408,8 +15386,7 @@ def load_heroku_packaging():
             return {}
 
         name_col = next((c for c in dfp.columns if c.lower() in ("name", "product_name", "designation")), None)
-        pack_col = next(
-            (c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
+        pack_col = next((c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
 
         if not name_col or not pack_col:
             print("   ⚠️ Colonnes name/packaging non trouvées")
@@ -14452,7 +15429,11 @@ def load_catalog_packaging():
 
     try:
         print("📦 Chargement catalogue conditionnement (Google Sheet)...")
-        df = pd.read_csv(CATALOG_PACKAGING_URL, timeout=10)
+        df = load_csv_fast(CATALOG_PACKAGING_URL)  # Utilise load_csv_fast avec timeout intégré
+
+        if df is None or df.empty:
+            print("   ⚠️ Catalogue vide ou non chargé")
+            return _catalog_packaging_cache["data"] or {}
 
         print(f"   📊 {df.shape[0]} lignes, {df.shape[1]} colonnes")
 
@@ -14601,8 +15582,7 @@ def get_fraction_from_packaging(product_name: str, heroku_packaging: dict) -> fl
     return frac
 
 
-def calculate_quantity_for_po(qac_edited: float, product_name: str, catalog_packaging: dict,
-                              heroku_packaging: dict) -> int:
+def calculate_quantity_for_po(qac_edited: float, product_name: str, catalog_packaging: dict, heroku_packaging: dict) -> int:
     """
     Calcule la quantité finale pour le bon de commande.
 
@@ -14654,21 +15634,18 @@ def load_packaging_map():
     try:
         dfp = pd.read_csv(PACKAGING_URL)
         name_col = next((c for c in dfp.columns if c.lower() in ("name", "product_name", "designation")), None)
-        pack_col = next(
-            (c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
+        pack_col = next((c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
         if not name_col or not pack_col:
             print("⚠️ Dataclip: colonnes name/packaging non trouvées.")
             return {}
-        dfp["__key__"] = dfp[name_col].astype(str).str.lower().str.strip()
+        dfp["__key__"]  = dfp[name_col].astype(str).str.lower().str.strip()
         dfp["__pack__"] = dfp[pack_col].astype(str).str.lower().str.strip()
         return dict(zip(dfp["__key__"], dfp["__pack__"]))
     except Exception as e:
         print(f"❌ load_packaging_map: {e}")
         return {}
 
-
 FRACTION_FINDER = re.compile(r"(\d+)\s*/\s*(\d+)", re.IGNORECASE)
-
 
 def detect_fraction_from_text(txt: str) -> float:
     """Retourne la fraction trouvée (ex: '1/2' -> 0.5) ou 1.0 si rien."""
@@ -14678,14 +15655,12 @@ def detect_fraction_from_text(txt: str) -> float:
     m = FRACTION_FINDER.search(s)
     if m:
         try:
-            num = int(m.group(1));
-            den = int(m.group(2))
+            num = int(m.group(1)); den = int(m.group(2))
             if den > 0:
                 return num / den
         except (ValueError, TypeError):
             pass
     return 1.0
-
 
 def consolidate_to_major(qty_units: float, packaging_text: str, product_name: str) -> int:
     """Convertit la QAC (éventuellement en sous-unité) → unités majeures entières (ceil)."""
@@ -14696,7 +15671,6 @@ def consolidate_to_major(qty_units: float, packaging_text: str, product_name: st
         frac = 1.0
     maj = float(qty_units) * float(frac)
     return max(0, int(math.ceil(maj)))
-
 
 def safe_float(v, default=0.0):
     try:
@@ -14913,54 +15887,108 @@ def _agent_local(produits):
 
 
 # ===== CALLBACK : AGENT IA =====
-'''
-# ===== CALLBACK : AGENT IA (MODIFIÉ) =====
+# ===== CALLBACK : AGENT IA (OPTIMISÉ) =====
 @app.callback(
     [Output("main-table", "data", allow_duplicate=True),
      Output("main-table", "selected_rows", allow_duplicate=True),
-     Output("btn-po-pdf", "disabled", allow_duplicate=True)],  # ✅ Ajout Output
+     Output("btn-po-pdf", "disabled", allow_duplicate=True)],
     Input("btn-run-agent-ia", "n_clicks"),
     State("main-table", "data"),
     prevent_initial_call=True
 )
 def run_agent_ia_calcul(n_clicks, table_data):
     """
-    Lance l'Agent IA et active le bouton si succès
+    🤖 AGENT IA - Génère automatiquement les commandes pour les produits en rupture
+
+    LOGIQUE:
+    1. Identifie les produits en rupture (stock <= 0) ou à risque (couverture < 7j)
+    2. Remplit automatiquement QAC edited avec QAC calculé
+    3. Sélectionne ces produits pour le bon de commande
+    4. Active le bouton BC
     """
     if not n_clicks or not table_data:
         return no_update, no_update, no_update
 
-    # Calcul QAC
-    USE_GEMINI = True
-    qac_par_index = agent_ia_calculer_qac(table_data, use_gemini=USE_GEMINI)
+    print(f"\n{'='*60}")
+    print(f"🤖 AGENT IA - Analyse automatique des besoins")
+    print(f"{'='*60}")
 
-    if not qac_par_index:
-        print("⚠️ Aucun produit à commander")
-        return no_update, no_update, True  # Désactiver bouton
-
-    # Mise à jour tableau
-    updated_data = table_data.copy()
+    updated_data = []
     indices_selection = []
+    stats = {"rupture": 0, "risque": 0, "order_now": 0, "total_qac": 0}
 
-    for idx, qac_value in qac_par_index.items():
-        if 0 <= idx < len(updated_data):
-            updated_data[idx]['QAC edited'] = qac_value
+    for idx, prod in enumerate(table_data):
+        row = dict(prod)  # Copie
+
+        prod_name = str(row.get("product_name", "")).strip()
+        supplier = str(row.get("Supplier", "")).strip()
+
+        if not prod_name or not supplier or supplier.lower() == "nan":
+            updated_data.append(row)
+            continue
+
+        # Récupérer les données
+        stock = safe_float(row.get("total_stock"), safe_float(row.get("current_stock"), 0))
+        qac_auto = safe_float(row.get("QAC"), 0)
+        coverage = safe_float(row.get("Max Coverage Day"), safe_float(row.get("coverage_days"), 999))
+        ajusted_need = str(row.get("Ajusted_total_need", "")).upper()
+        stockout_prob = safe_float(row.get("Stockout Probability"), 0)
+
+        # ========================================
+        # 📋 CRITÈRES DE SÉLECTION
+        # ========================================
+        need_order = False
+        reason = ""
+
+        # Critère 1: Rupture de stock (stock = 0)
+        if stock <= 0 and qac_auto > 0:
+            need_order = True
+            reason = "RUPTURE"
+            stats["rupture"] += 1
+
+        # Critère 2: Couverture < 7 jours
+        elif coverage < 7 and qac_auto > 0:
+            need_order = True
+            reason = "RISQUE (<7j)"
+            stats["risque"] += 1
+
+        # Critère 3: ORDER NOW
+        elif "ORDER NOW" in ajusted_need and qac_auto > 0:
+            need_order = True
+            reason = "ORDER NOW"
+            stats["order_now"] += 1
+
+        # ========================================
+        # 📝 REMPLIR QAC EDITED SI BESOIN
+        # ========================================
+        if need_order and qac_auto > 0:
+            # Remplir QAC edited avec QAC calculé
+            row["QAC edited"] = str(int(qac_auto))
             indices_selection.append(idx)
+            stats["total_qac"] += qac_auto
+            print(f"   ✅ [{reason}] {prod_name[:35]} → QAC: {int(qac_auto)} ({supplier})")
 
-    print(f"✅ {len(qac_par_index)} QAC calculées, {len(indices_selection)} lignes sélectionnées")
+        updated_data.append(row)
 
-    # Vérifier si on peut activer le bouton
-    can_enable = all(
-        updated_data[idx].get("product_name") and
-        updated_data[idx].get("Supplier") and
-        safe_float(updated_data[idx].get("QAC edited", 0), 0) > 0
-        for idx in indices_selection
-    )
+    # ========================================
+    # 📊 RÉSUMÉ
+    # ========================================
+    print(f"\n{'='*60}")
+    print(f"📊 RÉSUMÉ AGENT IA")
+    print(f"{'='*60}")
+    print(f"   🔴 Ruptures: {stats['rupture']}")
+    print(f"   🟠 Risque (<7j): {stats['risque']}")
+    print(f"   🟡 Order Now: {stats['order_now']}")
+    print(f"   📦 Total produits à commander: {len(indices_selection)}")
+    print(f"   🔢 QAC total: {int(stats['total_qac'])} unités")
+    print(f"{'='*60}\n")
 
-    button_disabled = not can_enable
+    if not indices_selection:
+        print("⚠️ Aucun produit à commander")
+        return updated_data, [], True  # Désactiver bouton
 
-    return updated_data, sorted(indices_selection), button_disabled
-'''
+    # Activer le bouton BC
+    return updated_data, sorted(indices_selection), False
 
 
 # ============================================
@@ -14997,12 +16025,26 @@ def valider_qac_selection(selected_rows, table_data):
 # ============================================
 # FONCTION 3 : GÉNÉRATION EXCEL AVEC FORMULES + LOGO + SIGNATURE
 # ============================================
+def is_riz_cereales(product_name: str) -> bool:
+    """
+    Détecte si un produit est du riz ou des céréales.
+    Ces produits ont leur prix HT (TVA non incluse) contrairement aux autres.
+    """
+    name_lower = str(product_name).lower()
+    keywords = ['riz', 'cereale', 'céréale', 'cereal', 'semoule', 'couscous', 'mil', 'maïs', 'mais', 'fonio']
+    return any(kw in name_lower for kw in keywords)
+
+
 def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
     """
     🚀 VERSION OPTIMISÉE - Génère un Excel ultra-rapide
     - Cache pré-chargé
     - Styles pré-compilés
     - Logo pré-résolu
+
+    📋 LOGIQUE TVA:
+    - Produits normaux: Prix catalogue = TTC → on calcule le HT (PU/1.18)
+    - Riz et céréales: Prix catalogue = HT → on ajoute la TVA (PU*0.18)
     """
     if not selected_products:
         raise ValueError("Aucun produit sélectionné")
@@ -15117,7 +16159,7 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
     # ========================================
     # 📊 TABLEAUX PAR FOURNISSEUR
     # ========================================
-    headers = ['Réf.', 'Désignation', 'Qté', 'Unité', 'PU HT', 'TVA Unit.', 'PU TTC', 'Remise %', 'Total HT',
+    headers = ['Réf.', 'Désignation', 'Qté', 'Cond.', 'Unité', 'PU HT', 'TVA Unit.', 'PU TTC', 'Remise %', 'Total HT',
                'Total TTC']
 
     for supplier, products in suppliers.items():
@@ -15125,7 +16167,7 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
         ws[f'A{current_row}'] = f'📦 FOURNISSEUR : {supplier.upper()}'
         ws[f'A{current_row}'].font = supplier_font
         ws[f'A{current_row}'].fill = supplier_fill
-        ws.merge_cells(f'A{current_row}:J{current_row}')
+        ws.merge_cells(f'A{current_row}:K{current_row}')
         ws.row_dimensions[current_row].height = 25
         current_row += 1
 
@@ -15136,7 +16178,7 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             cell.font = header_font
             cell.alignment = center_align
             cell.border = border
-        ws.cell(row=current_row, column=8).fill = remise_fill
+        ws.cell(row=current_row, column=9).fill = remise_fill
         current_row += 1
         first_data_row = current_row
 
@@ -15147,16 +16189,34 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             prod_name = str(prod.get("product_name", "")).strip()
             prod_key = prod_name.lower()
 
+            # 🔄 PRENDRE QAC edited SI disponible, SINON QAC calculé
             qac_edited = safe_float(prod.get("QAC edited"), 0.0)
-            if qac_edited <= 0:
+            qac_auto = safe_float(prod.get("QAC"), 0.0)
+
+            # Utiliser QAC edited si rempli, sinon QAC auto
+            qac_final = qac_edited if qac_edited > 0 else qac_auto
+
+            if qac_final <= 0:
                 continue
 
             # Calculs avec cache pré-chargé
-            qty_final = calculate_quantity_for_po(qac_edited, prod_name, catalog_packaging, heroku_packaging)
+            qty_final = calculate_quantity_for_po(qac_final, prod_name, catalog_packaging, heroku_packaging)
             clean_name = get_clean_product_name(prod_name, catalog_packaging)
-            unit_price = safe_float(price_map.get(prod_key, 1000.0), 1000.0)
-            if unit_price <= 0:
-                unit_price = 1000.0
+            catalog_price = safe_float(price_map.get(prod_key, 1000.0), 1000.0)
+            if catalog_price <= 0:
+                catalog_price = 1000.0
+
+            # Obtenir conditionnement et fraction pour affichage
+            conditionnement = get_conditionnement(prod_name, catalog_packaging)
+            fraction = get_fraction_from_packaging(prod_name, heroku_packaging)
+
+            # Déterminer l'unité affichée
+            if fraction < 1.0:
+                unite = "Carton"  # Demi-cartons convertis en cartons
+            elif conditionnement > 1:
+                unite = f"×{conditionnement}"  # Carton de X
+            else:
+                unite = "Unité"
 
             product_id = prod.get("product_id", "")
             if product_id:
@@ -15165,7 +16225,24 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
                 except:
                     product_id = str(product_id)
 
-            # Remplissage cellules (optimisé - moins d'appels)
+            # ========================================
+            # 💰 CALCUL TVA SELON TYPE PRODUIT
+            # ========================================
+            # Riz/Céréales: prix catalogue = HT → ajouter TVA
+            # Autres: prix catalogue = TTC → extraire TVA
+
+            if is_riz_cereales(prod_name):
+                # Prix catalogue = HT
+                pu_ht = catalog_price
+                tva_unit = round(catalog_price * TVA_RATE, 0)
+                pu_ttc = round(catalog_price * (1 + TVA_RATE), 0)
+            else:
+                # Prix catalogue = TTC → calculer HT
+                pu_ttc = catalog_price
+                pu_ht = round(catalog_price / (1 + TVA_RATE), 0)
+                tva_unit = round(pu_ttc - pu_ht, 0)
+
+            # Remplissage cellules
             row = current_row
 
             # Col 1: Réf
@@ -15185,34 +16262,39 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             c.alignment = center_align
             c.font = bold_font
 
-            # Col 4: Unité
-            c = ws.cell(row=row, column=4, value="Unité")
+            # Col 4: Conditionnement
+            cond_display = f"{conditionnement}" if conditionnement > 1 else "-"
+            c = ws.cell(row=row, column=4, value=cond_display)
+            c.border = border
+            c.alignment = center_align
+            c.font = Font(size=9, color="666666")
+
+            # Col 5: Unité
+            c = ws.cell(row=row, column=5, value=unite)
             c.border = border
             c.alignment = center_align
 
-            # Col 5: PU HT
-            c = ws.cell(row=row, column=5, value=unit_price)
+            # Col 6: PU HT (valeur calculée)
+            c = ws.cell(row=row, column=6, value=pu_ht)
             c.border = border
             c.number_format = '#,##0'
 
-            # Colonne 6 : TVA Unitaire (18% du PU HT)
-            formula_tva_unit = f"=E{current_row}*0.18"
-            cell = ws.cell(row=current_row, column=6, value=formula_tva_unit)
+            # Colonne 7 : TVA Unitaire (valeur calculée)
+            cell = ws.cell(row=current_row, column=7, value=tva_unit)
             cell.number_format = '#,##0'
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
             cell.font = Font(italic=True, color="666666")
 
-            # Colonne 7 : PU TTC (PU HT + TVA Unitaire)
-            formula_pu_ttc = f"=E{current_row}+F{current_row}"
-            cell = ws.cell(row=current_row, column=7, value=formula_pu_ttc)
+            # Colonne 8 : PU TTC (valeur calculée)
+            cell = ws.cell(row=current_row, column=8, value=pu_ttc)
             cell.number_format = '#,##0'
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
             cell.font = Font(bold=True, color="0066CC")
 
-            # Colonne 8 : Remise % (ÉDITABLE par produit)
-            cell = ws.cell(row=current_row, column=8, value=0)
+            # Colonne 9 : Remise % (ÉDITABLE par produit)
+            cell = ws.cell(row=current_row, column=9, value=0)
             cell.number_format = '0.00'
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.fill = remise_fill
@@ -15220,19 +16302,19 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             cell.font = Font(bold=True)
 
             # ========================================
-            # FORMULES AUTOMATIQUES (TVA sur PU)
+            # FORMULES AUTOMATIQUES
             # ========================================
 
-            # Colonne 9 : Total HT = (PU HT × Qté) × (1-Remise/100)
-            formula_ht = f"=(E{current_row}*C{current_row})*(1-H{current_row}/100)"
-            cell = ws.cell(row=current_row, column=9, value=formula_ht)
+            # Colonne 10 : Total HT = (PU HT × Qté) × (1-Remise/100)
+            formula_ht = f"=(F{current_row}*C{current_row})*(1-I{current_row}/100)"
+            cell = ws.cell(row=current_row, column=10, value=formula_ht)
             cell.number_format = '#,##0'
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # Colonne 10 : Total TTC = (PU TTC × Qté) × (1-Remise/100)
-            formula_ttc = f"=(G{current_row}*C{current_row})*(1-H{current_row}/100)"
-            cell = ws.cell(row=current_row, column=10, value=formula_ttc)
+            # Colonne 11 : Total TTC = (PU TTC × Qté) × (1-Remise/100)
+            formula_ttc = f"=(H{current_row}*C{current_row})*(1-I{current_row}/100)"
+            cell = ws.cell(row=current_row, column=11, value=formula_ttc)
             cell.number_format = '#,##0'
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.fill = total_fill
@@ -15249,21 +16331,21 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
 
         if last_data_row >= first_data_row:
             # Ligne Sous-total brut
-            ws.merge_cells(f'A{current_row}:H{current_row}')
+            ws.merge_cells(f'A{current_row}:I{current_row}')
             cell = ws.cell(row=current_row, column=1, value=f"Sous-total {supplier.upper()}")
             cell.font = Font(bold=True, size=10)
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # Total HT brut (colonne 9)
-            cell = ws.cell(row=current_row, column=9, value=f"=SUM(I{first_data_row}:I{last_data_row})")
+            # Total HT brut (colonne 10)
+            cell = ws.cell(row=current_row, column=10, value=f"=SUM(J{first_data_row}:J{last_data_row})")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True)
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # TTC brut (colonne 10)
-            cell = ws.cell(row=current_row, column=10, value=f"=SUM(J{first_data_row}:J{last_data_row})")
+            # TTC brut (colonne 11)
+            cell = ws.cell(row=current_row, column=11, value=f"=SUM(K{first_data_row}:K{last_data_row})")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True)
             cell.alignment = Alignment(horizontal='right', vertical='center')
@@ -15275,29 +16357,29 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             # ========================================
             # 🎯 LIGNE ESCOMPTE FOURNISSEUR (ÉDITABLE)
             # ========================================
-            ws.merge_cells(f'A{current_row}:G{current_row}')
+            ws.merge_cells(f'A{current_row}:H{current_row}')
             cell = ws.cell(row=current_row, column=1, value=f"🎯 Escompte {supplier.upper()}")
             cell.font = Font(bold=True, size=10, color="E65100")
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # Cellule escompte % (ÉDITABLE - colonne H)
-            escompte_cell = ws.cell(row=current_row, column=8, value=0)
+            # Cellule escompte % (ÉDITABLE - colonne I)
+            escompte_cell = ws.cell(row=current_row, column=9, value=0)
             escompte_cell.number_format = '0.00"%"'
             escompte_cell.alignment = Alignment(horizontal='center', vertical='center')
             escompte_cell.fill = escompte_fill
             escompte_cell.border = border
             escompte_cell.font = Font(bold=True, size=11)
 
-            # Montant escompte HT (formule - colonne 9)
-            cell = ws.cell(row=current_row, column=9, value=f"=-I{subtotal_row}*H{current_row}/100")
+            # Montant escompte HT (formule - colonne 10)
+            cell = ws.cell(row=current_row, column=10, value=f"=-J{subtotal_row}*I{current_row}/100")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True, color="E65100")
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
 
-            # Montant escompte TTC (colonne 10)
-            cell = ws.cell(row=current_row, column=10, value=f"=-J{subtotal_row}*H{current_row}/100")
+            # Montant escompte TTC (colonne 11)
+            cell = ws.cell(row=current_row, column=11, value=f"=-K{subtotal_row}*I{current_row}/100")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True, color="E65100")
             cell.alignment = Alignment(horizontal='right', vertical='center')
@@ -15309,23 +16391,23 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             # ========================================
             # 💚 TOTAL NET FOURNISSEUR (après escompte)
             # ========================================
-            ws.merge_cells(f'A{current_row}:H{current_row}')
+            ws.merge_cells(f'A{current_row}:I{current_row}')
             cell = ws.cell(row=current_row, column=1, value=f"TOTAL NET {supplier.upper()}")
             cell.font = Font(bold=True, size=11)
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
             cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
 
-            # Total HT net (sous-total + escompte - colonne 9)
-            cell = ws.cell(row=current_row, column=9, value=f"=I{subtotal_row}+I{escompte_row}")
+            # Total HT net (sous-total + escompte - colonne 10)
+            cell = ws.cell(row=current_row, column=10, value=f"=J{subtotal_row}+J{escompte_row}")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True)
             cell.alignment = Alignment(horizontal='right', vertical='center')
             cell.border = border
             cell.fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
 
-            # TTC net (colonne 10)
-            cell = ws.cell(row=current_row, column=10, value=f"=J{subtotal_row}+J{escompte_row}")
+            # TTC net (colonne 11)
+            cell = ws.cell(row=current_row, column=11, value=f"=K{subtotal_row}+K{escompte_row}")
             cell.number_format = '#,##0'
             cell.font = Font(bold=True, size=11)
             cell.alignment = Alignment(horizontal='right', vertical='center')
@@ -15335,128 +16417,130 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
             current_row += 1
 
         current_row += 2
-        # ========================================
-        # 💰 TOTAUX GLOBAUX
-        # ========================================
 
-        current_row += 1
+    # ========================================
+    # 💰 TOTAUX GLOBAUX
+    # ========================================
 
-        # Total HT (colonne I maintenant)
-        ws[f'H{current_row}'] = "TOTAL HT :"
-        ws[f'H{current_row}'].font = Font(bold=True, size=12)
-        ws[f'H{current_row}'].alignment = Alignment(horizontal='right')
-        ws[f'I{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",I:I)'
-        ws[f'I{current_row}'].number_format = '#,##0 "FCFA"'
-        ws[f'I{current_row}'].font = Font(bold=True, size=12)
-        ws[f'I{current_row}'].border = Border(bottom=Side(style='thin'))
+    current_row += 1
 
-        current_row += 1
+    # Total HT (colonne J maintenant)
+    ws[f'I{current_row}'] = "TOTAL HT :"
+    ws[f'I{current_row}'].font = Font(bold=True, size=12)
+    ws[f'I{current_row}'].alignment = Alignment(horizontal='right')
+    ws[f'J{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",J:J)'
+    ws[f'J{current_row}'].number_format = '#,##0 "FCFA"'
+    ws[f'J{current_row}'].font = Font(bold=True, size=12)
+    ws[f'J{current_row}'].border = Border(bottom=Side(style='thin'))
 
-        # TVA Totale (différence TTC - HT)
-        ws[f'H{current_row}'] = "TVA (18%) :"
-        ws[f'H{current_row}'].font = Font(bold=True, size=12)
-        ws[f'H{current_row}'].alignment = Alignment(horizontal='right')
-        ws[f'I{current_row}'] = f'=I{current_row + 1}-I{current_row - 1}'
-        ws[f'I{current_row}'].number_format = '#,##0 "FCFA"'
-        ws[f'I{current_row}'].font = Font(bold=True, size=12)
-        ws[f'I{current_row}'].border = Border(bottom=Side(style='thin'))
+    current_row += 1
 
-        current_row += 1
+    # TVA Totale (différence TTC - HT)
+    ws[f'I{current_row}'] = "TVA (18%) :"
+    ws[f'I{current_row}'].font = Font(bold=True, size=12)
+    ws[f'I{current_row}'].alignment = Alignment(horizontal='right')
+    ws[f'J{current_row}'] = f'=J{current_row + 1}-J{current_row - 1}'
+    ws[f'J{current_row}'].number_format = '#,##0 "FCFA"'
+    ws[f'J{current_row}'].font = Font(bold=True, size=12)
+    ws[f'J{current_row}'].border = Border(bottom=Side(style='thin'))
 
-        # Total TTC (colonne J maintenant)
-        ws[f'H{current_row}'] = "TOTAL TTC :"
-        ws[f'H{current_row}'].font = Font(bold=True, size=14, color="006400")
-        ws[f'H{current_row}'].alignment = Alignment(horizontal='right')
-        ws[f'I{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",J:J)'
-        ws[f'I{current_row}'].number_format = '#,##0 "FCFA"'
-        ws[f'I{current_row}'].font = Font(bold=True, size=14, color="FFFFFF")
-        ws[f'I{current_row}'].fill = PatternFill(start_color="27AE60", end_color="27AE60", fill_type="solid")
-        ws[f'I{current_row}'].border = Border(
-            top=Side(style='double'),
-            bottom=Side(style='double')
-        )
+    current_row += 1
 
-        # ========================================
-        # ✍️ SIGNATURE EN BAS
-        # ========================================
+    # Total TTC (colonne K maintenant)
+    ws[f'I{current_row}'] = "TOTAL TTC :"
+    ws[f'I{current_row}'].font = Font(bold=True, size=14, color="006400")
+    ws[f'I{current_row}'].alignment = Alignment(horizontal='right')
+    ws[f'J{current_row}'] = '=SUMIF(A:A,"TOTAL NET*",K:K)'
+    ws[f'J{current_row}'].number_format = '#,##0 "FCFA"'
+    ws[f'J{current_row}'].font = Font(bold=True, size=14, color="FFFFFF")
+    ws[f'J{current_row}'].fill = PatternFill(start_color="27AE60", end_color="27AE60", fill_type="solid")
+    ws[f'J{current_row}'].border = Border(
+        top=Side(style='double'),
+        bottom=Side(style='double')
+    )
 
-        current_row += 4  # Espace entre total et signature
-        signature_row = current_row
+    # ========================================
+    # ✍️ SIGNATURE EN BAS
+    # ========================================
 
-        try:
-            # Chercher la signature
-            signature_paths = [
-                "assets/signature.png",
-                "assets/signature.jpg",
-                "signature.png",
-                "signature.jpg"
-            ]
+    current_row += 4  # Espace entre total et signature
+    signature_row = current_row
 
-            signature_path = None
-            for path in signature_paths:
-                if os.path.exists(path):
-                    signature_path = path
-                    break
+    try:
+        from openpyxl.drawing.image import Image as XLImage
 
-            if signature_path:
-                # Ajouter la signature
-                sig_img = XLImage(signature_path)
+        # Chercher la signature
+        signature_paths = [
+            "assets/signature.png",
+            "assets/signature.jpg",
+            "signature.png",
+            "signature.jpg"
+        ]
 
-                # Redimensionner signature (largeur 150px)
-                sig_img.width = 150
-                sig_img.height = int(150 / sig_img.width * sig_img.height) if sig_img.width > 0 else 80
+        signature_path = None
+        for path in signature_paths:
+            if os.path.exists(path):
+                signature_path = path
+                break
 
-                # Positionner en bas à droite (colonne H)
-                ws.add_image(sig_img, f'H{signature_row}')
+        if signature_path:
+            # Ajouter la signature
+            sig_img = XLImage(signature_path)
 
-                print(f"   ✅ Signature ajoutée dans Excel : {signature_path}")
+            # Redimensionner signature (largeur 150px)
+            sig_img.width = 150
+            sig_img.height = int(150 / sig_img.width * sig_img.height) if sig_img.width > 0 else 80
 
-                current_row += 6  # Espace pour la signature
-            else:
-                print("   ⚠️ Signature non trouvée - ajout cadre signature")
+            # Positionner en bas à droite (colonne H)
+            ws.add_image(sig_img, f'H{signature_row}')
 
-                # Alternative : Zone pour signature manuscrite
-                ws.merge_cells(f'H{current_row}:J{current_row}')
-                ws[f'H{current_row}'] = "Signature et Cachet"
-                ws[f'H{current_row}'].font = Font(bold=True, size=11)
-                ws[f'H{current_row}'].alignment = Alignment(horizontal='center', vertical='center')
-                ws[f'H{current_row}'].border = Border(
-                    bottom=Side(style='thin'),
-                    top=Side(style='thin'),
-                    left=Side(style='thin'),
-                    right=Side(style='thin')
-                )
-                ws.row_dimensions[current_row].height = 60
+            print(f"   ✅ Signature ajoutée dans Excel : {signature_path}")
 
-                current_row += 1
+            current_row += 6  # Espace pour la signature
+        else:
+            print("   ⚠️ Signature non trouvée - ajout cadre signature")
 
-        except Exception as e:
-            print(f"   ⚠️ Erreur ajout signature Excel : {e}")
-            import traceback
-            traceback.print_exc()
-
-            # Fallback : Ligne pour signature
+            # Alternative : Zone pour signature manuscrite
             ws.merge_cells(f'H{current_row}:J{current_row}')
-            ws[f'H{current_row}'] = "_" * 30
-            ws[f'H{current_row}'].alignment = Alignment(horizontal='center')
-            current_row += 1
             ws[f'H{current_row}'] = "Signature et Cachet"
-            ws[f'H{current_row}'].font = Font(bold=True, size=10)
-            ws[f'H{current_row}'].alignment = Alignment(horizontal='center')
+            ws[f'H{current_row}'].font = Font(bold=True, size=11)
+            ws[f'H{current_row}'].alignment = Alignment(horizontal='center', vertical='center')
+            ws[f'H{current_row}'].border = Border(
+                bottom=Side(style='thin'),
+                top=Side(style='thin'),
+                left=Side(style='thin'),
+                right=Side(style='thin')
+            )
+            ws.row_dimensions[current_row].height = 60
+
+            current_row += 1
+
+    except Exception as e:
+        print(f"   ⚠️ Erreur ajout signature Excel : {e}")
+
+        # Fallback : Ligne pour signature
+        ws.merge_cells(f'H{current_row}:J{current_row}')
+        ws[f'H{current_row}'] = "_" * 30
+        ws[f'H{current_row}'].alignment = Alignment(horizontal='center')
+        current_row += 1
+        ws[f'H{current_row}'] = "Signature et Cachet"
+        ws[f'H{current_row}'].font = Font(bold=True, size=10)
+        ws[f'H{current_row}'].alignment = Alignment(horizontal='center')
 
     # ========================================
     # 📐 LARGEURS COLONNES
     # ========================================
-    ws.column_dimensions['A'].width = 8
-    ws.column_dimensions['B'].width = 40
-    ws.column_dimensions['C'].width = 8
-    ws.column_dimensions['D'].width = 8
-    ws.column_dimensions['E'].width = 12
-    ws.column_dimensions['F'].width = 10
-    ws.column_dimensions['G'].width = 12
-    ws.column_dimensions['H'].width = 10
-    ws.column_dimensions['I'].width = 14
-    ws.column_dimensions['J'].width = 14
+    ws.column_dimensions['A'].width = 8      # Réf
+    ws.column_dimensions['B'].width = 38     # Désignation
+    ws.column_dimensions['C'].width = 7      # Qté
+    ws.column_dimensions['D'].width = 6      # Cond.
+    ws.column_dimensions['E'].width = 8      # Unité
+    ws.column_dimensions['F'].width = 11     # PU HT
+    ws.column_dimensions['G'].width = 10     # TVA Unit
+    ws.column_dimensions['H'].width = 11     # PU TTC
+    ws.column_dimensions['I'].width = 9      # Remise %
+    ws.column_dimensions['J'].width = 13     # Total HT
+    ws.column_dimensions['K'].width = 13     # Total TTC
 
     # ========================================
     # 💾 EXPORT
@@ -15470,29 +16554,33 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
 
     return buf, po_number
 
-
 # ===== CALLBACK : GÉNÉRATION BON DE COMMANDE EXCEL AVEC VALIDATION =====
 @app.callback(
     [Output("download-po", "data"),
      Output("po-loading-overlay", "is_open")],
     Input("btn-po-pdf", "n_clicks"),
     [State("main-table", "selected_rows"),
-     State("main-table", "data")],
+     State("main-table", "data"),
+     State("auth-state", "data")],  # ✅ AJOUT: auth-state pour tracking
     prevent_initial_call=True
 )
-def export_po_excel_validated(n_clicks, selected_rows, table_data):
+def export_po_excel_validated(n_clicks, selected_rows, table_data, auth_state):
     """
     🚀 VERSION ULTRA-RAPIDE - Génère un BC Excel en <2s
     Utilise le cache pré-chargé pour éviter les chargements réseau
+    + Tracking des commandes par agent
     """
     callback_start = time.time()
 
     if not n_clicks or not table_data or not selected_rows:
         return no_update, False
 
-    print(f"\n{'=' * 60}")
+    print(f"\n{'='*60}")
     print(f"📄 GÉNÉRATION BON DE COMMANDE EXCEL")
-    print(f"{'=' * 60}")
+    print(f"{'='*60}")
+
+    # Récupérer l'utilisateur connecté
+    username = auth_state.get("username", "unknown") if auth_state else "unknown"
 
     # ========== VALIDATION STRICTE QAC ==========
     is_valid, error_msg, missing = valider_qac_selection(selected_rows, table_data)
@@ -15503,7 +16591,7 @@ def export_po_excel_validated(n_clicks, selected_rows, table_data):
 
     # ========== GÉNÉRATION RAPIDE ==========
     selected_products = [table_data[idx] for idx in selected_rows]
-    print(f"📦 {len(selected_products)} produits sélectionnés")
+    print(f"📦 {len(selected_products)} produits sélectionnés par {username}")
 
     # Utiliser le cache pré-chargé (instantané)
     bc_cache = get_bc_cache()
@@ -15518,9 +16606,34 @@ def export_po_excel_validated(n_clicks, selected_rows, table_data):
 
         fname = f"BC_{po_number}_{len(selected_products)}p.xlsx"
 
+        # ========== TRACKING PAR FOURNISSEUR ==========
+        # Calculer les stats par fournisseur pour le tracking
+        suppliers_stats = {}
+        for prod in selected_products:
+            supplier = str(prod.get("Supplier", "N/A")).strip()
+            if supplier not in suppliers_stats:
+                suppliers_stats[supplier] = {"products": 0, "amount": 0}
+
+            qac = safe_float(prod.get("QAC edited"), safe_float(prod.get("QAC"), 0))
+            price = safe_float(price_map.get(str(prod.get("product_name", "")).lower(), 1000), 1000)
+
+            suppliers_stats[supplier]["products"] += 1
+            suppliers_stats[supplier]["amount"] += qac * price
+
+        # Tracker chaque fournisseur séparément
+        for supplier, stats in suppliers_stats.items():
+            track_agent_order(
+                username=username,
+                supplier=supplier,
+                order_total=stats["amount"],
+                products_count=stats["products"],
+                po_number=po_number
+            )
+
         callback_elapsed = time.time() - callback_start
         print(f"⚡ TOTAL: {callback_elapsed:.2f}s - {fname}")
-        print(f"{'=' * 60}\n")
+        print(f"   📊 Tracking: {len(suppliers_stats)} fournisseurs pour {username}")
+        print(f"{'='*60}\n")
 
         return dcc.send_bytes(excel_buffer.read(), filename=fname), False
 
@@ -15561,15 +16674,16 @@ def toggle_po_button(selected_rows, data):
     return False
 
 
-# ===== CALLBACK 2 : AGENT IA =====
-# ===== CALLBACK : AGENT IA (VERSION CORRIGÉE POUR VOTRE ARCHITECTURE) =====
+# ===== CALLBACK 2 : AGENT IA (DÉSACTIVÉ - UTILISE LE CALLBACK PRINCIPAL) =====
+# NOTE: Le callback principal run_agent_ia_calcul est défini plus haut et modifie main-table directement
+'''
 @app.callback(
     Output("master-data", "data", allow_duplicate=True),
     Input("btn-run-agent-ia", "n_clicks"),
     State("master-data", "data"),
     prevent_initial_call=True
 )
-def run_agent_ia_calcul(n_clicks, master_json):
+def run_agent_ia_calcul_OLD(n_clicks, master_json):
     """
     Lance l'Agent IA et met à jour master-data
     → apply_filters se déclenchera automatiquement après
@@ -15606,9 +16720,10 @@ def run_agent_ia_calcul(n_clicks, master_json):
     # Retourner master-data mis à jour
     # → apply_filters se déclenchera automatiquement et propagera à main-table
     return master_df.to_json(orient="records")
+'''
 
-
-# ===== CALLBACK : PRÉSÉLECTION APRÈS AGENT IA =====
+# ===== CALLBACK : PRÉSÉLECTION APRÈS AGENT IA (DÉSACTIVÉ - INTÉGRÉ AU CALLBACK PRINCIPAL) =====
+'''
 @app.callback(
     Output("main-table", "selected_rows", allow_duplicate=True),
     [Input("main-table", "data"),
@@ -15647,7 +16762,7 @@ def preselect_qac_rows(table_data, ia_clicks, ia_clicks_state):
         return sorted(indices_selection)
 
     return no_update
-
+'''
 
 # ===== CALLBACK 3 : REMPLIR QAC =====
 # ===== CALLBACK : REMPLIR QAC DEPUIS TARGET (CORRIGÉ) =====
@@ -15678,7 +16793,6 @@ def fill_qac_from_target(n_clicks, selected_rows, master_json):
     print(f"✅ {count} QAC remplies depuis target_quantity")
 
     return master_df.to_json(orient="records")
-
 
 # ====== EXPORT BON DE COMMANDE WORD ======
 '''
@@ -15931,6 +17045,7 @@ def export_po_word_optimized(n_clicks, selected_rows, table_data):
 
     return dcc.send_bytes(buf.read(), filename=fname), False  # ✅ Fermer overlay
 '''
+
 
 '''
 @app.callback(
@@ -16304,8 +17419,6 @@ def toggle_po_button(selected_rows, data):
     # Sinon, désactiver
     return True
 '''
-
-
 # ==================== CALLBACK 4 : COMPTEUR DE SÉLECTION ====================
 @app.callback(
     Output("selection-counter", "children"),
@@ -16350,7 +17463,6 @@ def select_all_rows(n_clicks, table_data):
     return list(range(len(table_data)))
 '''
 
-
 @app.callback(
     Output("main-table", "selected_rows", allow_duplicate=True),
     Input("btn-clear-selection", "n_clicks"),
@@ -16361,7 +17473,6 @@ def clear_selection(n_clicks):
     if not n_clicks:
         return no_update
     return []
-
 
 # ------------------------------ Edit/Add/Delete rows -----------------------------
 # NOTE: Ce callback est désactivé car remplacé par open_add_product_modal
@@ -16397,7 +17508,6 @@ def open_edit_modal(n_add, active_cell, data):
 
 import json
 
-
 @app.callback(
     [Output("master-data", "data", allow_duplicate=True),
      Output("filtered-data", "data", allow_duplicate=True),
@@ -16422,8 +17532,7 @@ import json
     State("auth-state", "data"),
     prevent_initial_call=True
 )
-def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, fc, filter_opts, master_json, is_adding,
-              auth_state):
+def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, fc, filter_opts, master_json, is_adding, auth_state):
     """Sauvegarde les modifications ou ajoute un nouveau produit avec intégration Supabase"""
     global initial_df
 
@@ -16455,9 +17564,9 @@ def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, f
     # Mode ajout ou édition
     if is_adding:
         # ✅ AJOUT D'UN NOUVEAU PRODUIT
-        print(f"\n{'=' * 60}")
+        print(f"\n{'='*60}")
         print(f"➕ AJOUT D'UN NOUVEAU PRODUIT")
-        print(f"{'=' * 60}")
+        print(f"{'='*60}")
 
         new_row = {c: np.nan for c in df.columns}
         new_row["product_name"] = prod.strip()
@@ -16529,15 +17638,14 @@ def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, f
             })
             print(f"   ✅ Sauvegardé dans Supabase")
 
-        print(f"{'=' * 60}\n")
+        print(f"{'='*60}\n")
 
         feedback = dbc.Alert([
             html.I(className="fas fa-check-circle me-2"),
             f"Produit '{prod}' ajouté avec succès"
         ], color="success", duration=4000)
 
-    elif active_cell and active_cell.get("column_id") == "edit Edit" and active_cell.get(
-            "row") is not None and table_data:
+    elif active_cell and active_cell.get("column_id") == "edit Edit" and active_cell.get("row") is not None and table_data:
         # ✅ ÉDITION D'UN PRODUIT EXISTANT
         row = active_cell["row"]
         r = table_data[row]
@@ -16606,9 +17714,7 @@ def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, f
     print(f"📊 Table mise à jour: {len(fdf_actions)} produits affichés (total: {len(df)})")
 
     # Retour des résultats (fermer le modal et reset le flag)
-    return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict(
-        "records"), [], False, feedback, False
-
+    return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), [], False, feedback, False
 
 '''
 @app.callback(
@@ -16647,8 +17753,6 @@ def delete_row(master_json):
     # filtered-data, main-table, selected_rows (empty list), and risk-banner
     return df.to_json(orient="records"), df.to_dict("records"), [], banner
 '''
-
-
 # ------------------------------ Floating Chat callbacks ---------------------------
 @app.callback(
     Output("chat-open", "data"),
@@ -16765,7 +17869,3 @@ def on_chat(n_clicks, user_text, history, uploaded_json, master_json):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(debug=True, host="0.0.0.0", port=port)
-
-# Alternative avec Waitress (production):
-# from waitress import serve
-# serve(app, host="0.0.0.0", port=10000)

@@ -4,7 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="optimise BC" />
+    <list default="true" id="fead9ba1-4f20-469d-b4ae-5504c2294ffe" name="Changes" comment="optimise dash et creation de my espace">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -24,6 +26,7 @@
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="UPDATE_TYPE" value="REBASE" />
   </component>
   <component name="GitHubPullRequestSearchHistory">{
   &quot;lastFilter&quot;: {
@@ -77,30 +80,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1754907722960</updated>
-    </task>
-    <task id="LOCAL-00181" summary="css">
-      <option name="closed" value="true" />
-      <created>1763125915954</created>
-      <option name="number" value="00181" />
-      <option name="presentableId" value="LOCAL-00181" />
-      <option name="project" value="LOCAL" />
-      <updated>1763125915954</updated>
-    </task>
-    <task id="LOCAL-00182" summary="css">
-      <option name="closed" value="true" />
-      <created>1763126659511</created>
-      <option name="number" value="00182" />
-      <option name="presentableId" value="LOCAL-00182" />
-      <option name="project" value="LOCAL" />
-      <updated>1763126659512</updated>
-    </task>
-    <task id="LOCAL-00183" summary="css">
-      <option name="closed" value="true" />
-      <created>1763126821635</created>
-      <option name="number" value="00183" />
-      <option name="presentableId" value="LOCAL-00183" />
-      <option name="project" value="LOCAL" />
-      <updated>1763126821635</updated>
     </task>
     <task id="LOCAL-00184" summary="css">
       <option name="closed" value="true" />
@@ -470,7 +449,31 @@
       <option name="project" value="LOCAL" />
       <updated>1765412319029</updated>
     </task>
-    <option name="localTasksCounter" value="230" />
+    <task id="LOCAL-00230" summary="optimise BC">
+      <option name="closed" value="true" />
+      <created>1765413597104</created>
+      <option name="number" value="00230" />
+      <option name="presentableId" value="LOCAL-00230" />
+      <option name="project" value="LOCAL" />
+      <updated>1765413597104</updated>
+    </task>
+    <task id="LOCAL-00231" summary="optimise dash et creation de my espace">
+      <option name="closed" value="true" />
+      <created>1765968536026</created>
+      <option name="number" value="00231" />
+      <option name="presentableId" value="LOCAL-00231" />
+      <option name="project" value="LOCAL" />
+      <updated>1765968536027</updated>
+    </task>
+    <task id="LOCAL-00232" summary="optimise dash et creation de my espace">
+      <option name="closed" value="true" />
+      <created>1765968647666</created>
+      <option name="number" value="00232" />
+      <option name="presentableId" value="LOCAL-00232" />
+      <option name="project" value="LOCAL" />
+      <updated>1765968647666</updated>
+    </task>
+    <option name="localTasksCounter" value="233" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -515,7 +518,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="toggle_po_button" />
     <MESSAGE value="stabilisation_dash" />
     <MESSAGE value="ADS rotation" />
     <MESSAGE value="rotation INSTANTANE" />
@@ -540,6 +542,7 @@
     <MESSAGE value="optimisation dash" />
     <MESSAGE value="product_id debug" />
     <MESSAGE value="optimise BC" />
-    <option name="LAST_COMMIT_MESSAGE" value="optimise BC" />
+    <MESSAGE value="optimise dash et creation de my espace" />
+    <option name="LAST_COMMIT_MESSAGE" value="optimise dash et creation de my espace" />
   </component>
 </project>

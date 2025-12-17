@@ -28,26 +28,27 @@ from dash.exceptions import PreventUpdate
 # 🔧 CONFIGURATION PERFORMANCE GLOBALE
 # ============================================================
 PERFORMANCE_CONFIG = {
-    "PARALLEL_LOADING": True,           # Chargement CSV en parallèle
-    "MAX_WORKERS": 6,                   # Threads pour chargement parallèle
-    "CACHE_TTL_SECONDS": 600,           # Cache 10 minutes
-    "BACKGROUND_REFRESH": True,         # Refresh cache en arrière-plan
-    "COMPRESS_RESPONSES": True,         # Compression gzip
-    "CONNECTION_TIMEOUT": 15,           # Timeout connexions HTTP
-    "READ_TIMEOUT": 30,                 # Timeout lecture HTTP
-    "CHUNK_SIZE": 50000,                # Taille des chunks pour gros DataFrames
-    "DEBOUNCE_MS": 300,                 # Debounce pour callbacks UI
+    "PARALLEL_LOADING": True,  # Chargement CSV en parallèle
+    "MAX_WORKERS": 6,  # Threads pour chargement parallèle
+    "CACHE_TTL_SECONDS": 600,  # Cache 10 minutes
+    "BACKGROUND_REFRESH": True,  # Refresh cache en arrière-plan
+    "COMPRESS_RESPONSES": True,  # Compression gzip
+    "CONNECTION_TIMEOUT": 15,  # Timeout connexions HTTP
+    "READ_TIMEOUT": 30,  # Timeout lecture HTTP
+    "CHUNK_SIZE": 50000,  # Taille des chunks pour gros DataFrames
+    "DEBOUNCE_MS": 300,  # Debounce pour callbacks UI
 }
 
 # ✅ NOUVEAU: Import Supabase pour tracking utilisateurs
 try:
     from supabase import create_client, Client
+
     SUPABASE_AVAILABLE = True
 except ImportError:
     SUPABASE_AVAILABLE = False
     print("⚠️ Supabase non installé. Exécuter: pip install supabase")
 
-#import MATCH
+# import MATCH
 
 print("CWD:", os.getcwd())
 print("Dir files:", os.listdir("."))
@@ -61,7 +62,8 @@ import orjson
 
 ORJSON_OPTS = orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY
 
-app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP], prevent_initial_callbacks='initial_duplicate')
+app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP],
+           prevent_initial_callbacks='initial_duplicate')
 
 # ⚠️ Très important pour Render/Gunicorn
 server = app.server
@@ -76,6 +78,7 @@ server.secret_key = os.getenv("SECRET_KEY", "maad-supply-chain-secret-key-change
 # Compression gzip des réponses
 try:
     from flask_compress import Compress
+
     Compress(server)
     print("✅ Compression gzip activée")
 except ImportError:
@@ -118,6 +121,7 @@ from reportlab.platypus import Image
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
 # --- Word / python-docx (import paresseux & sûr) ---
 DOCX_AVAILABLE = False
 DOCX_IMPORT_ERROR = None
@@ -127,12 +131,13 @@ try:
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml.ns import qn
     from docx.oxml import OxmlElement
+
     DOCX_AVAILABLE = True
 except Exception as _e:
     DOCX_AVAILABLE = False
     DOCX_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
 # Imports existants + ces nouveaux
-#import anthropic
+# import anthropic
 import json
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -147,6 +152,7 @@ import threading
 from queue import Queue
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+
 warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
 
 # ============================================================
@@ -162,6 +168,7 @@ _GLOBAL_CACHE_LOCK = threading.Lock()
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
 
 def create_http_session():
     """Crée une session HTTP optimisée avec pooling et retry"""
@@ -188,6 +195,7 @@ def create_http_session():
     session.mount("https://", adapter)
     return session
 
+
 # Session globale réutilisable
 _HTTP_SESSION = create_http_session()
 
@@ -211,6 +219,7 @@ _data_lock = threading.Lock()
 # Cache des données par utilisateur (évite les conflits)
 _user_data_cache = {}
 _user_cache_lock = threading.Lock()
+
 
 # ============================================================
 # 🚀 SYSTÈME DE CHARGEMENT PARALLÈLE DES CSV
@@ -329,7 +338,8 @@ def get_cached_data(cache_key, loader_func, ttl_seconds=None):
             # Données encore valides
             if age < ttl_seconds:
                 # Si proche de l'expiration (>80%), refresh en arrière-plan
-                if age > ttl_seconds * 0.8 and not cached.get("refreshing") and PERFORMANCE_CONFIG["BACKGROUND_REFRESH"]:
+                if age > ttl_seconds * 0.8 and not cached.get("refreshing") and PERFORMANCE_CONFIG[
+                    "BACKGROUND_REFRESH"]:
                     cached["refreshing"] = True
                     _async_executor.submit(_background_refresh, cache_key, loader_func)
 
@@ -378,6 +388,7 @@ def invalidate_cache(cache_key=None):
         else:
             _GLOBAL_DATA_CACHE.clear()
     print(f"🧹 Cache invalidé: {cache_key or 'ALL'}")
+
 
 # ============================================================
 # 📦 CACHE GLOBAL POUR LES DONNÉES DE RÉCEPTION (ASYNC)
@@ -497,6 +508,7 @@ def get_cached_receptions():
 
 def preload_receptions_background(url: str):
     """Lance le chargement des réceptions en arrière-plan (non-bloquant)"""
+
     def _bg_load():
         load_receptions_async(url, timeout=15)
 
@@ -565,6 +577,7 @@ def clear_all_caches():
 
     print("🧹 Tous les caches nettoyés")
 
+
 RENDER_ENV = os.getenv("RENDER", False)
 DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
 
@@ -572,7 +585,8 @@ DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
 # 🗄️ CONFIGURATION SUPABASE
 # ============================================================
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://tvaxxzkilrsgfqjswtkt.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR2YXh4emtpbHJzZ2ZxanN3dGt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ3Mzc1NzksImV4cCI6MjA4MDMxMzU3OX0.uIbLmOm2z9YlD5bxh8nXMY2JjqJr8Qj12hmBc7hBPy0")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY",
+                         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR2YXh4emtpbHJzZ2ZxanN3dGt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ3Mzc1NzksImV4cCI6MjA4MDMxMzU3OX0.uIbLmOm2z9YlD5bxh8nXMY2JjqJr8Qj12hmBc7hBPy0")
 
 # Initialiser le client Supabase
 supabase_client = None
@@ -715,6 +729,7 @@ def get_or_create_user(username: str) -> dict:
 # Flag global pour désactiver le tracking si RLS bloque
 SUPABASE_TRACKING_ENABLED = True
 
+
 def create_session(user_id: str, ip_address: str = None, user_agent: str = None) -> str:
     """Crée une nouvelle session utilisateur"""
     global SUPABASE_TRACKING_ENABLED
@@ -838,7 +853,8 @@ def _do_track_activity(user_id: str, session_id: str, action_type: str, page: st
             print(f"⚠️ Erreur track_activity: {e}")
 
 
-def track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: int, new_value: int, supplier: str = None):
+def track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: int, new_value: int,
+                   supplier: str = None):
     """Enregistre une modification QAC (asynchrone)"""
     if not supabase_client or not SUPABASE_TRACKING_ENABLED:
         return
@@ -856,7 +872,8 @@ def track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: 
     })
 
 
-def _do_track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: int, new_value: int, supplier: str = None):
+def _do_track_qac_edit(user_id: str, session_id: str, product_name: str, old_value: int, new_value: int,
+                       supplier: str = None):
     """Exécution réelle du tracking QAC edit"""
     global SUPABASE_TRACKING_ENABLED
 
@@ -886,7 +903,8 @@ def _do_track_qac_edit(user_id: str, session_id: str, product_name: str, old_val
 # 📊 NOUVELLES FONCTIONS DE TRACKING - ACTIONS AGENTS
 # ============================================================
 
-def track_po_generated(user_id: str, session_id: str, supplier: str, products_count: int, total_amount: float, po_type: str = "excel"):
+def track_po_generated(user_id: str, session_id: str, supplier: str, products_count: int, total_amount: float,
+                       po_type: str = "excel"):
     """Track la génération d'un bon de commande"""
     if not supabase_client or not SUPABASE_TRACKING_ENABLED:
         return
@@ -904,7 +922,8 @@ def track_po_generated(user_id: str, session_id: str, supplier: str, products_co
     })
 
 
-def _do_track_po_generated(user_id: str, session_id: str, supplier: str, products_count: int, total_amount: float, po_type: str = "excel"):
+def _do_track_po_generated(user_id: str, session_id: str, supplier: str, products_count: int, total_amount: float,
+                           po_type: str = "excel"):
     """Exécution réelle du tracking PO"""
     global SUPABASE_TRACKING_ENABLED
 
@@ -1257,7 +1276,8 @@ def get_dashboard_analytics() -> dict:
         # Stats récentes
         analytics["recent_stats"] = get_daily_stats(7)
 
-        print(f"📊 Analytics dashboard: {analytics['total_users']} users, {analytics['active_sessions']} sessions actives")
+        print(
+            f"📊 Analytics dashboard: {analytics['total_users']} users, {analytics['active_sessions']} sessions actives")
         return analytics
 
     except Exception as e:
@@ -1376,15 +1396,14 @@ def get_product_notes(product_name: str) -> list:
 # Variable globale pour stocker la session active
 ACTIVE_SESSIONS = {}  # {username: {"user_id": ..., "session_id": ...}}
 
-
 if RENDER_ENV:
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🚀 DÉMARRAGE SUR RENDER")
-    print("="*60)
+    print("=" * 60)
     print(f"Python version: {sys.version}")
     print(f"Working directory: {os.getcwd()}")
     print(f"Files: {os.listdir('.')[:10]}")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
 # ==========================================
@@ -1436,6 +1455,8 @@ def run_with_timeout(func, args=(), kwargs=None, timeout_seconds=30):
         raise exception[0]
 
     return result[0]
+
+
 # ------------- OpenAI client (clé hardcodée à ta demande) ----------------
 # OPENAI_API_KEY_HARDCODED = "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"
 # Ligne ~45 dans votre code
@@ -1825,6 +1846,7 @@ Cet email a été envoyé automatiquement.
         traceback.print_exc()
         return False
 
+
 # ==================== VÉRIFIER LA CONFIGURATION EMAIL ====================
 # Vers ligne 200-250, vérifie que ces variables existent :
 
@@ -1844,7 +1866,6 @@ TEAM_MEMBERS = {
     "ravane": {"name": "Ravane Diop", "email": "pr.diop@maad.io"},
     "insa": {"name": "Insa Niang", "email": "insa.niang@maad.io"},
 }
-
 
 # ============================================================
 # 👤 SYSTÈME DE GESTION DES AGENTS - SIMPLE ET PERFORMANT
@@ -2108,9 +2129,9 @@ def get_agent_targets(username: str) -> dict:
 
     # Objectifs différenciés par rôle
     targets_by_role = {
-        "admin": {"target_monthly": 50_000_000, "target_orders": 30},      # 50M / 30 BC
-        "manager": {"target_monthly": 30_000_000, "target_orders": 20},    # 30M / 20 BC
-        "user": {"target_monthly": 15_000_000, "target_orders": 15},       # 15M / 15 BC
+        "admin": {"target_monthly": 50_000_000, "target_orders": 30},  # 50M / 30 BC
+        "manager": {"target_monthly": 30_000_000, "target_orders": 20},  # 30M / 20 BC
+        "user": {"target_monthly": 15_000_000, "target_orders": 15},  # 15M / 15 BC
     }
 
     # Objectifs personnalisés par agent (optionnel)
@@ -2193,6 +2214,7 @@ def get_agent_suppliers(username: str, user_role: str) -> list:
     except Exception as e:
         print(f"   ⚠️ Erreur get_agent_suppliers: {e}")
         return None
+
 
 def track_agent_order(username: str, supplier: str, order_total: float, products_count: int, po_number: str):
     """
@@ -2390,30 +2412,14 @@ AUTH_USERS = {
 
 
 def verify_password(username: str, password: str) -> bool:
-    """Vérifie le mot de passe d'un utilisateur et track la connexion"""
+    """Vérifie le mot de passe - local et rapide"""
     username = username.lower().strip()
-    print(f"   🔍 DEBUG verify_password: username='{username}'")
 
     if username not in AUTH_USERS:
-        print(f"   ❌ Utilisateur '{username}' non trouvé dans AUTH_USERS")
-        print(f"   📋 Utilisateurs disponibles: {list(AUTH_USERS.keys())}")
-        track_login(username, success=False)  # Track tentative échouée
         return False
 
     password_hash = hashlib.sha256(password.encode()).hexdigest()
-    expected_hash = AUTH_USERS[username]["password_hash"]
-
-    print(f"   🔐 Hash fourni: {password_hash[:20]}...")
-    print(f"   🔐 Hash attendu: {expected_hash[:20]}...")
-
-    if password_hash == expected_hash:
-        print(f"   ✅ Mot de passe correct!")
-        track_login(username, success=True)  # Track connexion réussie
-        return True
-    else:
-        print(f"   ❌ Mot de passe incorrect")
-        track_login(username, success=False)  # Track tentative échouée
-        return False
+    return password_hash == AUTH_USERS[username]["password_hash"]
 
 
 def get_user_info(username: str) -> dict:
@@ -2822,7 +2828,8 @@ def create_user_navbar(username: str):
                 html.Img(src=LOGO_DATA_URI, style={"height": "32px"}) if LOGO_DATA_URI else html.Div(),
                 html.Div([
                     html.Div(APP_BRAND, style={"color": "#f8fafc", "fontWeight": "600", "fontSize": "14px"}),
-                    html.Div("Supply Chain", style={"color": "#64748b", "fontSize": "9px", "textTransform": "uppercase"})
+                    html.Div("Supply Chain",
+                             style={"color": "#64748b", "fontSize": "9px", "textTransform": "uppercase"})
                 ])
             ]),
 
@@ -2855,7 +2862,8 @@ def create_user_navbar(username: str):
                     html.Div([
                         html.Div(first_name, style={"color": "#f1f5f9", "fontWeight": "500", "fontSize": "12px"}),
                         html.Div(role_labels.get(user_role, "User"), style={
-                            "color": role_colors.get(user_role, "#64748b"), "fontSize": "9px", "textTransform": "uppercase"
+                            "color": role_colors.get(user_role, "#64748b"), "fontSize": "9px",
+                            "textTransform": "uppercase"
                         })
                     ])
                 ]),
@@ -3169,8 +3177,8 @@ def get_next_po_number() -> str:
     return po_number
 
 
-#import pandas as pd
-#import numpy as np
+# import pandas as pd
+# import numpy as np
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
@@ -3178,7 +3186,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_score, f1_score, mean_absolute_error, r2_score
-#import warnings
+
+# import warnings
 
 warnings.filterwarnings('ignore')
 
@@ -3761,6 +3770,7 @@ def calculate_ads_by_period(period_days: int = 7) -> pd.DataFrame:
         traceback.print_exc()
         return pd.DataFrame(columns=['product_name', f'Average Daily Sales ({period_days}d)'])
 
+
 def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     """
     🚀 VERSION OPTIMISÉE - Chargement parallèle des données
@@ -3769,9 +3779,9 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
     import pandas as pd
 
     load_start = time.time()
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"🚀 LOAD_SUPPLY_DATA OPTIMISÉ (période: {period_days})")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # =========================
     # Helpers
@@ -4017,7 +4027,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
             catalog_df.columns = [str(c).lower().strip() for c in catalog_df.columns]
 
             # Vérifier si on a des colonnes avec de vrais noms (pas "unnamed")
-            named_cols = [c for c in catalog_df.columns if 'unnamed' not in c.lower() and c != '' and '#n/a' not in c.lower()]
+            named_cols = [c for c in catalog_df.columns if
+                          'unnamed' not in c.lower() and c != '' and '#n/a' not in c.lower()]
             print(f"   Colonnes nommées: {len(named_cols)} -> {named_cols[:8]}")
 
             # Chercher product_id et product_name
@@ -4051,7 +4062,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                 print(f"   🎯 SUCCÈS avec skiprows={skip}")
 
                 catalog_subset = pd.DataFrame()
-                catalog_subset['product_id'] = pd.to_numeric(catalog_df[col_product_id], errors='coerce').fillna(0).astype(int)
+                catalog_subset['product_id'] = pd.to_numeric(catalog_df[col_product_id], errors='coerce').fillna(
+                    0).astype(int)
                 catalog_subset['product_name'] = catalog_df[col_product_name].astype(str).str.lower().str.strip()
 
                 if col_is_active:
@@ -4130,7 +4142,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
             })
         )
         # Convertir product_id en int
-        total_stock_df['product_id'] = pd.to_numeric(total_stock_df['product_id'], errors='coerce').fillna(0).astype(int)
+        total_stock_df['product_id'] = pd.to_numeric(total_stock_df['product_id'], errors='coerce').fillna(0).astype(
+            int)
         inv_valid = (total_stock_df['product_id'] > 0).sum()
         print(f"   ✅ Après groupby: {len(total_stock_df)} produits, {inv_valid} avec product_id de l'inventaire")
     else:
@@ -4194,7 +4207,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
             total_stock_df.drop(columns=['catalog_product_id'], errors='ignore', inplace=True)
 
         # Remplir les valeurs manquantes
-        total_stock_df['product_id'] = pd.to_numeric(total_stock_df['product_id'], errors='coerce').fillna(0).astype(int)
+        total_stock_df['product_id'] = pd.to_numeric(total_stock_df['product_id'], errors='coerce').fillna(0).astype(
+            int)
         total_stock_df['is_active'] = total_stock_df['is_active'].fillna(True)
 
         print(f"\n✅ Merge catalogue effectué:")
@@ -4238,7 +4252,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
 
     # ✅ DEBUG: Vérifier product_id après premier merge
     if 'product_id' in final_stock_sales_df.columns:
-        print(f"✅ product_id présent dans final_stock_sales_df: {(final_stock_sales_df['product_id'] > 0).sum()} valeurs valides")
+        print(
+            f"✅ product_id présent dans final_stock_sales_df: {(final_stock_sales_df['product_id'] > 0).sum()} valeurs valides")
     else:
         print(f"⚠️ product_id ABSENT de final_stock_sales_df - colonnes: {final_stock_sales_df.columns.tolist()[:8]}")
 
@@ -4858,7 +4873,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                 final_stock_sales_df['days_since_reception'] = (
                         pd.Timestamp.now() - final_stock_sales_df['last_reception_date']
                 ).dt.days
-                final_stock_sales_df['last_reception_date'] = final_stock_sales_df['last_reception_date'].dt.strftime('%d/%m/%Y')
+                final_stock_sales_df['last_reception_date'] = final_stock_sales_df['last_reception_date'].dt.strftime(
+                    '%d/%m/%Y')
             except Exception as e:
                 print(f"   ⚠️ Erreur formatage date: {e}")
 
@@ -4868,7 +4884,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                 final_stock_sales_df['last_reception_qty'], 0
             ).astype(int)
 
-        matched = final_stock_sales_df['last_reception_qty'].notna().sum() if 'last_reception_qty' in final_stock_sales_df.columns else 0
+        matched = final_stock_sales_df[
+            'last_reception_qty'].notna().sum() if 'last_reception_qty' in final_stock_sales_df.columns else 0
         print(f"   ✅ {matched}/{before_merge} produits avec données de réception")
     else:
         # ℹ️ Les données de réception ne sont pas disponibles (timeout ou erreur)
@@ -4895,12 +4912,14 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
 
     # ✅ DEBUG: Vérifier product_id après déduplication
     if 'product_id' in final_stock_sales_df.columns:
-        final_stock_sales_df['product_id'] = pd.to_numeric(final_stock_sales_df['product_id'], errors='coerce').fillna(0).astype(int)
+        final_stock_sales_df['product_id'] = pd.to_numeric(final_stock_sales_df['product_id'], errors='coerce').fillna(
+            0).astype(int)
         valid = (final_stock_sales_df['product_id'] > 0).sum()
         print(f"   🔍 product_id après dédup: {valid}/{len(final_stock_sales_df)} valides")
     else:
         # Dernier recours : créer product_id à 0
-        print(f"   ⚠️ product_id toujours absent après corrections! Colonnes: {final_stock_sales_df.columns.tolist()[:8]}...")
+        print(
+            f"   ⚠️ product_id toujours absent après corrections! Colonnes: {final_stock_sales_df.columns.tolist()[:8]}...")
         final_stock_sales_df['product_id'] = 0
 
     # =========================
@@ -4989,7 +5008,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
         print("Entraînement modèle supervisé...")
 
         # ✅ DEBUG: Vérifier product_id AVANT ML
-        before_ml_valid = (final_stock_sales_df['product_id'] > 0).sum() if 'product_id' in final_stock_sales_df.columns else 'ABSENT'
+        before_ml_valid = (final_stock_sales_df[
+                               'product_id'] > 0).sum() if 'product_id' in final_stock_sales_df.columns else 'ABSENT'
         print(f"   🔍 product_id AVANT ML: {before_ml_valid}")
 
         final_stock_sales_df, ml_model = create_supervised_target_from_sales(
@@ -4998,7 +5018,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
         )
 
         # ✅ DEBUG: Vérifier product_id APRÈS ML
-        after_ml_valid = (final_stock_sales_df['product_id'] > 0).sum() if 'product_id' in final_stock_sales_df.columns else 'ABSENT'
+        after_ml_valid = (final_stock_sales_df[
+                              'product_id'] > 0).sum() if 'product_id' in final_stock_sales_df.columns else 'ABSENT'
         print(f"   🔍 product_id APRÈS ML: {after_ml_valid}")
         if after_ml_valid == 'ABSENT' and before_ml_valid != 'ABSENT':
             print(f"   ⚠️⚠️⚠️ product_id PERDU dans create_supervised_target_from_sales! ⚠️⚠️⚠️")
@@ -5206,7 +5227,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
         # Ajouter features calculées
         if "total_stock" in final_stock_sales_df.columns and "Average Daily Sales" in final_stock_sales_df.columns:
             stock = pd.to_numeric(final_stock_sales_df["total_stock"], errors="coerce").fillna(0)
-            ads = pd.to_numeric(final_stock_sales_df["Average Daily Sales"], errors="coerce").fillna(0.01).replace(0, 0.01)
+            ads = pd.to_numeric(final_stock_sales_df["Average Daily Sales"], errors="coerce").fillna(0.01).replace(0,
+                                                                                                                   0.01)
 
             # Coverage ratio (jours de stock)
             final_stock_sales_df["_coverage_ratio"] = stock / ads
@@ -5216,7 +5238,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
             final_stock_sales_df["_stock_health"] = (stock / optimal.replace(0, 1)).clip(0, 2)
 
             # Velocity score (ventes rapides = plus à risque)
-            max_sales = pd.to_numeric(final_stock_sales_df.get("Max Daily Sales (Pikine)", ads), errors="coerce").fillna(ads)
+            max_sales = pd.to_numeric(final_stock_sales_df.get("Max Daily Sales (Pikine)", ads),
+                                      errors="coerce").fillna(ads)
             final_stock_sales_df["_velocity"] = max_sales / ads.replace(0, 0.01)
 
             feature_cols.extend(["_coverage_ratio", "_stock_health", "_velocity"])
@@ -5262,7 +5285,7 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
                 # Feature importance
                 importances = dict(zip(feature_cols, model.feature_importances_))
                 top_features = sorted(importances.items(), key=lambda x: x[1], reverse=True)[:3]
-                print(f"   - Top features: {', '.join([f'{k}({v:.2f})' for k,v in top_features])}")
+                print(f"   - Top features: {', '.join([f'{k}({v:.2f})' for k, v in top_features])}")
 
             else:
                 # Fallback: règles métier simples
@@ -5284,7 +5307,8 @@ def load_supply_data(period_days: str = "7d") -> pd.DataFrame:
             print("🤖 [ML Stockout] Colonnes ML absentes → règles métier")
             if "total_stock" in final_stock_sales_df.columns and "Average Daily Sales" in final_stock_sales_df.columns:
                 stock = pd.to_numeric(final_stock_sales_df["total_stock"], errors="coerce").fillna(0)
-                ads = pd.to_numeric(final_stock_sales_df["Average Daily Sales"], errors="coerce").fillna(0.01).replace(0, 0.01)
+                ads = pd.to_numeric(final_stock_sales_df["Average Daily Sales"], errors="coerce").fillna(0.01).replace(
+                    0, 0.01)
                 coverage = stock / ads
 
                 final_stock_sales_df["Stockout Probability"] = np.where(
@@ -5591,6 +5615,8 @@ def get_preloaded_data(period_days="7d"):
         return DATA_30D.copy()
     else:
         return DATA_7D.copy()
+
+
 # ==================== CALLBACK ROTATION ADS ====================
 '''
 @app.callback(
@@ -5859,6 +5885,8 @@ def update_rotation_period(period_value):
         # ✅ RETOUR EN CAS D'ERREUR (4 valeurs)
         return no_update, no_update, no_update, error_indicator
 '''
+
+
 # Utility: add Actions columns
 def add_action_cols(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
@@ -5881,12 +5909,11 @@ def recalculate_product_metrics(row: pd.Series) -> pd.Series:
         pd.Series avec toutes les métriques recalculées
     """
 
-
     row = row.copy()
 
     # === VALIDATION & NETTOYAGE ===
     numeric_cols = {
-        #'total_stock': 0,
+        # 'total_stock': 0,
         'Average Daily Sales': 0.1,
         'Max Daily Sales (Pikine)': 0,
         'QAC': 0,
@@ -5895,8 +5922,8 @@ def recalculate_product_metrics(row: pd.Series) -> pd.Series:
         'credit_days': 0,
         'ADJUSTED_LEADTIME': 7,
         'AJUSTER_BUFFER': 0,
-        #'target_quantity': 0,
-        #'optimal stock': 0,
+        # 'target_quantity': 0,
+        # 'optimal stock': 0,
         'Max Coverage Day': 0
     }
 
@@ -6164,9 +6191,9 @@ def train_optimal_order_quantity_model(df: pd.DataFrame) -> tuple:
 
 
 # ----------------------------- App & Cache ---------------------------------------
-#app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
-#server = app.server
-#cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
+# app = Dash(__name__, title=APP_TITLE, external_stylesheets=[THEME], suppress_callback_exceptions=True, prevent_initial_callbacks='initial_duplicate')
+# server = app.server
+# cache = Cache(app.server, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 3600})
 
 # ------------------------------ Custom CSS & JS ----------------------------------
 app.index_string = """
@@ -6947,7 +6974,7 @@ app.index_string = """
             }
 
             /* ========================================
-               SIDEBAR - DROPDOWNS VISIBLES
+               SIDEBAR - DROPDOWNS FOND CLAIR
                ======================================== */
             .sidebar {
                 background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%) !important;
@@ -6959,32 +6986,31 @@ app.index_string = """
                 font-weight: 500 !important;
             }
 
-            /* Tous les dropdowns dans le sidebar */
+            /* Dropdowns - FOND BLANC, TEXTE NOIR */
             .sidebar .Select-control,
             .sidebar .Select--single > .Select-control,
             .sidebar .Select--multi > .Select-control,
             .sidebar div[class*="control"] {
-                background-color: #1e293b !important;
-                border: 1px solid #475569 !important;
+                background-color: #ffffff !important;
+                border: 1px solid #cbd5e1 !important;
                 border-radius: 6px !important;
                 min-height: 32px !important;
             }
 
-            /* Texte dans les dropdowns */
+            /* Texte visible dans le dropdown fermé */
             .sidebar .Select-value-label,
             .sidebar .Select-placeholder,
             .sidebar div[class*="singleValue"],
             .sidebar div[class*="placeholder"],
-            .sidebar input[class*="Input"],
             .sidebar .Select-input > input {
-                color: #1e293b !important;
+                color: #1f2937 !important;
             }
 
-            /* Menu déroulant */
+            /* Menu déroulant ouvert */
             .sidebar .Select-menu-outer,
             .sidebar div[class*="menu"] {
-                background-color: #fff !important;
-                border: 1px solid #e2e8f0 !important;
+                background-color: #ffffff !important;
+                border: 1px solid #d1d5db !important;
                 border-radius: 6px !important;
                 z-index: 9999 !important;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
@@ -6993,23 +7019,22 @@ app.index_string = """
             /* Options dans le menu */
             .sidebar .Select-option,
             .sidebar div[class*="option"] {
-                background-color: #fff !important;
-                color: #1e293b !important;
+                background-color: #ffffff !important;
+                color: #1f2937 !important;
                 padding: 8px 12px !important;
             }
 
             .sidebar .Select-option:hover,
             .sidebar .Select-option.is-focused,
             .sidebar div[class*="option"]:hover {
-                background-color: #f1f5f9 !important;
-                color: #0f172a !important;
+                background-color: #e0f2fe !important;
+                color: #0c4a6e !important;
             }
 
             /* Tags sélectionnés (multi-select) */
             .sidebar .Select-value,
             .sidebar div[class*="multiValue"] {
                 background-color: #0ea5e9 !important;
-                border-color: #0ea5e9 !important;
                 color: #fff !important;
                 border-radius: 4px !important;
             }
@@ -7019,11 +7044,11 @@ app.index_string = """
                 color: #fff !important;
             }
 
-            /* Flèche et clear */
+            /* Flèche dropdown */
             .sidebar .Select-arrow-zone,
             .sidebar .Select-clear-zone,
             .sidebar div[class*="indicator"] {
-                color: #64748b !important;
+                color: #6b7280 !important;
             }
 
             /* Input recherche sidebar */
@@ -7103,6 +7128,7 @@ app.index_string = """
 </html>
 """
 
+
 # ------------------------------ Data cache layer ---------------------------------
 
 # NOTE: get_df_cached est défini au début du fichier (ligne ~294) avec @cache.memoize
@@ -7174,7 +7200,9 @@ def make_sidebar():
 
             # Fournisseur
             html.Div([
-                html.Label("Fournisseur", style={"color": "#e2e8f0", "fontSize": "11px", "fontWeight": "500", "marginBottom": "4px", "display": "block"}),
+                html.Label("Fournisseur",
+                           style={"color": "#e2e8f0", "fontSize": "11px", "fontWeight": "500", "marginBottom": "4px",
+                                  "display": "block"}),
                 dcc.Dropdown(
                     id="filter-supplier",
                     options=[{"label": s, "value": s} for s in suppliers],
@@ -7185,7 +7213,9 @@ def make_sidebar():
 
             # Catégorie
             html.Div([
-                html.Label("Catégorie", style={"color": "#e2e8f0", "fontSize": "11px", "fontWeight": "500", "marginBottom": "4px", "display": "block"}),
+                html.Label("Catégorie",
+                           style={"color": "#e2e8f0", "fontSize": "11px", "fontWeight": "500", "marginBottom": "4px",
+                                  "display": "block"}),
                 dcc.Dropdown(
                     id="filter-category",
                     options=[{"label": c, "value": c} for c in cats],
@@ -7196,7 +7226,9 @@ def make_sidebar():
 
             # Besoin
             html.Div([
-                html.Label("Besoin", style={"color": "#e2e8f0", "fontSize": "11px", "fontWeight": "500", "marginBottom": "4px", "display": "block"}),
+                html.Label("Besoin",
+                           style={"color": "#e2e8f0", "fontSize": "11px", "fontWeight": "500", "marginBottom": "4px",
+                                  "display": "block"}),
                 dcc.Dropdown(
                     id="filter-need",
                     options=[
@@ -7211,7 +7243,9 @@ def make_sidebar():
 
             # Agent
             html.Div([
-                html.Label("Agent", style={"color": "#e2e8f0", "fontSize": "11px", "fontWeight": "500", "marginBottom": "4px", "display": "block"}),
+                html.Label("Agent",
+                           style={"color": "#e2e8f0", "fontSize": "11px", "fontWeight": "500", "marginBottom": "4px",
+                                  "display": "block"}),
                 dcc.Dropdown(
                     id="filter-agent",
                     options=[{"label": "Tous", "value": "all"}] + [{"label": a, "value": a} for a in agents_list],
@@ -7390,7 +7424,6 @@ def aggregate_by_product(df: pd.DataFrame) -> pd.DataFrame:
     return grouped
 
 
-
 # ============================================================
 # FONCTION CENTRALE DE CALCUL DES KPIS - COHÉRENCE GARANTIE
 # ============================================================
@@ -7503,7 +7536,8 @@ def calculate_stock_kpis(df: pd.DataFrame) -> dict:
     # KPI 4 : Fournisseurs
     suppliers = df_clean['Supplier'].nunique() if 'Supplier' in df_clean.columns else 0
 
-    print(f"   📊 KPIs: {total_skus} SKUs actifs | {out_of_stock} ruptures | {at_risk} à risque | {suppliers} fournisseurs")
+    print(
+        f"   📊 KPIs: {total_skus} SKUs actifs | {out_of_stock} ruptures | {at_risk} à risque | {suppliers} fournisseurs")
 
     # 🚀 Tracking Supabase (asynchrone, non-bloquant)
     try:
@@ -7841,6 +7875,8 @@ def make_kpis(df: pd.DataFrame):
     )
 
     return cards, bell
+
+
 '''
 def make_kpis(df: pd.DataFrame):
     """Calcule les KPIs (SKUs, ruptures, fournisseurs) + alerte dropdown produits à risque (ML)."""
@@ -8074,6 +8110,8 @@ def make_kpis(df: pd.DataFrame):
 
     return cards, bell
 '''
+
+
 @app.callback(
     Output("risk-alert-collapse", "is_open"),
     Input("risk-alert-toggle", "n_clicks"),
@@ -8155,11 +8193,6 @@ def page_overview(master_df: pd.DataFrame = None, username: str = None, user_rol
             after_filter = len(df)
 
             print(f"   🔐 Filtre agent {username}: {before_filter} → {after_filter} produits")
-            print(f"      Fournisseurs: {agent_suppliers}")
-
-    print(df.head())
-
-
 
     # === UI HARDENING (garantir présence + valeurs non vides) ===
     def _ui_harden(df):
@@ -8229,7 +8262,7 @@ def page_overview(master_df: pd.DataFrame = None, username: str = None, user_rol
     # ✅ 1. DÉFINIR colonnes prioritaires overview
     cols_priority_overview = [
 
-        #"delete",
+        # "delete",
         "product_id",
         "product_name",
         "Supplier",
@@ -8321,7 +8354,8 @@ def page_overview(master_df: pd.DataFrame = None, username: str = None, user_rol
     if len(product_id_variants) > 1:
         print(f"⚠️ page_overview: {len(product_id_variants)} colonnes product_id: {product_id_variants}")
         # Garder celle avec le plus de valeurs valides
-        best_col = max(product_id_variants, key=lambda c: (pd.to_numeric(df_overview[c], errors='coerce').fillna(0) > 0).sum())
+        best_col = max(product_id_variants,
+                       key=lambda c: (pd.to_numeric(df_overview[c], errors='coerce').fillna(0) > 0).sum())
         df_overview['product_id'] = pd.to_numeric(df_overview[best_col], errors='coerce').fillna(0).astype(int)
         cols_to_drop = [c for c in product_id_variants if c != 'product_id']
         df_overview.drop(columns=cols_to_drop, errors='ignore', inplace=True)
@@ -8365,9 +8399,9 @@ def page_overview(master_df: pd.DataFrame = None, username: str = None, user_rol
 
     # Insérer les colonnes "edit" et "delete" dans le DataFrame avec un message d'action ou une valeur par défaut
     # df_with_actions.insert(0, "delete", "delete")  # Colonne Delete
-    #df_with_actions.insert(0, "edit", "edit")  # Colonne Edit
+    # df_with_actions.insert(0, "edit", "edit")  # Colonne Edit
     # Appliquer la fonction pour ajouter les colonnes "edit" et "delete"
-    #df_with_actions = add_action_cols(df)
+    # df_with_actions = add_action_cols(df)
 
     # Mettre à jour la liste des colonnes disponibles
     available_cols_with_actions = ["edit", "delete"] + available_cols
@@ -8413,7 +8447,7 @@ def page_overview(master_df: pd.DataFrame = None, username: str = None, user_rol
     })
 
     # Ajouter la nouvelle colonne 'QAC edited' dans available_cols
-    available_cols = available_cols #+ ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
+    available_cols = available_cols  # + ['QAC edited']  # Ajoute 'QAC edited' à la liste des colonnes
 
     # Générer dynamiquement les colonnes et rendre 'QAC edited' editable
     columns = [
@@ -8924,21 +8958,20 @@ def page_overview(master_df: pd.DataFrame = None, username: str = None, user_rol
         "border": "1px solid #e2e8f0", "marginBottom": "12px"
     })
 
-
     # Dropdown filter-status
-    #dcc.Dropdown(
+    # dcc.Dropdown(
     #   id="filter-status",
     #  options=[
     #     {"label": "Tous", "value": "all"},
     #    {"label": "Stock OK", "value": "ok"},
     #   {"label": "Rupture", "value": "oos"}
-    #],
-    #value="all",
-    #className="filter-dropdown"
-    #)
+    # ],
+    # value="all",
+    # className="filter-dropdown"
+    # )
 
     # Modal édition
-    #edit_modal = dbc.Modal(
+    # edit_modal = dbc.Modal(
     #   [
     #      dbc.ModalHeader(dbc.ModalTitle("Éditer produit")),
     #     dbc.ModalBody([
@@ -8947,11 +8980,11 @@ def page_overview(master_df: pd.DataFrame = None, username: str = None, user_rol
     #  ]),
     # dbc.ModalFooter(
     #    dbc.Button("Fermer", id="close-edit", className="ms-auto", n_clicks=0)
-    #),
-    #],
-    #id="edit-modal",
-    #is_open=False,
-    #)
+    # ),
+    # ],
+    # id="edit-modal",
+    # is_open=False,
+    # )
 
     # ✅ NOUVEAU : Bouton flottant + Modal amélioré
     notes_fab_button = html.Button(
@@ -9321,6 +9354,7 @@ def apply_filters(search, sup, cat, need, options, master_json):
         []
     )
 
+
 @app.callback(
     Output("master-data", "data", allow_duplicate=True),
     Input("rotation-period", "value"),
@@ -9380,6 +9414,7 @@ def update_rotation_simple(period_value):
         import traceback
         traceback.print_exc()
         return no_update
+
 
 '''
 # Callback 2 : Filtrage (avec allow_duplicate)
@@ -9904,6 +9939,7 @@ def send_note_with_notifications(n_clicks, message, author, product_name):
 
     return notes_display, "", author, feedback
 
+
 @app.callback(
     [Output('main-table', 'data', allow_duplicate=True),
      Output('action-feedback', 'children', allow_duplicate=True),
@@ -9981,9 +10017,9 @@ def reload_data_from_source(n_clicks, auth_state):
         return [no_update] * 5
 
     try:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"📥 RECHARGEMENT COMPLET DEPUIS GOOGLE SHEETS")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         username = auth_state.get("username", "") if auth_state else ""
 
@@ -10006,7 +10042,7 @@ def reload_data_from_source(n_clicks, auth_state):
         new_page_content = page_overview(updated_df)
 
         print(f"   ✅ {len(updated_df)} produits rechargés")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         feedback = dbc.Alert([
             html.I(className="fas fa-check-circle me-2"),
@@ -10072,6 +10108,7 @@ def update_selection_count(selected_rows, table_data):
         return ""
     count = len(selected_rows)
     return f"✓ {count} produit{'s' if count > 1 else ''} sélectionné{'s' if count > 1 else ''}"
+
 
 @app.callback(
     [Output('edit-modal', 'is_open', allow_duplicate=True),
@@ -10643,6 +10680,7 @@ def update_analytics_charts(supplier_value, category_value, need_value, master_j
         return (empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, error_indicator)
 '''
 
+
 def page_predictive(master_df: pd.DataFrame = None):
     """Page Prédictions avec filtres dynamiques"""
     df = master_df if master_df is not None else get_df_cached()
@@ -11019,6 +11057,7 @@ def update_predictive_charts(supplier_value, category_value, need_value, master_
         indicator
     )
 '''
+
 
 def page_analytics(master_df: pd.DataFrame = None):
     df = master_df if master_df is not None else get_df_cached()
@@ -11406,6 +11445,7 @@ def create_hidden_table_placeholder():
         style_table={"display": "none"}
     )
 '''
+
 
 def page_analytics(master_df: pd.DataFrame = None):
     """Page Analytics avec filtres sidebar et graphiques dynamiques"""
@@ -12180,6 +12220,8 @@ def update_predictive_all_charts(supplier_filter, category_filter, need_filter, 
         fig_risk,
         df.to_dict("records")
     )
+
+
 def page_about():
     return html.Div(className="content", children=[
         html.H2("À propos", className="page-title"),
@@ -12275,44 +12317,56 @@ def page_my_space(username: str, master_df: pd.DataFrame = None):
 
     suppliers_stats.sort(key=lambda x: x["oos_pct"], reverse=True)
     supplier_options = [{"label": "Tous mes fournisseurs", "value": "all"}]
-    supplier_options += [{"label": f"{s['supplier']} ({s['oos_pct']:.0f}% OOS)", "value": s['supplier']} for s in suppliers_stats]
+    supplier_options += [{"label": f"{s['supplier']} ({s['oos_pct']:.0f}% OOS)", "value": s['supplier']} for s in
+                         suppliers_stats]
 
     return html.Div([
         # En-tête
         html.Div([
             html.Div([
                 html.H4(user_name, style={"margin": "0", "fontSize": "18px", "color": "#1e293b", "fontWeight": "600"}),
-                html.Span(f"{user_role.upper()} | {datetime.now().strftime('%d/%m/%Y %H:%M')}", style={"fontSize": "11px", "color": "#64748b"})
+                html.Span(f"{user_role.upper()} | {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+                          style={"fontSize": "11px", "color": "#64748b"})
             ]),
-            html.Span(f"{len(suppliers_stats)} fournisseurs", style={"fontSize": "11px", "color": "#0ea5e9", "fontWeight": "500"})
-        ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "12px", "paddingBottom": "10px", "borderBottom": "1px solid #e2e8f0"}),
+            html.Span(f"{len(suppliers_stats)} fournisseurs",
+                      style={"fontSize": "11px", "color": "#0ea5e9", "fontWeight": "500"})
+        ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "12px",
+                  "paddingBottom": "10px", "borderBottom": "1px solid #e2e8f0"}),
 
         # Performances (30j)
         html.Div([
-            html.Div("Mes Performances (30 jours)", style={"fontSize": "12px", "fontWeight": "600", "marginBottom": "8px", "color": "#374151"}),
+            html.Div("Mes Performances (30 jours)",
+                     style={"fontSize": "12px", "fontWeight": "600", "marginBottom": "8px", "color": "#374151"}),
             html.Div([
                 html.Div([
                     html.Div(f"{bc_count}", style={"fontSize": "20px", "fontWeight": "700", "color": "#3b82f6"}),
                     html.Div("BC Générés", style={"fontSize": "9px", "color": "#6b7280"})
-                ], style={"textAlign": "center", "flex": "1", "padding": "10px", "background": "#eff6ff", "borderRadius": "6px"}),
+                ], style={"textAlign": "center", "flex": "1", "padding": "10px", "background": "#eff6ff",
+                          "borderRadius": "6px"}),
                 html.Div([
-                    html.Div(f"{bc_total/1e6:.1f}M", style={"fontSize": "20px", "fontWeight": "700", "color": "#22c55e"}),
+                    html.Div(f"{bc_total / 1e6:.1f}M",
+                             style={"fontSize": "20px", "fontWeight": "700", "color": "#22c55e"}),
                     html.Div("FCFA", style={"fontSize": "9px", "color": "#6b7280"})
-                ], style={"textAlign": "center", "flex": "1", "padding": "10px", "background": "#f0fdf4", "borderRadius": "6px"}),
+                ], style={"textAlign": "center", "flex": "1", "padding": "10px", "background": "#f0fdf4",
+                          "borderRadius": "6px"}),
                 html.Div([
                     html.Div(f"{logins}", style={"fontSize": "20px", "fontWeight": "700", "color": "#8b5cf6"}),
                     html.Div("Connexions", style={"fontSize": "9px", "color": "#6b7280"})
-                ], style={"textAlign": "center", "flex": "1", "padding": "10px", "background": "#faf5ff", "borderRadius": "6px"}),
+                ], style={"textAlign": "center", "flex": "1", "padding": "10px", "background": "#faf5ff",
+                          "borderRadius": "6px"}),
                 html.Div([
                     html.Div(f"{pages}", style={"fontSize": "20px", "fontWeight": "700", "color": "#06b6d4"}),
                     html.Div("Pages", style={"fontSize": "9px", "color": "#6b7280"})
-                ], style={"textAlign": "center", "flex": "1", "padding": "10px", "background": "#ecfeff", "borderRadius": "6px"}),
+                ], style={"textAlign": "center", "flex": "1", "padding": "10px", "background": "#ecfeff",
+                          "borderRadius": "6px"}),
             ], style={"display": "flex", "gap": "6px"})
-        ], style={"background": "#fff", "padding": "12px", "borderRadius": "8px", "border": "1px solid #e5e7eb", "marginBottom": "12px"}),
+        ], style={"background": "#fff", "padding": "12px", "borderRadius": "8px", "border": "1px solid #e5e7eb",
+                  "marginBottom": "12px"}),
 
         # Résumé Stock
         html.Div([
-            html.Div("Résumé Stock", style={"fontSize": "12px", "fontWeight": "600", "marginBottom": "8px", "color": "#374151"}),
+            html.Div("Résumé Stock",
+                     style={"fontSize": "12px", "fontWeight": "600", "marginBottom": "8px", "color": "#374151"}),
             html.Div([
                 html.Div([
                     html.Div(f"{total_skus:,}", style={"fontSize": "18px", "fontWeight": "700", "color": "#0ea5e9"}),
@@ -12321,23 +12375,31 @@ def page_my_space(username: str, master_df: pd.DataFrame = None):
                 html.Div([
                     html.Div(f"{total_ruptures}", style={"fontSize": "18px", "fontWeight": "700", "color": "#ef4444"}),
                     html.Div("Ruptures", style={"fontSize": "9px", "color": "#6b7280"})
-                ], style={"textAlign": "center", "flex": "1", "padding": "6px", "background": "#fef2f2", "borderRadius": "6px"}),
+                ], style={"textAlign": "center", "flex": "1", "padding": "6px", "background": "#fef2f2",
+                          "borderRadius": "6px"}),
                 html.Div([
                     html.Div(f"{total_at_risk}", style={"fontSize": "18px", "fontWeight": "700", "color": "#f59e0b"}),
                     html.Div("<7j", style={"fontSize": "9px", "color": "#6b7280"})
-                ], style={"textAlign": "center", "flex": "1", "padding": "6px", "background": "#fffbeb", "borderRadius": "6px"}),
+                ], style={"textAlign": "center", "flex": "1", "padding": "6px", "background": "#fffbeb",
+                          "borderRadius": "6px"}),
                 html.Div([
-                    html.Div(f"{(total_ruptures/total_skus*100) if total_skus > 0 else 0:.1f}%", style={"fontSize": "18px", "fontWeight": "700", "color": "#dc2626"}),
+                    html.Div(f"{(total_ruptures / total_skus * 100) if total_skus > 0 else 0:.1f}%",
+                             style={"fontSize": "18px", "fontWeight": "700", "color": "#dc2626"}),
                     html.Div("OOS", style={"fontSize": "9px", "color": "#6b7280"})
-                ], style={"textAlign": "center", "flex": "1", "padding": "6px", "background": "#fef2f2", "borderRadius": "6px"}),
+                ], style={"textAlign": "center", "flex": "1", "padding": "6px", "background": "#fef2f2",
+                          "borderRadius": "6px"}),
             ], style={"display": "flex", "gap": "6px"})
-        ], style={"background": "#fff", "padding": "12px", "borderRadius": "8px", "border": "1px solid #e5e7eb", "marginBottom": "12px"}),
+        ], style={"background": "#fff", "padding": "12px", "borderRadius": "8px", "border": "1px solid #e5e7eb",
+                  "marginBottom": "12px"}),
 
         # Filtre Fournisseur
         html.Div([
-            html.Div("Filtrer par Fournisseur", style={"fontSize": "12px", "fontWeight": "600", "marginBottom": "6px", "color": "#374151"}),
-            dcc.Dropdown(id="myspace-supplier-filter", options=supplier_options, value="all", clearable=False, style={"fontSize": "12px"})
-        ], style={"background": "#fff", "padding": "10px", "borderRadius": "8px", "border": "1px solid #e5e7eb", "marginBottom": "12px"}),
+            html.Div("Filtrer par Fournisseur",
+                     style={"fontSize": "12px", "fontWeight": "600", "marginBottom": "6px", "color": "#374151"}),
+            dcc.Dropdown(id="myspace-supplier-filter", options=supplier_options, value="all", clearable=False,
+                         style={"fontSize": "12px"})
+        ], style={"background": "#fff", "padding": "10px", "borderRadius": "8px", "border": "1px solid #e5e7eb",
+                  "marginBottom": "12px"}),
 
         # Liste Fournisseurs
         html.Div([
@@ -12349,25 +12411,41 @@ def page_my_space(username: str, master_df: pd.DataFrame = None):
             html.Div([
                 # Header
                 html.Div([
-                    html.Div("Fournisseur", style={"flex": "2", "fontWeight": "500", "fontSize": "10px", "color": "#64748b"}),
-                    html.Div("Produits", style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b", "textAlign": "center"}),
-                    html.Div("OOS", style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b", "textAlign": "center"}),
-                    html.Div("% OOS", style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b", "textAlign": "center"}),
-                    html.Div("Risque", style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b", "textAlign": "center"}),
-                    html.Div("Valeur", style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b", "textAlign": "right"}),
-                ], style={"display": "flex", "padding": "6px 10px", "background": "#f8fafc", "borderRadius": "4px", "marginBottom": "4px"}),
+                    html.Div("Fournisseur",
+                             style={"flex": "2", "fontWeight": "500", "fontSize": "10px", "color": "#64748b"}),
+                    html.Div("Produits",
+                             style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b",
+                                    "textAlign": "center"}),
+                    html.Div("OOS", style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b",
+                                           "textAlign": "center"}),
+                    html.Div("% OOS", style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b",
+                                             "textAlign": "center"}),
+                    html.Div("Risque", style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b",
+                                              "textAlign": "center"}),
+                    html.Div("Valeur", style={"flex": "1", "fontWeight": "500", "fontSize": "10px", "color": "#64748b",
+                                              "textAlign": "right"}),
+                ], style={"display": "flex", "padding": "6px 10px", "background": "#f8fafc", "borderRadius": "4px",
+                          "marginBottom": "4px"}),
 
-                html.Div([_create_supplier_row(s) for s in suppliers_stats[:15]], id="myspace-suppliers-list", style={"maxHeight": "280px", "overflowY": "auto"})
-            ]) if suppliers_stats else html.Div("Aucun fournisseur", style={"color": "#94a3b8", "textAlign": "center", "padding": "16px"})
-        ], style={"background": "#fff", "padding": "12px", "borderRadius": "8px", "border": "1px solid #e5e7eb", "marginBottom": "12px"}),
+                html.Div([_create_supplier_row(s) for s in suppliers_stats[:15]], id="myspace-suppliers-list",
+                         style={"maxHeight": "280px", "overflowY": "auto"})
+            ]) if suppliers_stats else html.Div("Aucun fournisseur",
+                                                style={"color": "#94a3b8", "textAlign": "center", "padding": "16px"})
+        ], style={"background": "#fff", "padding": "12px", "borderRadius": "8px", "border": "1px solid #e5e7eb",
+                  "marginBottom": "12px"}),
 
         # Actions
         html.Div([
-            html.Div("Actions Rapides", style={"fontSize": "12px", "fontWeight": "600", "marginBottom": "8px", "color": "#374151"}),
+            html.Div("Actions Rapides",
+                     style={"fontSize": "12px", "fontWeight": "600", "marginBottom": "8px", "color": "#374151"}),
             html.Div([
-                dcc.Link(dbc.Button("Overview", color="primary", size="sm", outline=True, style={"fontSize": "11px"}), href="/"),
-                dcc.Link(dbc.Button("Analytics", color="info", size="sm", outline=True, style={"fontSize": "11px"}), href="/analytics"),
-                dcc.Link(dbc.Button("Prédictions", color="warning", size="sm", outline=True, style={"fontSize": "11px"}), href="/predictions"),
+                dcc.Link(dbc.Button("Overview", color="primary", size="sm", outline=True, style={"fontSize": "11px"}),
+                         href="/"),
+                dcc.Link(dbc.Button("Analytics", color="info", size="sm", outline=True, style={"fontSize": "11px"}),
+                         href="/analytics"),
+                dcc.Link(
+                    dbc.Button("Prédictions", color="warning", size="sm", outline=True, style={"fontSize": "11px"}),
+                    href="/predictions"),
             ], style={"display": "flex", "gap": "6px"})
         ], style={"background": "#f8fafc", "padding": "12px", "borderRadius": "8px", "border": "1px solid #e5e7eb"}),
 
@@ -12387,12 +12465,18 @@ def _create_supplier_row(s: dict) -> html.Div:
         oos_color, oos_bg = "#22c55e", "#f0fdf4"
 
     return html.Div([
-        html.Div(s["supplier"][:22], style={"flex": "2", "fontSize": "11px", "color": "#1e293b", "overflow": "hidden", "textOverflow": "ellipsis", "whiteSpace": "nowrap"}),
-        html.Div(str(s["products"]), style={"flex": "1", "fontSize": "11px", "color": "#64748b", "textAlign": "center"}),
-        html.Div(str(s["oos"]), style={"flex": "1", "fontSize": "11px", "color": "#ef4444", "textAlign": "center", "fontWeight": "600"}),
-        html.Div(f"{oos_pct:.0f}%", style={"flex": "1", "fontSize": "11px", "color": oos_color, "textAlign": "center", "fontWeight": "600", "background": oos_bg, "borderRadius": "3px", "padding": "1px 0"}),
+        html.Div(s["supplier"][:22], style={"flex": "2", "fontSize": "11px", "color": "#1e293b", "overflow": "hidden",
+                                            "textOverflow": "ellipsis", "whiteSpace": "nowrap"}),
+        html.Div(str(s["products"]),
+                 style={"flex": "1", "fontSize": "11px", "color": "#64748b", "textAlign": "center"}),
+        html.Div(str(s["oos"]), style={"flex": "1", "fontSize": "11px", "color": "#ef4444", "textAlign": "center",
+                                       "fontWeight": "600"}),
+        html.Div(f"{oos_pct:.0f}%",
+                 style={"flex": "1", "fontSize": "11px", "color": oos_color, "textAlign": "center", "fontWeight": "600",
+                        "background": oos_bg, "borderRadius": "3px", "padding": "1px 0"}),
         html.Div(str(s["at_risk"]), style={"flex": "1", "fontSize": "11px", "color": "#f59e0b", "textAlign": "center"}),
-        html.Div(f"{s['stock_value']/1e6:.1f}M", style={"flex": "1", "fontSize": "11px", "color": "#22c55e", "textAlign": "right"}),
+        html.Div(f"{s['stock_value'] / 1e6:.1f}M",
+                 style={"flex": "1", "fontSize": "11px", "color": "#22c55e", "textAlign": "right"}),
     ], style={"display": "flex", "alignItems": "center", "padding": "6px 10px", "borderBottom": "1px solid #f1f5f9"})
 
 
@@ -12762,7 +12846,8 @@ def calculate_agent_performance(master_df: pd.DataFrame, agents_df: pd.DataFrame
 
             # Produits à risque (couverture < 7 jours)
             if 'rotation_days' in agent_products.columns:
-                agent_products['rotation_days'] = pd.to_numeric(agent_products['rotation_days'], errors='coerce').fillna(999)
+                agent_products['rotation_days'] = pd.to_numeric(agent_products['rotation_days'],
+                                                                errors='coerce').fillna(999)
                 risk_count = int(((agent_products['rotation_days'] < 7) & (agent_products['rotation_days'] > 0)).sum())
                 valid_rotations = agent_products[agent_products['rotation_days'] < 999]['rotation_days']
                 avg_rotation = valid_rotations.mean() if len(valid_rotations) > 0 else 0
@@ -12886,9 +12971,9 @@ def get_agent_for_product(product_supplier, mapping=None):
 def page_agents(master_df: pd.DataFrame = None):
     """Page de suivi de performance des agents - Compacte et adaptée au layout"""
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("👤 CHARGEMENT PAGE AGENTS")
-    print("="*60)
+    print("=" * 60)
 
     # Charger les données
     agents_df = load_agents_suppliers()
@@ -12932,7 +13017,8 @@ def page_agents(master_df: pd.DataFrame = None):
     total_ruptures = stock_kpis['out_of_stock']
     total_at_risk = stock_kpis['at_risk']
 
-    print(f"   📈 KPIs Agents: agents={total_agents}, score={avg_score:.1f}, rupt={total_ruptures}, risk={total_at_risk}")
+    print(
+        f"   📈 KPIs Agents: agents={total_agents}, score={avg_score:.1f}, rupt={total_ruptures}, risk={total_at_risk}")
 
     # ==========================================
     # KPIs AGRANDIS (style cards)
@@ -12944,7 +13030,8 @@ def page_agents(master_df: pd.DataFrame = None):
         "boxShadow": "0 2px 8px rgba(0,0,0,0.06)"
     }
     kpi_value_style = {"fontSize": "28px", "fontWeight": "700", "lineHeight": "1.2"}
-    kpi_label_style = {"color": "#64748b", "fontSize": "11px", "marginTop": "6px", "textTransform": "uppercase", "letterSpacing": "0.5px"}
+    kpi_label_style = {"color": "#64748b", "fontSize": "11px", "marginTop": "6px", "textTransform": "uppercase",
+                       "letterSpacing": "0.5px"}
 
     kpis_row = html.Div([
         html.Div([
@@ -12952,11 +13039,12 @@ def page_agents(master_df: pd.DataFrame = None):
             html.Div(" Agents", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
-            html.Div(f"{avg_score:.0f}", style={**kpi_value_style, "color": "#34d399" if avg_score >= 60 else "#f87171"}),
+            html.Div(f"{avg_score:.0f}",
+                     style={**kpi_value_style, "color": "#34d399" if avg_score >= 60 else "#f87171"}),
             html.Div(" Score Moyen", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
-            html.Div(f"{total_order_value/1e6:.1f}M", style={**kpi_value_style, "color": "#7c3aed"}),
+            html.Div(f"{total_order_value / 1e6:.1f}M", style={**kpi_value_style, "color": "#7c3aed"}),
             html.Div(" Valeur Cmd", style=kpi_label_style)
         ], style=kpi_card_style),
         html.Div([
@@ -13004,7 +13092,7 @@ def page_agents(master_df: pd.DataFrame = None):
                 'rank': idx + 1,
                 'agent': row['agent_name'],
                 'frs': int(row['total_suppliers']),
-                'val': f"{row['total_order_value']/1e6:.1f}M",
+                'val': f"{row['total_order_value'] / 1e6:.1f}M",
                 'ok': int(row['commandes_traitees']),
                 'pend': int(row['commandes_pending']),
                 'pct': f"{row['taux_traitement']:.0f}%",
@@ -13038,7 +13126,8 @@ def page_agents(master_df: pd.DataFrame = None):
             'padding': '10px 8px', 'fontSize': '13px', 'textAlign': 'center', 'minWidth': '70px'
         },
         style_data_conditional=[
-            {'if': {'filter_query': '{rank} = 1'}, 'borderLeft': '3px solid #fbbf24', 'backgroundColor': 'rgba(251, 191, 36, 0.05)'},
+            {'if': {'filter_query': '{rank} = 1'}, 'borderLeft': '3px solid #fbbf24',
+             'backgroundColor': 'rgba(251, 191, 36, 0.05)'},
             {'if': {'filter_query': '{rank} = 2'}, 'borderLeft': '3px solid #94a3b8'},
             {'if': {'filter_query': '{rank} = 3'}, 'borderLeft': '3px solid #b45309'},
             {'if': {'column_id': 'sc'}, 'fontWeight': '700', 'color': '#0ea5e9', 'fontSize': '14px'},
@@ -13074,7 +13163,8 @@ def page_agents(master_df: pd.DataFrame = None):
             risk_df['_stk'] = 0
 
         if 'Average Daily Sales' in risk_df.columns:
-            risk_df['_ads'] = pd.to_numeric(risk_df['Average Daily Sales'], errors='coerce').fillna(0.01).replace(0, 0.01)
+            risk_df['_ads'] = pd.to_numeric(risk_df['Average Daily Sales'], errors='coerce').fillna(0.01).replace(0,
+                                                                                                                  0.01)
         else:
             risk_df['_ads'] = 0.01
 
@@ -13144,7 +13234,8 @@ def page_agents(master_df: pd.DataFrame = None):
         dbc.Col([
             html.Div([
                 html.Span("🚨", style={"fontSize": "18px", "marginRight": "8px"}),
-                html.Span(f"Produits à Risque ({len(risk_products)})", style={"fontSize": "16px", "fontWeight": "600", "color": "#1e293b"})
+                html.Span(f"Produits à Risque ({len(risk_products)})",
+                          style={"fontSize": "16px", "fontWeight": "600", "color": "#1e293b"})
             ], style={"marginBottom": "12px"}),
             risk_table
         ], width=12)
@@ -13156,7 +13247,8 @@ def page_agents(master_df: pd.DataFrame = None):
     detail = html.Div([
         html.Span("🔍 ", style={"marginRight": "8px", "fontSize": "16px"}),
         html.Div(id="agent-suppliers-detail", children=[
-            html.Span("Cliquez sur un agent dans la table pour voir ses fournisseurs", style={"color": "#64748b", "fontSize": "13px"})
+            html.Span("Cliquez sur un agent dans la table pour voir ses fournisseurs",
+                      style={"color": "#64748b", "fontSize": "13px"})
         ], style={"display": "inline"})
     ], style={
         "background": "linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%)",
@@ -13170,8 +13262,10 @@ def page_agents(master_df: pd.DataFrame = None):
     return html.Div(className="content", children=[
         # Header
         html.Div([
-            html.H4(" Performance Agents", style={"margin": "0", "fontSize": "20px", "fontWeight": "700", "color": "#0ea5e9"}),
-            html.P("Suivi des performances et gestion des risques par agent", style={"margin": "4px 0 0 0", "color": "#64748b", "fontSize": "13px"})
+            html.H4(" Performance Agents",
+                    style={"margin": "0", "fontSize": "20px", "fontWeight": "700", "color": "#0ea5e9"}),
+            html.P("Suivi des performances et gestion des risques par agent",
+                   style={"margin": "4px 0 0 0", "color": "#64748b", "fontSize": "13px"})
         ], style={"marginBottom": "20px"}),
 
         # KPIs
@@ -13216,7 +13310,8 @@ def page_agents(master_df: pd.DataFrame = None):
 def show_agent_suppliers_detail(selected_rows, table_data):
     """Affiche les fournisseurs détaillés quand un agent est sélectionné"""
     if not selected_rows or not table_data:
-        return html.Span("Cliquez sur un agent pour voir ses fournisseurs", style={"color": "#64748b", "fontSize": "10px"})
+        return html.Span("Cliquez sur un agent pour voir ses fournisseurs",
+                         style={"color": "#64748b", "fontSize": "10px"})
 
     # Récupérer l'agent sélectionné (colonne renommée en 'agent')
     agent_name = table_data[selected_rows[0]].get('agent', table_data[selected_rows[0]].get('agent_name', ''))
@@ -13259,7 +13354,7 @@ def show_agent_suppliers_detail(selected_rows, table_data):
     suppliers_list = agent_data[supplier_col].dropna().unique().tolist()
     suppliers_str = ", ".join([s[:15] for s in suppliers_list[:8]])
     if len(suppliers_list) > 8:
-        suppliers_str += f"... (+{len(suppliers_list)-8})"
+        suppliers_str += f"... (+{len(suppliers_list) - 8})"
 
     return html.Span([
         html.B(agent_name, style={"color": "#0ea5e9"}),
@@ -13366,6 +13461,8 @@ def display_page(pathname):
         ], className="error-message")
 
 '''
+
+
 # ------------------------------ Chatbot helpers ----------------------------------
 
 # =============================== Chatbot helpers ================================
@@ -13688,38 +13785,31 @@ def _chatbot_fallback(user_text: str, df: pd.DataFrame, prefix: str = "") -> str
 #  return prefix + (
 #     "Recommandation impossible avec les données disponibles." if lang == "fr" else "Unable to compute recommendation with available data.")
 # ------------------------------ Layout root (with floating chat) ------------------
+print("🚀 Démarrage du chargement initial...")
+initial_df = None
+
 try:
     initial_df = get_df_cached()
     if initial_df is None or initial_df.empty:
-        raise ValueError("DataFrame vide ou None retourné par get_df_cached()")
-    print(f"✅ Application initialisée avec {len(initial_df)} produits")
+        print("⚠️ DataFrame vide - création d'un DataFrame par défaut")
+        initial_df = pd.DataFrame(columns=['product_name', 'Supplier', 'total_stock', 'product_id', 'QAC edited'])
+    else:
+        print(f"✅ Chargé {len(initial_df)} produits")
 except Exception as e:
-    print(f"❌ ERREUR CRITIQUE lors du chargement initial : {e}")
-    import traceback
+    print(f"❌ Erreur chargement: {e}")
+    initial_df = pd.DataFrame(columns=['product_name', 'Supplier', 'total_stock', 'product_id', 'QAC edited'])
 
-    traceback.print_exc()
-    # Créer un DataFrame vide par sécurité
-    initial_df = pd.DataFrame(columns=['product_name', 'Supplier', 'total_stock'])
-
-initial_df = get_df_cached()
-initial_df['QAC edited']=' '
-
-# ✅ GARANTIR product_id dans le DataFrame initial
-if 'product_id' in initial_df.columns:
-    initial_df['product_id'] = pd.to_numeric(initial_df['product_id'], errors='coerce').fillna(0).astype(int)
-    print(f"✅ product_id initial: {(initial_df['product_id'] > 0).sum()} valides sur {len(initial_df)}")
+# Ajouter colonnes manquantes
+if 'QAC edited' not in initial_df.columns:
+    initial_df['QAC edited'] = ' '
+if 'product_id' not in initial_df.columns:
+    initial_df['product_id'] = range(len(initial_df))
 else:
-    initial_df['product_id'] = 0
-    print("⚠️ product_id absent du DataFrame initial - créé avec 0")
+    initial_df['product_id'] = pd.to_numeric(initial_df['product_id'], errors='coerce').fillna(0).astype(int)
 
-# ✅ Mettre à jour les stats journalières dans Supabase
-try:
-    update_daily_stats_on_load(initial_df)
-except Exception as e:
-    print(f"⚠️ Erreur update_daily_stats_on_load: {e}")
+print(f"✅ Initial_df prêt: {len(initial_df)} lignes")
 
-#initial_df['delete']='delete'
-# ==================== LAYOUT CORRIGÉ AVEC AUTHENTIFICATION ====================
+# ==================== LAYOUT ====================
 
 app.layout = html.Div([
     # ========== STORES AUTHENTIFICATION ==========
@@ -13776,7 +13866,6 @@ app.layout = html.Div([
         dbc.Alert(id="alert-bc-error", is_open=False),
         html.Div(id="qac-save-feedback"),
     ]),
-
 
     # ========== EDIT MODAL (VISIBLE AU NIVEAU RACINE) ==========
     dbc.Modal(
@@ -13912,7 +14001,7 @@ app.layout = html.Div([
 
 
 # ============================================================
-# 🔐 CALLBACKS D'AUTHENTIFICATION
+# CALLBACKS D'AUTHENTIFICATION
 # ============================================================
 
 @app.callback(
@@ -13922,90 +14011,69 @@ app.layout = html.Div([
     prevent_initial_call=False
 )
 def render_page_content(auth_state, pathname):
-    """
-    Callback principal qui gère l'affichage:
-    - Si non authentifié → page de connexion
-    - Si authentifié → dashboard avec barre utilisateur
-    """
-    print(f"🔐 render_page_content: auth_state={auth_state}, pathname={pathname}")
+    """Callback principal avec protection maximale"""
+    try:
+        # Non authentifié → login
+        if not auth_state or not auth_state.get("authenticated"):
+            return create_login_layout()
 
-    # Vérifier si l'utilisateur est authentifié
-    if not auth_state or not auth_state.get("authenticated"):
-        print("   → Affichage page de connexion")
-        return create_login_layout()
+        username = auth_state.get("username", "") or ""
+        user_info = auth_state.get("user_info") or {}
+        user_role = user_info.get("role", "user")
 
-    # Utilisateur connecté - afficher le dashboard
-    username = auth_state.get("username", "")
-    print(f"   → Utilisateur connecté: {username}")
-
-    # Créer la barre utilisateur
-    user_navbar = create_user_navbar(username)
-
-    # Créer la sidebar
-    sidebar = make_sidebar()
-
-    # Déterminer la page
-    page_name = "overview"  # Par défaut
-
-    # Sélectionner la page appropriée selon l'URL
-    # Récupérer le rôle de l'utilisateur
-    user_info = get_user_info(username) or {}
-    user_role = user_info.get("role", "user")
-
-    if pathname is None or pathname == "/" or pathname == "/overview":
-        page_content = page_overview(initial_df, username, user_role)
-        page_name = "overview"
-    elif pathname == "/myspace":
-        page_content = page_my_space(username, initial_df)
-        page_name = "myspace"
-    elif pathname == "/analytics":
-        page_content = page_analytics(initial_df)
-        page_name = "analytics"
-    elif pathname == "/predictions":
-        page_content = page_predictive(initial_df)
-        page_name = "predictions"
-    elif pathname == "/promotions":
-        page_content = page_promotions()
-        page_name = "promotions"
-    elif pathname == "/about":
-        page_content = page_about()
-        page_name = "about"
-    else:
-        # Page par défaut
-        page_content = page_overview(initial_df)
-        page_name = "overview"
-
-    # ✅ TRACKING SUPABASE: Page view
-    if supabase_client and username:
+        # Navbar et sidebar
         try:
-            if username in ACTIVE_SESSIONS:
-                session_info = ACTIVE_SESSIONS[username]
-                track_activity(
-                    session_info.get("user_id"),
-                    session_info.get("session_id"),
-                    "page_view",
-                    page=page_name,
-                    details={"pathname": pathname}
-                )
-        except Exception as e:
-            print(f"⚠️ Erreur tracking page_view: {e}")
+            user_navbar = create_user_navbar(username)
+        except:
+            user_navbar = html.Div("Navbar Error", style={"height": "50px", "background": "#0f172a"})
 
-    # Retourner le layout complet avec navbar + sidebar + page
-    return html.Div([
-        user_navbar,
-        sidebar,
-        html.Div(
-            id="page-container",
-            style={
-                "marginLeft": "240px",  # Largeur du sidebar
-                "marginTop": "50px",     # Hauteur de la navbar
-                "padding": "20px",
-                "minHeight": "calc(100vh - 56px)",
-                "background": "#f8fafc"
-            },
-            children=page_content
-        )
-    ])
+        try:
+            sidebar = make_sidebar()
+        except:
+            sidebar = html.Div("Sidebar Error", style={"width": "240px", "background": "#1e293b"})
+
+        # Page selon URL
+        page_content = html.Div("Chargement...", style={"padding": "40px"})
+        try:
+            if pathname == "/myspace":
+                page_content = page_my_space(username, initial_df)
+            elif pathname == "/analytics":
+                page_content = page_analytics(initial_df)
+            elif pathname == "/predictions":
+                page_content = page_predictive(initial_df)
+            elif pathname == "/promotions":
+                page_content = page_promotions()
+            elif pathname == "/about":
+                page_content = page_about()
+            else:
+                page_content = page_overview(initial_df, username, user_role)
+        except Exception as e:
+            page_content = html.Div([
+                html.H4("Erreur de chargement"),
+                html.P(f"Page: {pathname}"),
+                html.Small(str(e)[:100], style={"color": "#94a3b8"})
+            ], style={"padding": "40px", "textAlign": "center"})
+
+        return html.Div([
+            user_navbar,
+            sidebar,
+            html.Div(
+                id="page-container",
+                style={
+                    "marginLeft": "240px",
+                    "marginTop": "50px",
+                    "padding": "16px",
+                    "minHeight": "calc(100vh - 50px)",
+                    "background": "#f8fafc"
+                },
+                children=page_content
+            )
+        ])
+    except Exception as e:
+        return html.Div([
+            html.H3("Erreur critique"),
+            html.P(str(e)[:200])
+        ], style={"padding": "40px", "textAlign": "center", "color": "#dc2626"})
 
 
 @app.callback(
@@ -14019,111 +14087,49 @@ def render_page_content(auth_state, pathname):
     prevent_initial_call=True
 )
 def handle_login(n_clicks, username, password, current_auth):
-    """
-    🚀 VERSION OPTIMISÉE - Login ultra-rapide
-    Le tracking Supabase se fait en arrière-plan pour ne pas bloquer
-    """
-    login_start = time.time()
+    """Login avec protection maximale"""
+    error_style = {"display": "block", "background": "#fef2f2", "border": "1px solid #fca5a5",
+                   "borderRadius": "6px", "padding": "10px", "marginBottom": "14px", "color": "#dc2626",
+                   "fontSize": "12px"}
 
-    if not n_clicks or n_clicks == 0:
-        raise dash.exceptions.PreventUpdate
+    try:
+        if not n_clicks:
+            raise dash.exceptions.PreventUpdate
 
-    # Validation des champs (instantané)
-    if not username or not password:
+        if not username or not password:
+            return (current_auth or {"authenticated": False}, "Remplissez tous les champs", error_style)
+
+        username = str(username).lower().strip()
+
+        if username not in AUTH_USERS:
+            return ({"authenticated": False, "username": None}, "Identifiant inconnu", error_style)
+
+        password_hash = hashlib.sha256(str(password).encode()).hexdigest()
+        if password_hash != AUTH_USERS[username]["password_hash"]:
+            return ({"authenticated": False, "username": None}, "Mot de passe incorrect", error_style)
+
+        # Succès
         return (
-            current_auth or {"authenticated": False, "username": None},
-            html.Div([
-                html.Span("⚠️", style={"marginRight": "8px"}),
-                "Veuillez remplir tous les champs"
-            ], style={
-                "background": "rgba(239, 68, 68, 0.15)",
-                "border": "1px solid #ef4444",
-                "borderRadius": "10px",
-                "padding": "12px 16px",
-                "marginBottom": "20px",
-                "color": "#fca5a5",
-                "fontSize": "13px"
-            }),
-            {"display": "block"}
+            {
+                "authenticated": True,
+                "username": username,
+                "user_info": {
+                    "username": username,
+                    "name": AUTH_USERS[username]["name"],
+                    "email": AUTH_USERS[username]["email"],
+                    "role": AUTH_USERS[username]["role"]
+                }
+            },
+            "",
+            {"display": "none"}
         )
-
-    # Vérification des identifiants (local = instantané)
-    username = username.lower().strip()
-
-    if verify_password(username, password):
-        # ✅ Connexion réussie - réponse IMMÉDIATE
-        user_info = get_user_info(username)
-
-        # Générer un session_id local temporaire
-        import uuid
-        temp_session_id = str(uuid.uuid4())
-
-        auth_data = {
-            "authenticated": True,
-            "username": username,
-            "user_info": user_info,
-            "session_id": temp_session_id,
-            "user_id": None,
-            "login_time": time.time()
-        }
-
-        # 🚀 TRACKING SUPABASE EN ARRIÈRE-PLAN (non-bloquant)
-        def async_supabase_login():
-            try:
-                if supabase_client:
-                    db_user = get_or_create_user(username)
-                    if db_user:
-                        user_id = db_user["id"]
-                        session_id = create_session(user_id)
-                        ACTIVE_SESSIONS[username] = {
-                            "user_id": user_id,
-                            "session_id": session_id
-                        }
-                        track_activity(user_id, session_id, "login", page="login")
-                        print(f"   ✅ Supabase tracking OK pour {username}")
-            except Exception as e:
-                print(f"   ⚠️ Supabase tracking async: {e}")
-
-        # Lancer en arrière-plan
-        _async_executor.submit(async_supabase_login)
-
-        elapsed = time.time() - login_start
-        print(f"🔐 Login {username} réussi en {elapsed:.3f}s")
-
-        return (auth_data, "", {"display": "none"})
-    else:
-        # Échec de connexion
-        print(f"   ❌ Échec de connexion pour {username}")
-
-        # Tracking échec en arrière-plan aussi
-        def async_track_failed():
-            try:
-                if supabase_client:
-                    track_activity(None, None, "login_failed", page="login", details={"username_attempted": username})
-            except:
-                pass
-
-        _async_executor.submit(async_track_failed)
-
-        return (
-            {"authenticated": False, "username": None},
-            html.Div([
-                html.Span("❌", style={"marginRight": "8px"}),
-                "Identifiant ou mot de passe incorrect"
-            ], style={
-                "background": "rgba(239, 68, 68, 0.15)",
-                "border": "1px solid #ef4444",
-                "borderRadius": "10px",
-                "padding": "12px 16px",
-                "marginBottom": "20px",
-                "color": "#fca5a5",
-                "fontSize": "13px"
-            }),
-            {"display": "block"}
-        )
+    except dash.exceptions.PreventUpdate:
+        raise
+    except Exception as e:
+        return ({"authenticated": False, "username": None}, f"Erreur: {str(e)[:50]}", error_style)
 
 
-# Callback logout séparé avec allow_duplicate
+# Callback logout
 @app.callback(
     Output("auth-state", "data", allow_duplicate=True),
     [Input("logout-button", "n_clicks")],
@@ -14131,19 +14137,9 @@ def handle_login(n_clicks, username, password, current_auth):
     prevent_initial_call=True
 )
 def handle_logout(n_clicks, current_auth):
-    """Gère la déconnexion"""
-    if not n_clicks or n_clicks == 0:
+    """Déconnexion"""
+    if not n_clicks:
         raise dash.exceptions.PreventUpdate
-
-    print("🔐 Déconnexion utilisateur")
-
-    # ✅ TRACKING SUPABASE: Enregistrer la déconnexion
-    if current_auth:
-        username = current_auth.get("username")
-        if username:
-            track_logout(username)
-            print(f"   📊 Déconnexion trackée: {username}")
-
     return {"authenticated": False, "username": None}
 
 
@@ -14168,6 +14164,7 @@ def update_feedback(input_value):
     return f"Input value: {input_value}"
 '''
 
+
 @app.callback(
     Output('edit-product-output', 'children'),
     Input('edit-product', 'value'),
@@ -14176,6 +14173,7 @@ def update_product_name(value):
     if value:
         return f"Produit modifié: {value}"
     return no_update
+
 
 # Callback pour stocker les données locales
 @app.callback(
@@ -14250,7 +14248,6 @@ def capture_qac_edits(table_data, stored_edits):
     print(f"💾 [localStorage] {len(stored_edits)} QAC sauvegardés")
     return stored_edits
 '''
-
 
 
 # ==================== CALLBACK 2 : RESTAURER LES QAC AU CHARGEMENT ====================
@@ -14558,9 +14555,10 @@ def load_qac_from_csv_on_startup(pathname):
         return {}
 '''
 
+
 # Callback pour mettre à jour le Store 'selected-product-for-notes'
 @app.callback(
-    Output('selected-product-for-notes', 'data', allow_duplicate = True),
+    Output('selected-product-for-notes', 'data', allow_duplicate=True),
     Input('main-table', 'active_cell'),
     State('main-table', 'data'),
     prevent_initial_call=True
@@ -14574,11 +14572,11 @@ def update_selected_product(active_cell, table_data):
 
 
 # Validation layout
-#app.validation_layout = html.Div([
+# app.validation_layout = html.Div([
 #   dcc.Location(id="url"),
 #  dcc.Store(id="master-data"),
 # dcc.Store(id="filtered-data"),
-#dcc.Dropdown(id="filter-supplier"),
+# dcc.Dropdown(id="filter-supplier"),
 #   dcc.Dropdown(id="filter-category"),
 #  dcc.Dropdown(id="filter-need"),  # ✅ IMPORTANT
 # dcc.Dropdown(
@@ -14586,51 +14584,51 @@ def update_selected_product(active_cell, table_data):
 #   options=[
 #      {'label': 'Status 1', 'value': 'status1'},
 #     {'label': 'Status 2', 'value': 'status2'}
-#],
+# ],
 #       value='status1'
 #  ),
 
 # dcc.Input(id="search-input"),
-#dbc.Checklist(id="toggle-options"),
-#dcc.Store(id="uploaded-csv"),
+# dbc.Checklist(id="toggle-options"),
+# dcc.Store(id="uploaded-csv"),
 #   dcc.Store(id="chat-store"),
 #  dcc.Store(id="chat-open"),
 # make_sidebar(),
-#page_overview(initial_df),
+# page_overview(initial_df),
 #  page_analytics(),
 #  page_predictive(),
 # page_about(),
-#html.Div(id="page-container"),
+# html.Div(id="page-container"),
 #  html.Button(id="chat-fab"),
 # html.Div(id="chat-window"),
-#html.Div(id="chat-messages"),
+# html.Div(id="chat-messages"),
 #  dbc.Textarea(id="chat-input"),
 # dcc.Upload(id="chat-upload"),
 #  html.Small(id="upload-status"),
 # dbc.Button(id="chat-send"),
 #  dbc.Button(id="chat-close"),
 # dcc.Download(id="download-data"),
-#dcc.Download(id="download-po"),
+# dcc.Download(id="download-po"),
 # dbc.Button(id="btn-add-row"),
-#dbc.Modal(id="edit-modal"),
+# dbc.Modal(id="edit-modal"),
 # dbc.Input(id="edit-product"),
-#dbc.Input(id="edit-supplier"),
+# dbc.Input(id="edit-supplier"),
 #  dbc.Input(id="edit-category"),
 # dbc.Input(id="edit-stock"),
-#dbc.Modal(id="notes-modal"),
+# dbc.Modal(id="notes-modal"),
 # html.Div(id="notes-modal-title"),
 # ✅ Ajouter les nouveaux composants
 # html.Button(id="notes-fab"),
 #   dcc.Dropdown(id="note-product-selector"),
 #  dbc.Modal(id="notes-modal-new"),
 # html.Div(id="notes-display-list"),
-#dbc.Textarea(id="note-text-input"),
+# dbc.Textarea(id="note-text-input"),
 #  dbc.Input(id="note-author-input"),
 # html.Div(id="note-feedback-new"),
-#dbc.Button(id="note-modal-send"),
+# dbc.Button(id="note-modal-send"),
 #  dbc.Button(id="note-modal-close"),
 # dcc.Store(id="selected-product-for-notes"),
-#])
+# ])
 # Validation layout
 # Validation layout
 app.validation_layout = html.Div([
@@ -14644,7 +14642,7 @@ app.validation_layout = html.Div([
     dcc.Store(id={'type': 'selected-product-for-notes', 'index': '2'}),
     dcc.Store(id="edit-mode"),
     dcc.Store(id="edit-original-product"),
-    #dcc.Store(id="qac-edits"),
+    # dcc.Store(id="qac-edits"),
     dcc.Store(id="qac-edits-store"),
 
     # ==================== COMPOSANTS CACHÉS (pour callbacks) ====================
@@ -14814,6 +14812,8 @@ app.validation_layout = html.Div([
     html.Div(id="conflict-alert"),
     dcc.ConfirmDialog(id="confirm-dialog"),
 ])
+
+
 # ------------------------------ Routing ------------------------------------------
 # ⚠️ ANCIEN CALLBACK DÉSACTIVÉ - Remplacé par render_page_content (avec authentification)
 # @app.callback(
@@ -14891,6 +14891,7 @@ def filter_dataframe(df: pd.DataFrame, query: str, suppliers: list, statuses: li
 
     print(f"[filter_dataframe] ✅ Résultat final: {len(out)} lignes")
     return out
+
 
 def validate_core_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Garantit que les colonnes critiques existent et sont valides"""
@@ -15068,6 +15069,8 @@ def initial_load_table(pathname, master_json):
 
     return df.to_json(orient="records"), df.to_dict("records"), []
 '''
+
+
 # ------------------------------ Notes System Callbacks ----------------------------
 
 # ------------------------------ Export CSV ---------------------------------------
@@ -15219,7 +15222,8 @@ def preload_bc_cache():
             if not catalog.empty and len(catalog.columns) >= 11:
                 catalog_subset = catalog.iloc[:, [0, 1, 3, 10]].copy()
                 catalog_subset.columns = ['product_id', 'product_name', 'selling_price', 'purchase_price']
-                catalog_subset['product_name_clean'] = catalog_subset['product_name'].astype(str).str.lower().str.strip()
+                catalog_subset['product_name_clean'] = catalog_subset['product_name'].astype(
+                    str).str.lower().str.strip()
                 prices = dict(zip(
                     catalog_subset['product_name_clean'],
                     pd.to_numeric(catalog_subset['purchase_price'], errors='coerce').fillna(1000)
@@ -15339,6 +15343,8 @@ def get_packaging_map_cached():
     except Exception as e:
         print(f"❌ Erreur packaging : {e}")
         return {}
+
+
 # ====== IMPORTS NÉCESSAIRES ======
 
 # ===== Helpers packaging (ROBUSTES) =====
@@ -15386,7 +15392,8 @@ def load_heroku_packaging():
             return {}
 
         name_col = next((c for c in dfp.columns if c.lower() in ("name", "product_name", "designation")), None)
-        pack_col = next((c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
+        pack_col = next(
+            (c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
 
         if not name_col or not pack_col:
             print("   ⚠️ Colonnes name/packaging non trouvées")
@@ -15582,7 +15589,8 @@ def get_fraction_from_packaging(product_name: str, heroku_packaging: dict) -> fl
     return frac
 
 
-def calculate_quantity_for_po(qac_edited: float, product_name: str, catalog_packaging: dict, heroku_packaging: dict) -> int:
+def calculate_quantity_for_po(qac_edited: float, product_name: str, catalog_packaging: dict,
+                              heroku_packaging: dict) -> int:
     """
     Calcule la quantité finale pour le bon de commande.
 
@@ -15634,18 +15642,21 @@ def load_packaging_map():
     try:
         dfp = pd.read_csv(PACKAGING_URL)
         name_col = next((c for c in dfp.columns if c.lower() in ("name", "product_name", "designation")), None)
-        pack_col = next((c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
+        pack_col = next(
+            (c for c in dfp.columns if ("pack" in c.lower()) or (c.lower() in ("packaging", "conditionnement"))), None)
         if not name_col or not pack_col:
             print("⚠️ Dataclip: colonnes name/packaging non trouvées.")
             return {}
-        dfp["__key__"]  = dfp[name_col].astype(str).str.lower().str.strip()
+        dfp["__key__"] = dfp[name_col].astype(str).str.lower().str.strip()
         dfp["__pack__"] = dfp[pack_col].astype(str).str.lower().str.strip()
         return dict(zip(dfp["__key__"], dfp["__pack__"]))
     except Exception as e:
         print(f"❌ load_packaging_map: {e}")
         return {}
 
+
 FRACTION_FINDER = re.compile(r"(\d+)\s*/\s*(\d+)", re.IGNORECASE)
+
 
 def detect_fraction_from_text(txt: str) -> float:
     """Retourne la fraction trouvée (ex: '1/2' -> 0.5) ou 1.0 si rien."""
@@ -15655,12 +15666,14 @@ def detect_fraction_from_text(txt: str) -> float:
     m = FRACTION_FINDER.search(s)
     if m:
         try:
-            num = int(m.group(1)); den = int(m.group(2))
+            num = int(m.group(1));
+            den = int(m.group(2))
             if den > 0:
                 return num / den
         except (ValueError, TypeError):
             pass
     return 1.0
+
 
 def consolidate_to_major(qty_units: float, packaging_text: str, product_name: str) -> int:
     """Convertit la QAC (éventuellement en sous-unité) → unités majeures entières (ceil)."""
@@ -15671,6 +15684,7 @@ def consolidate_to_major(qty_units: float, packaging_text: str, product_name: st
         frac = 1.0
     maj = float(qty_units) * float(frac)
     return max(0, int(math.ceil(maj)))
+
 
 def safe_float(v, default=0.0):
     try:
@@ -15909,9 +15923,9 @@ def run_agent_ia_calcul(n_clicks, table_data):
     if not n_clicks or not table_data:
         return no_update, no_update, no_update
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"🤖 AGENT IA - Analyse automatique des besoins")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     updated_data = []
     indices_selection = []
@@ -15973,15 +15987,15 @@ def run_agent_ia_calcul(n_clicks, table_data):
     # ========================================
     # 📊 RÉSUMÉ
     # ========================================
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"📊 RÉSUMÉ AGENT IA")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"   🔴 Ruptures: {stats['rupture']}")
     print(f"   🟠 Risque (<7j): {stats['risque']}")
     print(f"   🟡 Order Now: {stats['order_now']}")
     print(f"   📦 Total produits à commander: {len(indices_selection)}")
     print(f"   🔢 QAC total: {int(stats['total_qac'])} unités")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     if not indices_selection:
         print("⚠️ Aucun produit à commander")
@@ -16530,17 +16544,17 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
     # ========================================
     # 📐 LARGEURS COLONNES
     # ========================================
-    ws.column_dimensions['A'].width = 8      # Réf
-    ws.column_dimensions['B'].width = 38     # Désignation
-    ws.column_dimensions['C'].width = 7      # Qté
-    ws.column_dimensions['D'].width = 6      # Cond.
-    ws.column_dimensions['E'].width = 8      # Unité
-    ws.column_dimensions['F'].width = 11     # PU HT
-    ws.column_dimensions['G'].width = 10     # TVA Unit
-    ws.column_dimensions['H'].width = 11     # PU TTC
-    ws.column_dimensions['I'].width = 9      # Remise %
-    ws.column_dimensions['J'].width = 13     # Total HT
-    ws.column_dimensions['K'].width = 13     # Total TTC
+    ws.column_dimensions['A'].width = 8  # Réf
+    ws.column_dimensions['B'].width = 38  # Désignation
+    ws.column_dimensions['C'].width = 7  # Qté
+    ws.column_dimensions['D'].width = 6  # Cond.
+    ws.column_dimensions['E'].width = 8  # Unité
+    ws.column_dimensions['F'].width = 11  # PU HT
+    ws.column_dimensions['G'].width = 10  # TVA Unit
+    ws.column_dimensions['H'].width = 11  # PU TTC
+    ws.column_dimensions['I'].width = 9  # Remise %
+    ws.column_dimensions['J'].width = 13  # Total HT
+    ws.column_dimensions['K'].width = 13  # Total TTC
 
     # ========================================
     # 💾 EXPORT
@@ -16553,6 +16567,7 @@ def generer_bc_excel_avec_formules(selected_products, price_map, packaging_map):
     print(f"   ⚡ Excel généré en {gen_elapsed:.2f}s : BC-{po_number}")
 
     return buf, po_number
+
 
 # ===== CALLBACK : GÉNÉRATION BON DE COMMANDE EXCEL AVEC VALIDATION =====
 @app.callback(
@@ -16575,9 +16590,9 @@ def export_po_excel_validated(n_clicks, selected_rows, table_data, auth_state):
     if not n_clicks or not table_data or not selected_rows:
         return no_update, False
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"📄 GÉNÉRATION BON DE COMMANDE EXCEL")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Récupérer l'utilisateur connecté
     username = auth_state.get("username", "unknown") if auth_state else "unknown"
@@ -16633,7 +16648,7 @@ def export_po_excel_validated(n_clicks, selected_rows, table_data, auth_state):
         callback_elapsed = time.time() - callback_start
         print(f"⚡ TOTAL: {callback_elapsed:.2f}s - {fname}")
         print(f"   📊 Tracking: {len(suppliers_stats)} fournisseurs pour {username}")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         return dcc.send_bytes(excel_buffer.read(), filename=fname), False
 
@@ -16764,6 +16779,7 @@ def preselect_qac_rows(table_data, ia_clicks, ia_clicks_state):
     return no_update
 '''
 
+
 # ===== CALLBACK 3 : REMPLIR QAC =====
 # ===== CALLBACK : REMPLIR QAC DEPUIS TARGET (CORRIGÉ) =====
 @app.callback(
@@ -16793,6 +16809,7 @@ def fill_qac_from_target(n_clicks, selected_rows, master_json):
     print(f"✅ {count} QAC remplies depuis target_quantity")
 
     return master_df.to_json(orient="records")
+
 
 # ====== EXPORT BON DE COMMANDE WORD ======
 '''
@@ -17045,7 +17062,6 @@ def export_po_word_optimized(n_clicks, selected_rows, table_data):
 
     return dcc.send_bytes(buf.read(), filename=fname), False  # ✅ Fermer overlay
 '''
-
 
 '''
 @app.callback(
@@ -17419,6 +17435,8 @@ def toggle_po_button(selected_rows, data):
     # Sinon, désactiver
     return True
 '''
+
+
 # ==================== CALLBACK 4 : COMPTEUR DE SÉLECTION ====================
 @app.callback(
     Output("selection-counter", "children"),
@@ -17463,6 +17481,7 @@ def select_all_rows(n_clicks, table_data):
     return list(range(len(table_data)))
 '''
 
+
 @app.callback(
     Output("main-table", "selected_rows", allow_duplicate=True),
     Input("btn-clear-selection", "n_clicks"),
@@ -17473,6 +17492,7 @@ def clear_selection(n_clicks):
     if not n_clicks:
         return no_update
     return []
+
 
 # ------------------------------ Edit/Add/Delete rows -----------------------------
 # NOTE: Ce callback est désactivé car remplacé par open_add_product_modal
@@ -17508,6 +17528,7 @@ def open_edit_modal(n_add, active_cell, data):
 
 import json
 
+
 @app.callback(
     [Output("master-data", "data", allow_duplicate=True),
      Output("filtered-data", "data", allow_duplicate=True),
@@ -17532,7 +17553,8 @@ import json
     State("auth-state", "data"),
     prevent_initial_call=True
 )
-def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, fc, filter_opts, master_json, is_adding, auth_state):
+def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, fc, filter_opts, master_json, is_adding,
+              auth_state):
     """Sauvegarde les modifications ou ajoute un nouveau produit avec intégration Supabase"""
     global initial_df
 
@@ -17564,9 +17586,9 @@ def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, f
     # Mode ajout ou édition
     if is_adding:
         # ✅ AJOUT D'UN NOUVEAU PRODUIT
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"➕ AJOUT D'UN NOUVEAU PRODUIT")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         new_row = {c: np.nan for c in df.columns}
         new_row["product_name"] = prod.strip()
@@ -17638,14 +17660,15 @@ def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, f
             })
             print(f"   ✅ Sauvegardé dans Supabase")
 
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         feedback = dbc.Alert([
             html.I(className="fas fa-check-circle me-2"),
             f"Produit '{prod}' ajouté avec succès"
         ], color="success", duration=4000)
 
-    elif active_cell and active_cell.get("column_id") == "edit Edit" and active_cell.get("row") is not None and table_data:
+    elif active_cell and active_cell.get("column_id") == "edit Edit" and active_cell.get(
+            "row") is not None and table_data:
         # ✅ ÉDITION D'UN PRODUIT EXISTANT
         row = active_cell["row"]
         r = table_data[row]
@@ -17714,7 +17737,9 @@ def save_edit(n_clicks, prod, sup, cat, stock, active_cell, table_data, q, fs, f
     print(f"📊 Table mise à jour: {len(fdf_actions)} produits affichés (total: {len(df)})")
 
     # Retour des résultats (fermer le modal et reset le flag)
-    return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict("records"), [], False, feedback, False
+    return df.to_json(orient="records"), fdf_actions.to_json(orient="records"), fdf_actions.to_dict(
+        "records"), [], False, feedback, False
+
 
 '''
 @app.callback(
@@ -17753,6 +17778,8 @@ def delete_row(master_json):
     # filtered-data, main-table, selected_rows (empty list), and risk-banner
     return df.to_json(orient="records"), df.to_dict("records"), [], banner
 '''
+
+
 # ------------------------------ Floating Chat callbacks ---------------------------
 @app.callback(
     Output("chat-open", "data"),

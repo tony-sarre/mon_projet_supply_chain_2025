@@ -1,520 +1,1299 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Supply Chain Analytics — Tableau de Bord</title>
-  <style>
-    :root {
-      --bg:      #0b1120;
-      --panel:   #101929;
-      --panel2:  #0d1f33;
-      --border:  #1e3050;
-      --text:    #cdd9e8;
-      --muted:   #6b829a;
-      --blue:    #2f80ed;
-      --cyan:    #38bdf8;
-      --green:   #22c55e;
-      --amber:   #f59e0b;
-      --red:     #ef4444;
-      --purple:  #a78bfa;
-    }
-    *{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;}
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Supply Chain Analytics Platform</title>
+<style>
+/* ══════════════════════════════════════════════
+   DESIGN SYSTEM — Light professional theme
+══════════════════════════════════════════════ */
+:root{
+  --bg:#f1f5f9;
+  --surface:#ffffff;
+  --surface2:#f8fafc;
+  --sidebar:#1e3a5f;
+  --sidebar-hover:rgba(255,255,255,.08);
+  --sidebar-active:rgba(255,255,255,.15);
+  --border:#e2e8f0;
+  --border-dark:#cbd5e1;
+  --text:#1e293b;
+  --text-sec:#64748b;
+  --text-muted:#94a3b8;
+  --blue:#2563eb;
+  --blue-light:#eff6ff;
+  --cyan:#0891b2;
+  --green:#16a34a;
+  --green-light:#f0fdf4;
+  --amber:#d97706;
+  --amber-light:#fffbeb;
+  --red:#dc2626;
+  --red-light:#fef2f2;
+  --purple:#7c3aed;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+  --shadow-md:0 4px 6px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.05);
+  --shadow-lg:0 10px 15px rgba(0,0,0,.08),0 4px 6px rgba(0,0,0,.04);
+  --radius:10px;
+}
 
-    /* ── TOPBAR ── */
-    header{
-      display:flex;align-items:center;justify-content:space-between;
-      padding:.75rem 1.5rem;
-      background:var(--panel);border-bottom:1px solid var(--border);
-      position:sticky;top:0;z-index:50;
-    }
-    .brand{font-size:.95rem;font-weight:700;color:var(--cyan);letter-spacing:.04em;}
-    .brand small{color:var(--muted);font-weight:400;margin-left:.5rem;font-size:.75rem;}
-    .header-right{display:flex;align-items:center;gap:1rem;}
-    .live-badge{
-      display:flex;align-items:center;gap:.4rem;
-      font-size:.72rem;color:var(--green);
-      background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);
-      padding:.2rem .6rem;border-radius:4px;
-    }
-    .live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite;}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-    .date{font-size:.75rem;color:var(--muted);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+button{cursor:pointer;font-family:inherit;}
 
-    /* ── LAYOUT ── */
-    .shell{display:flex;flex:1;overflow:hidden;}
+/* ══ LOGIN PAGE ══ */
+#loginPage{
+  display:flex;align-items:center;justify-content:center;
+  min-height:100vh;
+  background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 50%,#0891b2 100%);
+  padding:1rem;
+}
+.login-card{
+  background:var(--surface);border-radius:16px;
+  padding:2.5rem 2rem;width:100%;max-width:420px;
+  box-shadow:var(--shadow-lg);
+}
+.login-logo{
+  text-align:center;margin-bottom:2rem;
+}
+.login-logo-icon{
+  width:56px;height:56px;background:var(--blue);border-radius:14px;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:1.5rem;color:#fff;margin-bottom:.75rem;
+  box-shadow:0 4px 12px rgba(37,99,235,.3);
+}
+.login-logo h1{font-size:1.3rem;font-weight:700;color:var(--text);}
+.login-logo p{font-size:.8rem;color:var(--text-sec);margin-top:.25rem;}
 
-    /* ── SIDEBAR ── */
-    nav{
-      width:200px;flex-shrink:0;
-      background:var(--panel);border-right:1px solid var(--border);
-      padding:1rem .75rem;display:flex;flex-direction:column;gap:.25rem;
-      overflow-y:auto;
-    }
-    .nav-section{font-size:.65rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;padding:.5rem .5rem .25rem;margin-top:.5rem;}
-    .nav-item{
-      display:flex;align-items:center;gap:.6rem;
-      padding:.5rem .75rem;border-radius:6px;
-      font-size:.82rem;color:var(--muted);
-      cursor:pointer;transition:background .15s,color .15s;
-      border:none;background:none;width:100%;text-align:left;
-    }
-    .nav-item:hover{background:rgba(255,255,255,.04);color:var(--text);}
-    .nav-item.active{background:rgba(47,128,237,.15);color:var(--cyan);font-weight:600;}
-    .nav-icon{width:16px;text-align:center;font-size:.85rem;}
+.role-tabs{display:flex;gap:.5rem;margin-bottom:1.5rem;background:var(--bg);border-radius:8px;padding:.25rem;}
+.role-tab{
+  flex:1;padding:.5rem;border:none;background:none;border-radius:6px;
+  font-size:.82rem;font-weight:600;color:var(--text-sec);transition:.15s;
+}
+.role-tab.active{background:var(--surface);color:var(--blue);box-shadow:var(--shadow);}
 
-    /* ── MAIN ── */
-    main{flex:1;overflow-y:auto;padding:1.25rem;}
+.form-group{margin-bottom:1rem;}
+.form-label{display:block;font-size:.78rem;font-weight:600;color:var(--text-sec);margin-bottom:.4rem;}
+.form-input{
+  width:100%;padding:.65rem .9rem;border:1.5px solid var(--border);border-radius:8px;
+  font-size:.9rem;color:var(--text);background:var(--surface);transition:.15s;outline:none;
+}
+.form-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
 
-    /* ── PAGE HEADER ── */
-    .page-header{margin-bottom:1.25rem;}
-    .page-title{font-size:1.1rem;font-weight:700;color:var(--text);}
-    .page-sub{font-size:.78rem;color:var(--muted);margin-top:.2rem;}
+.btn-login{
+  width:100%;padding:.75rem;background:var(--blue);color:#fff;border:none;
+  border-radius:8px;font-size:.95rem;font-weight:700;
+  box-shadow:0 4px 12px rgba(37,99,235,.3);transition:.15s;margin-top:.5rem;
+}
+.btn-login:hover{background:#1d4ed8;transform:translateY(-1px);}
+.login-error{color:var(--red);font-size:.78rem;margin-top:.5rem;display:none;}
 
-    /* ── ALERTS ── */
-    .alert-row{display:flex;gap:.75rem;margin-bottom:1.25rem;flex-wrap:wrap;}
-    .alert{
-      flex:1;min-width:220px;
-      padding:.6rem 1rem;border-radius:6px;
-      font-size:.78rem;display:flex;align-items:center;gap:.6rem;
-    }
-    .alert-danger{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#fca5a5;}
-    .alert-warning{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);color:#fcd34d;}
-    .alert-info{background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:#7dd3fc;}
-    .alert-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-    .alert-danger .alert-dot{background:var(--red);}
-    .alert-warning .alert-dot{background:var(--amber);}
-    .alert-info .alert-dot{background:var(--cyan);}
+.login-hint{
+  margin-top:1.5rem;padding:1rem;background:var(--bg);border-radius:8px;
+  font-size:.75rem;color:var(--text-sec);
+}
+.login-hint strong{display:block;margin-bottom:.3rem;color:var(--text);}
 
-    /* ── KPI GRID ── */
-    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1.25rem;}
-    .kpi{
-      background:var(--panel);border:1px solid var(--border);border-radius:8px;
-      padding:1rem 1.1rem;cursor:pointer;transition:border-color .15s,transform .15s;
-      position:relative;overflow:hidden;
-    }
-    .kpi:hover{border-color:var(--blue);transform:translateY(-2px);}
-    .kpi.selected{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan);}
-    .kpi::before{
-      content:'';position:absolute;top:0;left:0;right:0;height:3px;
-      border-radius:8px 8px 0 0;
-    }
-    .kpi.blue::before{background:var(--blue);}
-    .kpi.red::before{background:var(--red);}
-    .kpi.amber::before{background:var(--amber);}
-    .kpi.green::before{background:var(--green);}
-    .kpi-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
-    .kpi-value{font-size:1.8rem;font-weight:700;color:var(--text);margin:.3rem 0;}
-    .kpi-sub{font-size:.72rem;display:flex;align-items:center;gap:.3rem;}
-    .up{color:var(--green);}
-    .down{color:var(--red);}
-    .neutral{color:var(--muted);}
-    .kpi-hint{font-size:.65rem;color:var(--muted);margin-top:.3rem;}
+/* ══ APP SHELL ══ */
+#appShell{display:none;flex-direction:column;height:100vh;}
 
-    /* ── CHARTS ROW ── */
-    .charts-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-bottom:1.25rem;}
-    .chart-panel{
-      background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1rem;
-    }
-    .chart-panel.wide{grid-column:span 2;}
-    .panel-title{font-size:.78rem;font-weight:600;color:var(--text);margin-bottom:.15rem;}
-    .panel-sub{font-size:.68rem;color:var(--muted);margin-bottom:.85rem;}
+/* ── Topbar ── */
+.topbar{
+  height:56px;background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 1rem;gap:1rem;
+  box-shadow:var(--shadow);z-index:40;flex-shrink:0;
+}
+.topbar-brand{
+  display:flex;align-items:center;gap:.6rem;width:220px;
+}
+.topbar-brand-icon{
+  width:32px;height:32px;background:var(--blue);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:.9rem;font-weight:800;
+}
+.topbar-brand-name{font-size:.9rem;font-weight:700;color:var(--text);}
+.topbar-brand-sub{font-size:.65rem;color:var(--text-sec);}
+.topbar-spacer{flex:1;}
+.topbar-status{
+  display:flex;align-items:center;gap:.4rem;font-size:.75rem;color:var(--green);
+  background:var(--green-light);border:1px solid #bbf7d0;padding:.3rem .75rem;border-radius:20px;
+}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:blink 2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+.topbar-user{
+  display:flex;align-items:center;gap:.6rem;padding:.35rem .75rem;border-radius:8px;
+  cursor:pointer;transition:.15s;border:1px solid transparent;
+}
+.topbar-user:hover{background:var(--bg);border-color:var(--border);}
+.user-avatar{
+  width:32px;height:32px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.75rem;font-weight:700;color:#fff;
+}
+.user-name{font-size:.82rem;font-weight:600;color:var(--text);}
+.user-role{font-size:.65rem;color:var(--text-sec);}
+.btn-logout{
+  background:none;border:1px solid var(--border);color:var(--text-sec);
+  padding:.35rem .7rem;border-radius:6px;font-size:.75rem;
+}
+.btn-logout:hover{background:var(--red-light);color:var(--red);border-color:var(--red);}
 
-    /* Bar chart */
-    .bar-chart{display:flex;align-items:flex-end;gap:3px;height:90px;}
-    .bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;}
-    .bar{
-      width:100%;border-radius:2px 2px 0 0;
-      transition:opacity .15s;cursor:default;
-    }
-    .bar-lbl{font-size:.55rem;color:var(--muted);}
+/* ── Layout ── */
+.app-body{display:flex;flex:1;overflow:hidden;}
 
-    /* Donut */
-    .donut-wrap{display:flex;align-items:center;gap:1rem;}
-    .donut-legend{flex:1;}
-    .legend-item{display:flex;align-items:center;gap:.4rem;font-size:.72rem;color:var(--muted);margin-bottom:.45rem;}
-    .legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-    .legend-val{margin-left:auto;color:var(--text);font-weight:600;}
+/* ── Sidebar ── */
+.sidebar{
+  width:220px;background:var(--sidebar);flex-shrink:0;
+  display:flex;flex-direction:column;overflow-y:auto;
+  padding:.75rem .5rem;
+}
+.nav-section{font-size:.6rem;color:rgba(255,255,255,.35);letter-spacing:.1em;text-transform:uppercase;padding:.75rem .75rem .3rem;}
+.nav-item{
+  display:flex;align-items:center;gap:.65rem;
+  padding:.55rem .75rem;border-radius:7px;
+  font-size:.82rem;color:rgba(255,255,255,.65);
+  background:none;border:none;width:100%;text-align:left;
+  transition:.12s;position:relative;
+}
+.nav-item:hover{background:var(--sidebar-hover);color:rgba(255,255,255,.9);}
+.nav-item.active{background:var(--sidebar-active);color:#fff;font-weight:600;}
+.nav-item.active::before{
+  content:'';position:absolute;left:0;top:25%;bottom:25%;
+  width:3px;background:#60a5fa;border-radius:0 2px 2px 0;
+}
+.nav-icon{width:18px;text-align:center;font-size:1rem;opacity:.9;}
+.nav-badge{margin-left:auto;background:rgba(239,68,68,.8);color:#fff;font-size:.6rem;padding:.1rem .4rem;border-radius:10px;font-weight:700;}
 
-    /* Status table */
-    .status-table{width:100%;border-collapse:collapse;font-size:.78rem;}
-    .status-table th{color:var(--muted);font-weight:500;text-align:left;padding:.35rem .5rem;border-bottom:1px solid var(--border);font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;}
-    .status-table td{padding:.4rem .5rem;border-bottom:1px solid rgba(30,48,80,.5);}
-    .status-table tr:last-child td{border-bottom:none;}
-    .badge{display:inline-block;font-size:.65rem;padding:.15rem .5rem;border-radius:3px;font-weight:600;}
-    .badge-red{background:rgba(239,68,68,.15);color:#fca5a5;}
-    .badge-amber{background:rgba(245,158,11,.15);color:#fcd34d;}
-    .badge-green{background:rgba(34,197,94,.15);color:#86efac;}
-    .badge-blue{background:rgba(47,128,237,.15);color:#93c5fd;}
+/* ── Main ── */
+.main-content{flex:1;overflow-y:auto;padding:1.5rem;}
 
-    /* Detail panel (shown on KPI click) */
-    .detail-panel{
-      background:var(--panel);border:1px solid var(--border);border-radius:8px;
-      padding:1rem;margin-bottom:1.25rem;display:none;
-    }
-    .detail-panel.open{display:block;}
-    .detail-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;}
-    .detail-title{font-size:.85rem;font-weight:600;color:var(--cyan);}
-    .close-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.8rem;padding:.2rem .5rem;}
-    .close-btn:hover{color:var(--text);}
-    .detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;}
-    .detail-stat{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:.75rem;}
-    .detail-stat-label{font-size:.68rem;color:var(--muted);margin-bottom:.3rem;}
-    .detail-stat-value{font-size:1.1rem;font-weight:700;}
+/* ── Page header ── */
+.page-hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.25rem;}
+.page-hd-left h2{font-size:1.2rem;font-weight:700;color:var(--text);}
+.page-hd-left p{font-size:.78rem;color:var(--text-sec);margin-top:.15rem;}
+.page-hd-right{display:flex;gap:.5rem;align-items:center;}
 
-    /* Horizontal bar for categories */
-    .hbar-list{display:flex;flex-direction:column;gap:.5rem;}
-    .hbar-item{}
-    .hbar-header{display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-bottom:.2rem;}
-    .hbar-track{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;}
-    .hbar-fill{height:100%;border-radius:3px;transition:width .4s ease;}
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .9rem;border-radius:7px;font-size:.8rem;font-weight:600;border:none;transition:.15s;}
+.btn-primary{background:var(--blue);color:#fff;}
+.btn-primary:hover{background:#1d4ed8;}
+.btn-ghost{background:none;color:var(--text-sec);border:1px solid var(--border);}
+.btn-ghost:hover{background:var(--bg);color:var(--text);}
+.btn-sm{padding:.3rem .65rem;font-size:.73rem;}
 
-    @media(max-width:900px){
-      nav{display:none;}
-      .kpi-grid{grid-template-columns:repeat(2,1fr);}
-      .charts-row{grid-template-columns:1fr;}
-      .chart-panel.wide{grid-column:span 1;}
-    }
-  </style>
+/* ── Cards ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);}
+.card-body{padding:1.25rem;}
+.card-title{font-size:.85rem;font-weight:700;color:var(--text);margin-bottom:.2rem;}
+.card-sub{font-size:.72rem;color:var(--text-sec);}
+
+/* ── KPI GRID ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.875rem;margin-bottom:1.25rem;}
+.kpi-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:1.1rem 1.2rem;box-shadow:var(--shadow);
+  cursor:pointer;transition:.15s;position:relative;overflow:hidden;
+}
+.kpi-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);}
+.kpi-card.selected{border-color:var(--blue);box-shadow:0 0 0 2px rgba(37,99,235,.15);}
+.kpi-card::after{
+  content:'';position:absolute;top:0;left:0;right:0;height:4px;border-radius:var(--radius) var(--radius) 0 0;
+}
+.kpi-card.c-blue::after{background:var(--blue);}
+.kpi-card.c-red::after{background:var(--red);}
+.kpi-card.c-amber::after{background:var(--amber);}
+.kpi-card.c-green::after{background:var(--green);}
+.kpi-label{font-size:.7rem;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;}
+.kpi-value{font-size:2rem;font-weight:800;color:var(--text);margin:.35rem 0 .2rem;line-height:1;}
+.kpi-meta{font-size:.72rem;display:flex;align-items:center;gap:.3rem;}
+.kpi-meta.up{color:var(--green);}
+.kpi-meta.down{color:var(--red);}
+.kpi-meta.neutral{color:var(--text-sec);}
+.kpi-icon{
+  position:absolute;right:1rem;top:50%;transform:translateY(-50%);
+  font-size:2rem;opacity:.07;
+}
+
+/* ── Detail Drawer ── */
+.detail-drawer{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:1.25rem;margin-bottom:1.25rem;box-shadow:var(--shadow-md);
+  display:none;
+}
+.detail-drawer.open{display:block;}
+.drawer-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;padding-bottom:.75rem;border-bottom:1px solid var(--border);}
+.drawer-title{font-size:.9rem;font-weight:700;color:var(--blue);}
+.drawer-close{background:none;border:1px solid var(--border);color:var(--text-sec);padding:.25rem .6rem;border-radius:6px;font-size:.75rem;}
+.drawer-close:hover{background:var(--red-light);color:var(--red);}
+.detail-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;}
+.detail-kpi{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.85rem;}
+.detail-kpi-label{font-size:.68rem;color:var(--text-sec);margin-bottom:.3rem;}
+.detail-kpi-value{font-size:1.2rem;font-weight:700;}
+
+/* ── Two-col layout ── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:.875rem;margin-bottom:1.25rem;}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.875rem;margin-bottom:1.25rem;}
+.col-span2{grid-column:span 2;}
+
+/* ── Tables ── */
+.data-table{width:100%;border-collapse:collapse;font-size:.8rem;}
+.data-table th{
+  font-size:.68rem;font-weight:700;color:var(--text-sec);
+  text-align:left;padding:.5rem .75rem;
+  background:var(--surface2);border-bottom:1px solid var(--border);
+  text-transform:uppercase;letter-spacing:.04em;
+  position:sticky;top:0;
+}
+.data-table td{padding:.55rem .75rem;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;}
+.data-table tr:last-child td{border-bottom:none;}
+.data-table tr:hover td{background:var(--blue-light);}
+.tbl-wrap{overflow-x:auto;max-height:320px;overflow-y:auto;}
+
+/* ── Badges ── */
+.badge{display:inline-flex;align-items:center;gap:.25rem;font-size:.68rem;font-weight:600;padding:.2rem .55rem;border-radius:20px;}
+.badge-red{background:var(--red-light);color:var(--red);}
+.badge-amber{background:var(--amber-light);color:var(--amber);}
+.badge-green{background:var(--green-light);color:var(--green);}
+.badge-blue{background:var(--blue-light);color:var(--blue);}
+.badge-gray{background:var(--bg);color:var(--text-sec);border:1px solid var(--border);}
+
+/* ── Progress bars ── */
+.prog-track{height:6px;background:var(--bg);border-radius:3px;overflow:hidden;}
+.prog-fill{height:100%;border-radius:3px;transition:width .4s ease;}
+.prog-blue{background:var(--blue);}
+.prog-red{background:var(--red);}
+.prog-green{background:var(--green);}
+.prog-amber{background:var(--amber);}
+
+/* ── Agent cards ── */
+.agent-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.875rem;margin-bottom:1.25rem;}
+.agent-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:1.25rem;box-shadow:var(--shadow);transition:.15s;cursor:pointer;
+}
+.agent-card:hover{box-shadow:var(--shadow-md);border-color:#bfdbfe;}
+.agent-header{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;}
+.agent-avatar{
+  width:42px;height:42px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.9rem;font-weight:800;color:#fff;flex-shrink:0;
+}
+.agent-name{font-size:.9rem;font-weight:700;color:var(--text);}
+.agent-zone{font-size:.72rem;color:var(--text-sec);}
+.agent-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-top:.75rem;}
+.agent-stat{text-align:center;padding:.5rem;background:var(--bg);border-radius:7px;}
+.agent-stat-val{font-size:1.1rem;font-weight:700;}
+.agent-stat-lbl{font-size:.62rem;color:var(--text-sec);margin-top:.1rem;}
+.agent-perf{margin-top:.75rem;}
+.perf-label{display:flex;justify-content:space-between;font-size:.7rem;color:var(--text-sec);margin-bottom:.3rem;}
+
+/* ── Alert banners ── */
+.alert-strip{
+  display:flex;align-items:flex-start;gap:.6rem;padding:.7rem 1rem;border-radius:8px;
+  font-size:.78rem;margin-bottom:.5rem;
+}
+.alert-strip-danger{background:var(--red-light);border:1px solid #fecaca;color:#991b1b;}
+.alert-strip-warning{background:var(--amber-light);border:1px solid #fde68a;color:#92400e;}
+.alert-strip-info{background:var(--blue-light);border:1px solid #bfdbfe;color:#1e40af;}
+.alert-strip-icon{font-size:1rem;flex-shrink:0;margin-top:.05rem;}
+
+/* ── Donut chart ── */
+.donut-wrap{display:flex;align-items:center;gap:1.25rem;}
+.legend-list{flex:1;}
+.legend-row{display:flex;align-items:center;gap:.5rem;font-size:.75rem;color:var(--text-sec);margin-bottom:.5rem;}
+.legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.legend-num{margin-left:auto;font-weight:700;color:var(--text);font-size:.8rem;}
+
+/* ── Horiz bars ── */
+.hbar-list{display:flex;flex-direction:column;gap:.65rem;}
+.hbar-row{}
+.hbar-top{display:flex;justify-content:space-between;font-size:.75rem;color:var(--text-sec);margin-bottom:.3rem;}
+.hbar-top strong{color:var(--text);}
+
+/* ══ AI ASSISTANT ══ */
+.ai-fab{
+  position:fixed;right:1.5rem;bottom:1.5rem;z-index:200;
+  width:52px;height:52px;border-radius:50%;
+  background:var(--blue);color:#fff;border:none;
+  font-size:1.2rem;box-shadow:0 4px 16px rgba(37,99,235,.4);
+  display:none;transition:.15s;
+}
+.ai-fab:hover{background:#1d4ed8;transform:scale(1.05);}
+.ai-panel{
+  position:fixed;right:1.5rem;bottom:5rem;z-index:200;
+  width:360px;height:480px;
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  box-shadow:var(--shadow-lg);display:none;flex-direction:column;overflow:hidden;
+}
+.ai-panel.open{display:flex;}
+.ai-panel-header{
+  padding:.85rem 1rem;background:var(--blue);color:#fff;
+  display:flex;align-items:center;gap:.6rem;
+}
+.ai-panel-header h3{font-size:.88rem;font-weight:700;flex:1;}
+.ai-panel-close{background:rgba(255,255,255,.2);border:none;color:#fff;width:26px;height:26px;border-radius:6px;font-size:.85rem;}
+.ai-messages{flex:1;overflow-y:auto;padding:.75rem;display:flex;flex-direction:column;gap:.6rem;}
+.msg{max-width:88%;padding:.55rem .8rem;border-radius:10px;font-size:.8rem;line-height:1.5;}
+.msg-bot{background:var(--bg);color:var(--text);align-self:flex-start;border-bottom-left-radius:3px;}
+.msg-user{background:var(--blue);color:#fff;align-self:flex-end;border-bottom-right-radius:3px;}
+.msg-typing{display:flex;gap:.3rem;align-items:center;padding:.55rem .8rem;}
+.typing-dot{width:6px;height:6px;border-radius:50%;background:var(--text-sec);animation:typing .9s infinite;}
+.typing-dot:nth-child(2){animation-delay:.2s;}
+.typing-dot:nth-child(3){animation-delay:.4s;}
+@keyframes typing{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
+.ai-input-row{padding:.75rem;border-top:1px solid var(--border);display:flex;gap:.5rem;}
+.ai-input{
+  flex:1;padding:.5rem .75rem;border:1.5px solid var(--border);border-radius:8px;
+  font-size:.8rem;color:var(--text);outline:none;
+}
+.ai-input:focus{border-color:var(--blue);}
+.ai-send{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:.5rem .75rem;font-size:.8rem;font-weight:600;}
+.ai-send:hover{background:#1d4ed8;}
+
+/* ══ VIEWS TOGGLE ══ */
+.view{display:none;}
+.view.active{display:block;}
+
+/* ══ RESPONSIVE ══ */
+@media(max-width:1024px){
+  .kpi-grid{grid-template-columns:repeat(2,1fr);}
+  .two-col,.three-col,.agent-grid{grid-template-columns:1fr;}
+  .col-span2{grid-column:span 1;}
+}
+@media(max-width:768px){
+  .sidebar{display:none;}
+  .ai-panel{width:calc(100vw - 2rem);right:1rem;}
+}
+</style>
 </head>
 <body>
 
-<!-- TOPBAR -->
-<header>
-  <div class="brand">Supply Chain Analytics <small>Gestion des stocks & approvisionnements</small></div>
-  <div class="header-right">
-    <div class="live-badge"><div class="live-dot"></div>Données synchronisées</div>
-    <div class="date" id="dateLbl"></div>
+<!-- ════════════════════════════════════
+     LOGIN PAGE
+════════════════════════════════════ -->
+<div id="loginPage">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">SC</div>
+      <h1>Supply Chain Analytics</h1>
+      <p>Plateforme de gestion des stocks & approvisionnements</p>
+    </div>
+
+    <div class="role-tabs">
+      <button class="role-tab active" onclick="selectRole('manager',this)">Manager</button>
+      <button class="role-tab" onclick="selectRole('agent',this)">Agent commercial</button>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Identifiant</label>
+      <input class="form-input" id="loginUser" type="text" placeholder="Entrez votre identifiant" autocomplete="username"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Mot de passe</label>
+      <input class="form-input" id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password"/>
+    </div>
+    <div class="login-error" id="loginError">Identifiant ou mot de passe incorrect.</div>
+    <button class="btn-login" onclick="doLogin()">Se connecter</button>
+
+    <div class="login-hint">
+      <strong>Accès de démonstration</strong>
+      Manager : <code>manager</code> / <code>scm2025</code><br/>
+      Agent : <code>agent1</code> / <code>scm2025</code> &nbsp;|&nbsp; <code>agent2</code> / <code>scm2025</code>
+    </div>
   </div>
-</header>
+</div>
 
-<div class="shell">
+<!-- ════════════════════════════════════
+     APP SHELL
+════════════════════════════════════ -->
+<div id="appShell" style="display:none;flex-direction:column;height:100vh;">
 
-  <!-- SIDEBAR -->
-  <nav>
-    <div class="nav-section">Tableau de bord</div>
-    <button class="nav-item active" onclick="setPage('overview',this)">
-      <span class="nav-icon">▦</span> Vue générale
-    </button>
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-brand-icon">SC</div>
+      <div>
+        <div class="topbar-brand-name">Supply Chain</div>
+        <div class="topbar-brand-sub">Analytics Platform</div>
+      </div>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-status"><div class="status-dot"></div>Données synchronisées</div>
+    <div class="topbar-user" onclick="openAI()">
+      <div class="user-avatar" id="uAvatar" style="background:var(--blue)">M</div>
+      <div>
+        <div class="user-name" id="uName">—</div>
+        <div class="user-role" id="uRole">—</div>
+      </div>
+    </div>
+    <button class="btn-logout" onclick="doLogout()">Déconnexion</button>
+  </div>
+
+  <div class="app-body">
+    <!-- SIDEBAR -->
+    <nav class="sidebar" id="sidebarNav"></nav>
+
+    <!-- MAIN -->
+    <main class="main-content" id="mainContent"></main>
+  </div>
+</div>
+
+<!-- AI FAB -->
+<button class="ai-fab" id="aiFab" onclick="toggleAI()">✦</button>
+
+<!-- AI PANEL -->
+<div class="ai-panel" id="aiPanel">
+  <div class="ai-panel-header">
+    <span>✦</span>
+    <h3>Assistant IA — Supply Chain</h3>
+    <button class="ai-panel-close" onclick="toggleAI()">✕</button>
+  </div>
+  <div class="ai-messages" id="aiMessages">
+    <div class="msg msg-bot">Bonjour ! Je suis votre assistant Supply Chain. Posez-moi vos questions sur les stocks, ruptures, fournisseurs ou prévisions.</div>
+  </div>
+  <div class="ai-input-row">
+    <input class="ai-input" id="aiInput" placeholder="Votre question..." onkeydown="if(event.key==='Enter')sendAI()"/>
+    <button class="ai-send" onclick="sendAI()">Envoyer</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     DATA & LOGIC
+════════════════════════════════════ -->
+<script>
+// ── DATA ──
+const DATA = {
+  stats:{total:1880,oos:1132,soon:295,orderSoon:156,ok:297,suppliers:143},
+  suppliers:[
+    {name:'Borodji Distribution',refs:107,ok:36,soon:16,order:14,oos:41,rate:33.6},
+    {name:'ARIMEX',refs:94,ok:12,soon:6,order:13,oos:63,rate:12.8},
+    {name:'SENICO',refs:89,ok:7,soon:10,order:23,oos:49,rate:7.9},
+    {name:'Maad',refs:66,ok:25,soon:1,order:1,oos:39,rate:37.9},
+    {name:'SIAGRO',refs:66,ok:11,soon:16,order:3,oos:36,rate:16.7},
+    {name:'LSB',refs:65,ok:6,soon:5,order:2,oos:52,rate:9.2},
+    {name:'Patisen',refs:58,ok:5,soon:5,order:8,oos:40,rate:8.6},
+    {name:'SIAD',refs:53,ok:17,soon:8,order:3,oos:25,rate:32.1},
+    {name:'H&D Industries',refs:51,ok:0,soon:20,order:0,oos:31,rate:0},
+    {name:'CMGA',refs:46,ok:0,soon:17,order:3,oos:26,rate:0},
+    {name:'SOCOMAF',refs:41,ok:8,soon:12,order:4,oos:17,rate:19.5},
+    {name:'IBS',refs:40,ok:1,soon:16,order:0,oos:23,rate:2.5},
+  ],
+  categories:[
+    {name:'CX',refs:1460,sales:5.71,cov:72020},
+    {name:'BX',refs:93,sales:30.07,cov:22},
+    {name:'CZ',refs:92,sales:12.43,cov:27.4},
+    {name:'CY',refs:66,sales:11.66,cov:76.5},
+    {name:'BY',refs:48,sales:26.45,cov:167.2},
+    {name:'BZ',refs:40,sales:21.57,cov:76},
+    {name:'AZ',refs:23,sales:58.43,cov:9.3},
+    {name:'AX',refs:25,sales:115.60,cov:5.4},
+    {name:'AY',refs:13,sales:67.87,cov:8.6},
+    {name:'A+X',refs:7,sales:544.27,cov:4},
+    {name:'A+Z',refs:10,sales:84.48,cov:4.4},
+  ],
+  agents:[
+    {
+      id:'agent1',name:'Mamadou Diallo',zone:'Dakar Centre',color:'#2563eb',
+      suppliers:['Borodji Distribution','ARIMEX','SENICO'],
+      refs:290,ok:55,soon:32,order:50,oos:153,rate:19,
+      po_month:12,po_pending:4,
+      objectives:{stock:75,quality:88,delay:72},
+      perf:{jan:62,fev:68,mar:71,avr:74,mai:70,jun:73}
+    },
+    {
+      id:'agent2',name:'Fatou Seck',zone:'Pikine / Guédiawaye',color:'#7c3aed',
+      suppliers:['Maad','SIAGRO','LSB'],
+      refs:197,ok:42,soon:22,order:6,oos:127,rate:21.3,
+      po_month:8,po_pending:2,
+      objectives:{stock:80,quality:90,delay:68},
+      perf:{jan:55,fev:60,mar:65,avr:68,mai:72,jun:75}
+    },
+    {
+      id:'agent3',name:'Ibrahima Ndiaye',zone:'Thiès / Mbour',color:'#0891b2',
+      suppliers:['Patisen','SIAD','H&D Industries'],
+      refs:162,ok:22,soon:33,order:11,oos:96,rate:13.6,
+      po_month:6,po_pending:3,
+      objectives:{stock:70,quality:82,delay:65},
+      perf:{jan:48,fev:52,mar:58,avr:61,mai:63,jun:65}
+    },
+    {
+      id:'agent4',name:'Aminata Ba',zone:'Saint-Louis / Louga',color:'#16a34a',
+      suppliers:['CMGA','SOCOMAF','IBS'],
+      refs:127,ok:9,soon:45,order:7,oos:66,rate:7.1,
+      po_month:4,po_pending:5,
+      objectives:{stock:65,quality:78,delay:60},
+      perf:{jan:38,fev:42,mar:47,avr:49,mai:52,jun:55}
+    },
+  ]
+};
+
+// ── AUTH ──
+const USERS={
+  manager:{pass:'scm2025',role:'manager',name:'Admin Manager',zone:'Direction'},
+  agent1:{pass:'scm2025',role:'agent',agentId:'agent1'},
+  agent2:{pass:'scm2025',role:'agent',agentId:'agent2'},
+  agent3:{pass:'scm2025',role:'agent',agentId:'agent3'},
+  agent4:{pass:'scm2025',role:'agent',agentId:'agent4'},
+};
+
+let currentUser=null, currentRole=null, currentPage='dashboard';
+let selectedRole='manager';
+
+function selectRole(r,el){
+  selectedRole=r;
+  document.querySelectorAll('.role-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('loginUser').value='';
+  document.getElementById('loginPass').value='';
+}
+
+function doLogin(){
+  const u=document.getElementById('loginUser').value.trim();
+  const p=document.getElementById('loginPass').value;
+  const err=document.getElementById('loginError');
+  const record=USERS[u];
+  if(!record||record.pass!==p){err.style.display='block';return;}
+  err.style.display='none';
+  currentUser=u;currentRole=record.role;
+  initApp(record);
+}
+
+document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+
+function doLogout(){
+  currentUser=null;currentRole=null;currentPage='dashboard';
+  document.getElementById('loginPage').style.display='flex';
+  document.getElementById('appShell').style.display='none';
+  document.getElementById('aiFab').style.display='none';
+  document.getElementById('aiPanel').classList.remove('open');
+}
+
+function initApp(record){
+  document.getElementById('loginPage').style.display='none';
+  document.getElementById('appShell').style.display='flex';
+  document.getElementById('aiFab').style.display='flex';
+
+  if(record.role==='manager'){
+    document.getElementById('uName').textContent='Admin Manager';
+    document.getElementById('uRole').textContent='Direction générale';
+    document.getElementById('uAvatar').textContent='MG';
+    document.getElementById('uAvatar').style.background='#1e3a5f';
+    buildManagerSidebar();
+    renderPage('dashboard');
+  } else {
+    const ag=DATA.agents.find(a=>a.id===record.agentId);
+    document.getElementById('uName').textContent=ag.name;
+    document.getElementById('uRole').textContent='Agent — '+ag.zone;
+    document.getElementById('uAvatar').textContent=ag.name.split(' ').map(w=>w[0]).join('');
+    document.getElementById('uAvatar').style.background=ag.color;
+    buildAgentSidebar();
+    renderPage('agent-dashboard',ag);
+  }
+}
+
+// ── SIDEBARS ──
+function buildManagerSidebar(){
+  document.getElementById('sidebarNav').innerHTML=`
+    <div class="nav-section">Vue globale</div>
+    <button class="nav-item active" onclick="navTo('dashboard',this)"><span class="nav-icon">⊞</span>Tableau de bord</button>
+    <button class="nav-item" onclick="navTo('agents',this)"><span class="nav-icon">◉</span>Agents &amp; Comptes<span class="nav-badge">4</span></button>
 
     <div class="nav-section">Stocks</div>
-    <button class="nav-item" onclick="setPage('stock',this)">
-      <span class="nav-icon">≡</span> Niveaux de stock
-    </button>
-    <button class="nav-item" onclick="setPage('ruptures',this)">
-      <span class="nav-icon">!</span> Ruptures
-    </button>
-    <button class="nav-item" onclick="setPage('categories',this)">
-      <span class="nav-icon">◫</span> Catégories ABC
-    </button>
+    <button class="nav-item" onclick="navTo('stock',this)"><span class="nav-icon">≡</span>Niveaux de stock<span class="nav-badge">1132</span></button>
+    <button class="nav-item" onclick="navTo('categories',this)"><span class="nav-icon">◫</span>Catégories ABC/XYZ</button>
 
     <div class="nav-section">Achats</div>
-    <button class="nav-item" onclick="setPage('commandes',this)">
-      <span class="nav-icon">↑</span> Commandes PO
-    </button>
-    <button class="nav-item" onclick="setPage('fournisseurs',this)">
-      <span class="nav-icon">◉</span> Fournisseurs
-    </button>
+    <button class="nav-item" onclick="navTo('fournisseurs',this)"><span class="nav-icon">↑</span>Fournisseurs</button>
 
-    <div class="nav-section">Qualité</div>
-    <button class="nav-item" onclick="setPage('qac',this)">
-      <span class="nav-icon">✓</span> Contrôle QAC
-    </button>
+    <div class="nav-section">Analyse</div>
+    <button class="nav-item" onclick="navTo('previsions',this)"><span class="nav-icon">~</span>Prévisions ML</button>
+    <button class="nav-item" onclick="toggleAI()"><span class="nav-icon">✦</span>Assistant IA</button>
+  `;
+}
 
-    <div class="nav-section">Prévisions</div>
-    <button class="nav-item" onclick="setPage('previsions',this)">
-      <span class="nav-icon">~</span> Modèle ML
-    </button>
-  </nav>
+function buildAgentSidebar(){
+  document.getElementById('sidebarNav').innerHTML=`
+    <div class="nav-section">Mon espace</div>
+    <button class="nav-item active" onclick="navTo('agent-dashboard',this)"><span class="nav-icon">⊞</span>Mon tableau de bord</button>
+    <button class="nav-item" onclick="navTo('agent-stock',this)"><span class="nav-icon">≡</span>Mes stocks<span class="nav-badge" id="agentBadgeStock">—</span></button>
+    <button class="nav-item" onclick="navTo('agent-po',this)"><span class="nav-icon">↑</span>Mes commandes PO</button>
 
-  <!-- MAIN -->
-  <main>
-    <div class="page-header">
-      <div class="page-title" id="pageTitle">Vue générale</div>
-      <div class="page-sub" id="pageSub">Indicateurs clés — cliquez sur un KPI pour le détail</div>
+    <div class="nav-section">Outils</div>
+    <button class="nav-item" onclick="toggleAI()"><span class="nav-icon">✦</span>Assistant IA</button>
+  `;
+}
+
+function navTo(page,el){
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');
+  if(currentRole==='agent'){
+    const ag=DATA.agents.find(a=>a.id===currentUser);
+    renderPage(page,ag);
+  } else {
+    renderPage(page);
+  }
+}
+
+// ── RENDER ROUTER ──
+function renderPage(page,ctx){
+  currentPage=page;
+  const el=document.getElementById('mainContent');
+  if(page==='dashboard') el.innerHTML=renderManagerDashboard();
+  else if(page==='agents') el.innerHTML=renderAgents();
+  else if(page==='stock') el.innerHTML=renderStock();
+  else if(page==='categories') el.innerHTML=renderCategories();
+  else if(page==='fournisseurs') el.innerHTML=renderFournisseurs();
+  else if(page==='previsions') el.innerHTML=renderPrevisions();
+  else if(page==='agent-dashboard') el.innerHTML=renderAgentDashboard(ctx);
+  else if(page==='agent-stock') el.innerHTML=renderAgentStock(ctx);
+  else if(page==='agent-po') el.innerHTML=renderAgentPO(ctx);
+}
+
+// ══════════════════════════════════════
+// MANAGER VIEWS
+// ══════════════════════════════════════
+function renderManagerDashboard(){
+  const s=DATA.stats;
+  return`
+  <div class="page-hd">
+    <div class="page-hd-left">
+      <h2>Tableau de bord — Vue globale</h2>
+      <p>Situation au ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</p>
     </div>
-
-    <!-- ALERTS -->
-    <div class="alert-row">
-      <div class="alert alert-danger">
-        <div class="alert-dot"></div>
-        <div><strong>1 132 produits en rupture de stock</strong> — Réapprovisionnement requis</div>
-      </div>
-      <div class="alert alert-warning">
-        <div class="alert-dot"></div>
-        <div><strong>295 ruptures prévues prochainement</strong> — Stock critique</div>
-      </div>
-      <div class="alert alert-info">
-        <div class="alert-dot"></div>
-        <div><strong>156 produits</strong> à commander dans les 7 prochains jours</div>
-      </div>
+    <div class="page-hd-right">
+      <button class="btn btn-ghost btn-sm" onclick="renderPage('dashboard')">Actualiser</button>
     </div>
+  </div>
 
-    <!-- KPI GRID -->
-    <div class="kpi-grid">
-      <div class="kpi blue" onclick="openDetail('produits')">
-        <div class="kpi-label">Références produits</div>
-        <div class="kpi-value">1 880</div>
-        <div class="kpi-sub neutral">143 fournisseurs actifs</div>
-        <div class="kpi-hint">Cliquer pour le détail par catégorie</div>
-      </div>
-      <div class="kpi red" onclick="openDetail('ruptures')">
-        <div class="kpi-label">En rupture de stock</div>
-        <div class="kpi-value">1 132</div>
-        <div class="kpi-sub down">60,2 % du catalogue</div>
-        <div class="kpi-hint">Cliquer pour la liste</div>
-      </div>
-      <div class="kpi amber" onclick="openDetail('risque')">
-        <div class="kpi-label">Rupture imminente</div>
-        <div class="kpi-value">295</div>
-        <div class="kpi-sub down">15,7 % du catalogue</div>
-        <div class="kpi-hint">Cliquer pour le détail</div>
-      </div>
-      <div class="kpi green" onclick="openDetail('ok')">
-        <div class="kpi-label">Stock OK</div>
-        <div class="kpi-value">297</div>
-        <div class="kpi-sub up">15,8 % — Commande conseillée : 156</div>
-        <div class="kpi-hint">Cliquer pour le détail</div>
-      </div>
+  <!-- Alerts -->
+  <div style="margin-bottom:1.25rem;">
+    <div class="alert-strip alert-strip-danger">
+      <span class="alert-strip-icon">▲</span>
+      <div><strong>Ruptures critiques :</strong> ${s.oos.toLocaleString('fr')} références en rupture de stock — réapprovisionnement urgent requis</div>
     </div>
-
-    <!-- DETAIL PANEL (affiché au clic KPI) -->
-    <div class="detail-panel" id="detailPanel">
-      <div class="detail-header">
-        <div class="detail-title" id="detailTitle">Détail</div>
-        <button class="close-btn" onclick="closeDetail()">Fermer</button>
-      </div>
-      <div id="detailContent"></div>
+    <div class="alert-strip alert-strip-warning">
+      <span class="alert-strip-icon">◆</span>
+      <div><strong>Ruptures imminentes :</strong> ${s.soon} références atteignent le stock de sécurité dans les 7 à 30 jours</div>
     </div>
+    <div class="alert-strip alert-strip-info">
+      <span class="alert-strip-icon">●</span>
+      <div><strong>Recommandation ML :</strong> ${s.orderSoon} références à commander cette semaine pour éviter des ruptures</div>
+    </div>
+  </div>
 
-    <!-- CHARTS -->
-    <div class="charts-row">
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi-card c-blue" onclick="openDrawer('refs')">
+      <div class="kpi-icon">≡</div>
+      <div class="kpi-label">Références totales</div>
+      <div class="kpi-value">${s.total.toLocaleString('fr')}</div>
+      <div class="kpi-meta neutral">${s.suppliers} fournisseurs actifs</div>
+    </div>
+    <div class="kpi-card c-red" onclick="openDrawer('oos')">
+      <div class="kpi-icon">!</div>
+      <div class="kpi-label">En rupture de stock</div>
+      <div class="kpi-value">${s.oos.toLocaleString('fr')}</div>
+      <div class="kpi-meta down">${((s.oos/s.total)*100).toFixed(1)} % du catalogue</div>
+    </div>
+    <div class="kpi-card c-amber" onclick="openDrawer('soon')">
+      <div class="kpi-icon">◆</div>
+      <div class="kpi-label">Rupture imminente</div>
+      <div class="kpi-value">${s.soon}</div>
+      <div class="kpi-meta down">Horizon 7–30 jours</div>
+    </div>
+    <div class="kpi-card c-green" onclick="openDrawer('ok')">
+      <div class="kpi-icon">✓</div>
+      <div class="kpi-label">Stock satisfaisant</div>
+      <div class="kpi-value">${s.ok}</div>
+      <div class="kpi-meta up">${((s.ok/s.total)*100).toFixed(1)} % du catalogue</div>
+    </div>
+  </div>
 
-      <!-- Répartition statuts (donut) -->
-      <div class="chart-panel">
-        <div class="panel-title">Répartition statuts stock</div>
-        <div class="panel-sub">Sur 1 880 références</div>
+  <!-- Detail drawer -->
+  <div class="detail-drawer" id="mainDrawer">
+    <div class="drawer-header">
+      <div class="drawer-title" id="drawerTitle">—</div>
+      <button class="drawer-close" onclick="closeDrawer()">Fermer ✕</button>
+    </div>
+    <div id="drawerContent"></div>
+  </div>
+
+  <!-- Two col -->
+  <div class="two-col">
+    <!-- Donut -->
+    <div class="card">
+      <div class="card-body">
+        <div class="card-title">Répartition des statuts</div>
+        <div class="card-sub" style="margin-bottom:1rem;">Sur ${s.total.toLocaleString('fr')} références</div>
         <div class="donut-wrap">
-          <svg viewBox="0 0 100 100" width="100" height="100">
-            <!-- Out of Stock 60.2% -->
-            <circle cx="50" cy="50" r="35" fill="none" stroke="#1e3050" stroke-width="18"/>
-            <circle cx="50" cy="50" r="35" fill="none" stroke="#ef4444" stroke-width="18"
+          <svg viewBox="0 0 100 100" width="110" height="110">
+            <circle cx="50" cy="50" r="35" fill="none" stroke="#f1f5f9" stroke-width="20"/>
+            <circle cx="50" cy="50" r="35" fill="none" stroke="#dc2626" stroke-width="20"
               stroke-dasharray="132.2 87.8" stroke-dashoffset="0" transform="rotate(-90 50 50)"/>
-            <!-- Predicted Stockout 15.7% -->
-            <circle cx="50" cy="50" r="35" fill="none" stroke="#f59e0b" stroke-width="18"
+            <circle cx="50" cy="50" r="35" fill="none" stroke="#d97706" stroke-width="20"
               stroke-dasharray="34.5 185.5" stroke-dashoffset="-132.2" transform="rotate(-90 50 50)"/>
-            <!-- Order Soon 8.3% -->
-            <circle cx="50" cy="50" r="35" fill="none" stroke="#2f80ed" stroke-width="18"
+            <circle cx="50" cy="50" r="35" fill="none" stroke="#2563eb" stroke-width="20"
               stroke-dasharray="18.2 201.8" stroke-dashoffset="-166.7" transform="rotate(-90 50 50)"/>
-            <!-- Stock OK 15.8% -->
-            <circle cx="50" cy="50" r="35" fill="none" stroke="#22c55e" stroke-width="18"
+            <circle cx="50" cy="50" r="35" fill="none" stroke="#16a34a" stroke-width="20"
               stroke-dasharray="34.7 185.3" stroke-dashoffset="-184.9" transform="rotate(-90 50 50)"/>
+            <text x="50" y="53" text-anchor="middle" fill="#1e293b" font-size="8" font-weight="800">${s.total.toLocaleString('fr')}</text>
           </svg>
-          <div class="donut-legend">
-            <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Rupture de stock<span class="legend-val">1 132</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>Rupture imminente<span class="legend-val">295</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>À commander bientôt<span class="legend-val">156</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Stock OK<span class="legend-val">297</span></div>
+          <div class="legend-list">
+            <div class="legend-row"><div class="legend-dot" style="background:#dc2626"></div>Rupture de stock<span class="legend-num">${s.oos.toLocaleString('fr')}</span></div>
+            <div class="legend-row"><div class="legend-dot" style="background:#d97706"></div>Rupture imminente<span class="legend-num">${s.soon}</span></div>
+            <div class="legend-row"><div class="legend-dot" style="background:#2563eb"></div>À commander<span class="legend-num">${s.orderSoon}</span></div>
+            <div class="legend-row"><div class="legend-dot" style="background:#16a34a"></div>Stock OK<span class="legend-num">${s.ok}</span></div>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- Top fournisseurs (bar) -->
-      <div class="chart-panel wide">
-        <div class="panel-title">Top fournisseurs par nombre de références</div>
-        <div class="panel-sub">6 premiers sur 143 fournisseurs actifs</div>
+    <!-- Performance agents -->
+    <div class="card">
+      <div class="card-body">
+        <div class="card-title">Performance des agents</div>
+        <div class="card-sub" style="margin-bottom:1rem;">Taux de disponibilité stock moyen</div>
         <div class="hbar-list">
-          <div class="hbar-item">
-            <div class="hbar-header"><span>Borodji Distribution</span><span>107</span></div>
-            <div class="hbar-track"><div class="hbar-fill" style="width:100%;background:var(--blue)"></div></div>
-          </div>
-          <div class="hbar-item">
-            <div class="hbar-header"><span>ARIMEX</span><span>94</span></div>
-            <div class="hbar-track"><div class="hbar-fill" style="width:87.9%;background:var(--cyan)"></div></div>
-          </div>
-          <div class="hbar-item">
-            <div class="hbar-header"><span>SENICO</span><span>89</span></div>
-            <div class="hbar-track"><div class="hbar-fill" style="width:83.2%;background:var(--cyan)"></div></div>
-          </div>
-          <div class="hbar-item">
-            <div class="hbar-header"><span>Maad</span><span>66</span></div>
-            <div class="hbar-track"><div class="hbar-fill" style="width:61.7%;background:var(--purple)"></div></div>
-          </div>
-          <div class="hbar-item">
-            <div class="hbar-header"><span>SIAGRO</span><span>66</span></div>
-            <div class="hbar-track"><div class="hbar-fill" style="width:61.7%;background:var(--purple)"></div></div>
-          </div>
-          <div class="hbar-item">
-            <div class="hbar-header"><span>LSB</span><span>65</span></div>
-            <div class="hbar-track"><div class="hbar-fill" style="width:60.7%;background:var(--purple)"></div></div>
-          </div>
+          ${DATA.agents.map(ag=>`
+          <div class="hbar-row">
+            <div class="hbar-top"><strong>${ag.name}</strong><span>${ag.zone}</span><span style="margin-left:auto;font-weight:700;color:${ag.rate>=25?'var(--green)':ag.rate>=15?'var(--amber)':'var(--red)'}">${ag.rate}%</span></div>
+            <div class="prog-track"><div class="prog-fill" style="width:${ag.rate}%;background:${ag.rate>=25?'var(--green)':ag.rate>=15?'var(--amber)':'var(--red)'}"></div></div>
+          </div>`).join('')}
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Catégories ABC -->
-    <div class="chart-panel" style="margin-bottom:1.25rem;">
-      <div class="panel-title">Répartition par classe ABC / XYZ</div>
-      <div class="panel-sub">Analyse de la variabilité et de la valeur des références</div>
-      <div class="bar-chart" style="height:110px;margin-top:.5rem;">
-        <div class="bar-wrap">
-          <div class="bar" style="height:100%;background:var(--red);"></div>
-          <div class="bar-lbl">CX<br/>1460</div>
-        </div>
-        <div class="bar-wrap">
-          <div class="bar" style="height:6.4%;background:var(--blue);"></div>
-          <div class="bar-lbl">BX<br/>93</div>
-        </div>
-        <div class="bar-wrap">
-          <div class="bar" style="height:6.3%;background:var(--blue);"></div>
-          <div class="bar-lbl">CZ<br/>92</div>
-        </div>
-        <div class="bar-wrap">
-          <div class="bar" style="height:4.5%;background:var(--cyan);"></div>
-          <div class="bar-lbl">CY<br/>66</div>
-        </div>
-        <div class="bar-wrap">
-          <div class="bar" style="height:3.3%;background:var(--cyan);"></div>
-          <div class="bar-lbl">BY<br/>48</div>
-        </div>
-        <div class="bar-wrap">
-          <div class="bar" style="height:2.7%;background:var(--purple);"></div>
-          <div class="bar-lbl">BZ<br/>40</div>
-        </div>
-        <div class="bar-wrap">
-          <div class="bar" style="height:1.7%;background:var(--green);"></div>
-          <div class="bar-lbl">AZ<br/>23</div>
-        </div>
-        <div class="bar-wrap">
-          <div class="bar" style="height:1.7%;background:var(--green);"></div>
-          <div class="bar-lbl">AX<br/>25</div>
-        </div>
-        <div class="bar-wrap">
-          <div class="bar" style="height:0.9%;background:var(--green);"></div>
-          <div class="bar-lbl">AY<br/>13</div>
-        </div>
+  <!-- Agents summary -->
+  <div class="card" style="margin-bottom:1.25rem;">
+    <div class="card-body">
+      <div class="card-title" style="margin-bottom:.85rem;">Synthèse par agent</div>
+      <div class="tbl-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>Agent</th><th>Zone</th><th>Fournisseurs</th><th>Références</th>
+            <th>Stock OK</th><th>À commander</th><th>Rupture imminente</th><th>En rupture</th><th>Disponibilité</th>
+          </tr></thead>
+          <tbody>
+            ${DATA.agents.map(ag=>`<tr>
+              <td><strong style="color:${ag.color}">${ag.name}</strong></td>
+              <td>${ag.zone}</td>
+              <td>${ag.suppliers.length}</td>
+              <td>${ag.refs}</td>
+              <td><span class="badge badge-green">${ag.ok}</span></td>
+              <td><span class="badge badge-blue">${ag.order}</span></td>
+              <td><span class="badge badge-amber">${ag.soon}</span></td>
+              <td><span class="badge badge-red">${ag.oos}</span></td>
+              <td><span class="badge ${ag.rate>=25?'badge-green':ag.rate>=15?'badge-amber':'badge-red'}">${ag.rate}%</span></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
       </div>
     </div>
+  </div>
 
-    <!-- Table statuts par fournisseur -->
-    <div class="chart-panel">
-      <div class="panel-title">Situation par fournisseur — Top 8</div>
-      <div class="panel-sub">Nombre de références par statut stock</div>
-      <table class="status-table">
-        <thead>
-          <tr>
-            <th>Fournisseur</th>
-            <th>Références</th>
-            <th>Stock OK</th>
-            <th>À commander</th>
-            <th>Rupture imminente</th>
-            <th>En rupture</th>
-          </tr>
-        </thead>
+  <!-- Top fournisseurs -->
+  <div class="card">
+    <div class="card-body">
+      <div class="card-title" style="margin-bottom:.85rem;">Top 12 fournisseurs par références</div>
+      <div class="tbl-wrap">
+        <table class="data-table">
+          <thead><tr><th>Fournisseur</th><th>Références</th><th>Stock OK</th><th>Imminente</th><th>À commander</th><th>Rupture</th><th>Dispo.</th></tr></thead>
+          <tbody>
+            ${DATA.suppliers.map(s=>`<tr>
+              <td><strong>${s.name}</strong></td>
+              <td>${s.refs}</td>
+              <td><span class="badge badge-green">${s.ok}</span></td>
+              <td><span class="badge badge-amber">${s.soon}</span></td>
+              <td><span class="badge badge-blue">${s.order}</span></td>
+              <td><span class="badge badge-red">${s.oos}</span></td>
+              <td><span class="badge ${s.rate>=25?'badge-green':s.rate>=10?'badge-amber':'badge-red'}">${s.rate}%</span></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  `;
+}
+
+function renderAgents(){
+  return`
+  <div class="page-hd">
+    <div class="page-hd-left"><h2>Agents &amp; Comptes</h2><p>Suivi de la performance par agent commercial</p></div>
+  </div>
+  <div class="agent-grid">
+    ${DATA.agents.map(ag=>`
+    <div class="agent-card">
+      <div class="agent-header">
+        <div class="agent-avatar" style="background:${ag.color}">${ag.name.split(' ').map(w=>w[0]).join('')}</div>
+        <div>
+          <div class="agent-name">${ag.name}</div>
+          <div class="agent-zone">${ag.zone}</div>
+        </div>
+        <div style="margin-left:auto;">
+          <span class="badge ${ag.rate>=25?'badge-green':ag.rate>=15?'badge-amber':'badge-red'}" style="font-size:.75rem;">${ag.rate}% dispo</span>
+        </div>
+      </div>
+
+      <div class="agent-stats">
+        <div class="agent-stat">
+          <div class="agent-stat-val" style="color:var(--text)">${ag.refs}</div>
+          <div class="agent-stat-lbl">Références</div>
+        </div>
+        <div class="agent-stat">
+          <div class="agent-stat-val" style="color:var(--red)">${ag.oos}</div>
+          <div class="agent-stat-lbl">En rupture</div>
+        </div>
+        <div class="agent-stat">
+          <div class="agent-stat-val" style="color:var(--green)">${ag.ok}</div>
+          <div class="agent-stat-lbl">Stock OK</div>
+        </div>
+      </div>
+
+      <div class="agent-perf" style="margin-top:1rem;">
+        <div class="perf-label"><span>Taux de disponibilité</span><span style="font-weight:700">${ag.rate}%</span></div>
+        <div class="prog-track"><div class="prog-fill prog-blue" style="width:${ag.rate}%"></div></div>
+      </div>
+      <div class="agent-perf">
+        <div class="perf-label"><span>Objectif stock</span><span>${ag.objectives.stock}%</span></div>
+        <div class="prog-track"><div class="prog-fill prog-amber" style="width:${ag.objectives.stock}%"></div></div>
+      </div>
+      <div class="agent-perf">
+        <div class="perf-label"><span>Score qualité</span><span>${ag.objectives.quality}%</span></div>
+        <div class="prog-track"><div class="prog-fill prog-green" style="width:${ag.objectives.quality}%"></div></div>
+      </div>
+
+      <div style="margin-top:.85rem;padding-top:.75rem;border-top:1px solid var(--border);font-size:.72rem;color:var(--text-sec);">
+        Fournisseurs : ${ag.suppliers.join(', ')}
+      </div>
+      <div style="margin-top:.75rem;display:flex;gap:.4rem;">
+        <span class="badge badge-blue">PO mois : ${ag.po_month}</span>
+        <span class="badge ${ag.po_pending>3?'badge-amber':'badge-gray'}">En attente : ${ag.po_pending}</span>
+      </div>
+    </div>
+    `).join('')}
+  </div>`;
+}
+
+function renderStock(){
+  const s=DATA.stats;
+  return`
+  <div class="page-hd">
+    <div class="page-hd-left"><h2>Niveaux de stock</h2><p>${s.oos} références en rupture sur ${s.total} — Catégories A+, A, B, C analysées</p></div>
+  </div>
+  <div class="alert-strip alert-strip-danger" style="margin-bottom:1.25rem;">
+    <span class="alert-strip-icon">▲</span>
+    <div><strong>${s.oos.toLocaleString('fr')} ruptures actives</strong> — La classe CX représente 77,7% du catalogue (1 460 refs) avec un taux de disponibilité critique</div>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      <div class="card-title" style="margin-bottom:.85rem;">Situation par classe ABC/XYZ</div>
+      <div class="tbl-wrap">
+        <table class="data-table">
+          <thead><tr><th>Classe</th><th>Références</th><th>Ventes moy/j</th><th>Couverture moy</th><th>Priorité</th></tr></thead>
+          <tbody>
+            ${DATA.categories.map(c=>{
+              const prio=c.name.startsWith('A+')||c.name.startsWith('AX')?'Critique':c.name.startsWith('A')||c.name.startsWith('BX')?'Haute':'Standard';
+              const cls=prio==='Critique'?'badge-red':prio==='Haute'?'badge-amber':'badge-gray';
+              return`<tr>
+                <td><strong>${c.name}</strong></td>
+                <td>${c.refs}</td>
+                <td>${c.sales.toFixed(2)} u/j</td>
+                <td>${c.cov>1000?'>1 000 j':(c.cov.toFixed(1)+' j')}</td>
+                <td><span class="badge ${cls}">${prio}</span></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderCategories(){
+  return`
+  <div class="page-hd">
+    <div class="page-hd-left"><h2>Analyse ABC / XYZ</h2><p>Segmentation des références par valeur et variabilité de la demande</p></div>
+  </div>
+  <div class="three-col">
+    <div class="card"><div class="card-body">
+      <div class="card-title">Classe A+ (premium)</div>
+      <div class="card-sub">Fort volume, demande régulière</div>
+      <div style="margin-top:.75rem;">
+        <div class="kpi-value" style="font-size:1.5rem;color:var(--red)">20</div>
+        <div style="font-size:.75rem;color:var(--text-sec);margin-top:.3rem;">Ventes moy : 270 u/j — Couverture : 4 j</div>
+        <div class="badge badge-red" style="margin-top:.5rem;">Priorité maximale</div>
+      </div>
+    </div></div>
+    <div class="card"><div class="card-body">
+      <div class="card-title">Classe A (haute valeur)</div>
+      <div class="card-sub">Volume significatif</div>
+      <div style="margin-top:.75rem;">
+        <div class="kpi-value" style="font-size:1.5rem;color:var(--amber)">61</div>
+        <div style="font-size:.75rem;color:var(--text-sec);margin-top:.3rem;">Ventes moy : 80 u/j — Couverture : 7 j</div>
+        <div class="badge badge-amber" style="margin-top:.5rem;">Priorité haute</div>
+      </div>
+    </div></div>
+    <div class="card"><div class="card-body">
+      <div class="card-title">Classe B (valeur moyenne)</div>
+      <div class="card-sub">Rotation intermédiaire</div>
+      <div style="margin-top:.75rem;">
+        <div class="kpi-value" style="font-size:1.5rem;color:var(--blue)">181</div>
+        <div style="font-size:.75rem;color:var(--text-sec);margin-top:.3rem;">Ventes moy : 26 u/j — Couverture : 88 j</div>
+        <div class="badge badge-blue" style="margin-top:.5rem;">Priorité standard</div>
+      </div>
+    </div></div>
+  </div>
+  <div class="card"><div class="card-body">
+    <div class="card-title" style="margin-bottom:.85rem;">Classe C — Détail par sous-catégorie</div>
+    <div class="hbar-list">
+      ${[{n:'CX',v:1460,max:1460},{n:'CY',v:66,max:1460},{n:'CZ',v:92,max:1460}].map(c=>`
+      <div class="hbar-row">
+        <div class="hbar-top"><strong>${c.n}</strong><span>${c.v} références</span></div>
+        <div class="prog-track"><div class="prog-fill prog-blue" style="width:${(c.v/c.max*100).toFixed(1)}%"></div></div>
+      </div>`).join('')}
+    </div>
+    <div style="margin-top:.75rem;font-size:.75rem;color:var(--text-sec);">La classe CX (1 460 refs, 77,7% du catalogue) représente les produits de faible valeur à forte variabilité. Taux de rupture : 60,2%.</div>
+  </div></div>`;
+}
+
+function renderFournisseurs(){
+  return`
+  <div class="page-hd">
+    <div class="page-hd-left"><h2>Fournisseurs</h2><p>143 fournisseurs actifs — Top 12 par nombre de références</p></div>
+  </div>
+  <div class="card"><div class="card-body">
+    <div class="card-title" style="margin-bottom:.85rem;">Performance fournisseurs</div>
+    <div class="tbl-wrap">
+      <table class="data-table">
+        <thead><tr>
+          <th>Fournisseur</th><th>Références</th><th>Stock OK</th>
+          <th>Rupture imminente</th><th>À commander</th><th>En rupture</th>
+          <th>Taux dispo.</th><th>Statut</th>
+        </tr></thead>
         <tbody>
-          <tr><td>Borodji Distribution</td><td>107</td><td><span class="badge badge-green">12</span></td><td><span class="badge badge-blue">9</span></td><td><span class="badge badge-amber">22</span></td><td><span class="badge badge-red">64</span></td></tr>
-          <tr><td>ARIMEX</td><td>94</td><td><span class="badge badge-green">10</span></td><td><span class="badge badge-blue">8</span></td><td><span class="badge badge-amber">18</span></td><td><span class="badge badge-red">58</span></td></tr>
-          <tr><td>SENICO</td><td>89</td><td><span class="badge badge-green">11</span></td><td><span class="badge badge-blue">7</span></td><td><span class="badge badge-amber">15</span></td><td><span class="badge badge-red">56</span></td></tr>
-          <tr><td>Maad</td><td>66</td><td><span class="badge badge-green">9</span></td><td><span class="badge badge-blue">6</span></td><td><span class="badge badge-amber">12</span></td><td><span class="badge badge-red">39</span></td></tr>
-          <tr><td>SIAGRO</td><td>66</td><td><span class="badge badge-green">8</span></td><td><span class="badge badge-blue">5</span></td><td><span class="badge badge-amber">11</span></td><td><span class="badge badge-red">42</span></td></tr>
-          <tr><td>LSB</td><td>65</td><td><span class="badge badge-green">7</span></td><td><span class="badge badge-blue">6</span></td><td><span class="badge badge-amber">10</span></td><td><span class="badge badge-red">42</span></td></tr>
-          <tr><td>SOCAFRI</td><td>52</td><td><span class="badge badge-green">5</span></td><td><span class="badge badge-blue">4</span></td><td><span class="badge badge-amber">9</span></td><td><span class="badge badge-red">34</span></td></tr>
-          <tr><td>Autres (136)</td><td>1 241</td><td><span class="badge badge-green">235</span></td><td><span class="badge badge-blue">111</span></td><td><span class="badge badge-amber">198</span></td><td><span class="badge badge-red">697</span></td></tr>
+          ${DATA.suppliers.map(s=>{
+            const status=s.rate>=30?'Bon':s.rate>=10?'À surveiller':'Critique';
+            const cls=s.rate>=30?'badge-green':s.rate>=10?'badge-amber':'badge-red';
+            return`<tr>
+              <td><strong>${s.name}</strong></td>
+              <td>${s.refs}</td>
+              <td><span class="badge badge-green">${s.ok}</span></td>
+              <td><span class="badge badge-amber">${s.soon}</span></td>
+              <td><span class="badge badge-blue">${s.order}</span></td>
+              <td><span class="badge badge-red">${s.oos}</span></td>
+              <td>
+                <div style="display:flex;align-items:center;gap:.5rem;">
+                  <div class="prog-track" style="width:60px;"><div class="prog-fill" style="width:${s.rate}%;background:${s.rate>=30?'var(--green)':s.rate>=10?'var(--amber)':'var(--red)'}"></div></div>
+                  <span style="font-size:.75rem;font-weight:700">${s.rate}%</span>
+                </div>
+              </td>
+              <td><span class="badge ${cls}">${status}</span></td>
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>
     </div>
+  </div></div>`;
+}
 
-  </main>
-</div>
+function renderPrevisions(){
+  return`
+  <div class="page-hd">
+    <div class="page-hd-left"><h2>Prévisions ML</h2><p>Modèle Random Forest — prévision de demande et détection des ruptures</p></div>
+  </div>
+  <div class="two-col" style="margin-bottom:1.25rem;">
+    <div class="card"><div class="card-body">
+      <div class="card-title">Ruptures prédites (modèle ML)</div>
+      <div class="card-sub" style="margin-bottom:.75rem;">Références détectées comme étant en risque par le modèle</div>
+      <div class="kpi-value" style="font-size:2.5rem;color:var(--red)">1 427</div>
+      <div style="font-size:.75rem;color:var(--text-sec);margin-top:.3rem;">Sur 1 880 références — précision modèle : ~94%</div>
+      <div class="badge badge-red" style="margin-top:.75rem;">Random Forest — sklearn</div>
+    </div></div>
+    <div class="card"><div class="card-body">
+      <div class="card-title">Recommandations de commande</div>
+      <div class="card-sub" style="margin-bottom:.75rem;">Références à approvisionner cette semaine</div>
+      <div class="kpi-value" style="font-size:2.5rem;color:var(--blue)">156</div>
+      <div style="font-size:.75rem;color:var(--text-sec);margin-top:.3rem;">Quantités calculées selon stock optimal et délais fournisseur</div>
+      <div class="badge badge-blue" style="margin-top:.75rem;">Order Soon</div>
+    </div></div>
+  </div>
+  <div class="card"><div class="card-body">
+    <div class="card-title" style="margin-bottom:.5rem;">Variables du modèle</div>
+    <div style="font-size:.78rem;color:var(--text-sec);margin-bottom:.85rem;">Le modèle utilise les variables suivantes pour prédire les ruptures</div>
+    <div style="display:flex;flex-wrap:wrap;gap:.4rem;">
+      ${['Ventes moyennes journalières','Stock actuel','Délai fournisseur','Point de réapprovisionnement optimal','Taux OOS (30 jours)','Buffer de sécurité','Catégorie ABC/XYZ','Jours de couverture','Saisonnalité'].map(v=>`<span class="badge badge-gray" style="font-size:.73rem;">${v}</span>`).join('')}
+    </div>
+  </div></div>`;
+}
 
-<script>
-  // ── Date ──
-  document.getElementById('dateLbl').textContent = new Date().toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+// ══════════════════════════════════════
+// AGENT VIEWS
+// ══════════════════════════════════════
+function renderAgentDashboard(ag){
+  document.getElementById('agentBadgeStock') && (document.getElementById('agentBadgeStock').textContent=ag.oos);
+  return`
+  <div class="page-hd">
+    <div class="page-hd-left">
+      <h2>Mon tableau de bord</h2>
+      <p>${ag.name} — ${ag.zone} — ${new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'})}</p>
+    </div>
+  </div>
 
-  // ── Navigation ──
-  const pages = {
-    overview:    {title:'Vue générale',       sub:'Indicateurs clés — cliquez sur un KPI pour le détail'},
-    stock:       {title:'Niveaux de stock',   sub:'Suivi des quantités par référence et fournisseur'},
-    ruptures:    {title:'Ruptures de stock',  sub:'1 132 références en rupture — action requise'},
-    categories:  {title:'Catégories ABC/XYZ', sub:'Segmentation des références par valeur et variabilité'},
-    commandes:   {title:'Commandes fournisseurs (PO)', sub:'Création et suivi des Purchase Orders'},
-    fournisseurs:{title:'Fournisseurs',        sub:'143 fournisseurs actifs'},
-    qac:         {title:'Contrôle qualité QAC',sub:'Score qualité par fournisseur'},
-    previsions:  {title:'Prévisions ML',       sub:'Modèle Random Forest — prévisions de demande'},
-  };
+  <div style="margin-bottom:1.25rem;">
+    ${ag.oos>100?`<div class="alert-strip alert-strip-danger"><span class="alert-strip-icon">▲</span><div><strong>${ag.oos} références en rupture</strong> sur ${ag.refs} dans votre portefeuille — action requise</div></div>`:''}
+    ${ag.soon>10?`<div class="alert-strip alert-strip-warning"><span class="alert-strip-icon">◆</span><div><strong>${ag.soon} ruptures imminentes</strong> — préparer les bons de commande</div></div>`:''}
+    ${ag.po_pending>3?`<div class="alert-strip alert-strip-info"><span class="alert-strip-icon">●</span><div><strong>${ag.po_pending} commandes PO en attente</strong> de validation</div></div>`:''}
+  </div>
 
-  function setPage(key, el){
-    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-    el.classList.add('active');
-    document.getElementById('pageTitle').textContent = pages[key].title;
-    document.getElementById('pageSub').textContent   = pages[key].sub;
-    closeDetail();
-  }
+  <div class="kpi-grid">
+    <div class="kpi-card c-blue">
+      <div class="kpi-icon">≡</div>
+      <div class="kpi-label">Mes références</div>
+      <div class="kpi-value">${ag.refs}</div>
+      <div class="kpi-meta neutral">${ag.suppliers.length} fournisseurs</div>
+    </div>
+    <div class="kpi-card c-red">
+      <div class="kpi-icon">!</div>
+      <div class="kpi-label">En rupture</div>
+      <div class="kpi-value">${ag.oos}</div>
+      <div class="kpi-meta down">${((ag.oos/ag.refs)*100).toFixed(1)} % du portefeuille</div>
+    </div>
+    <div class="kpi-card c-amber">
+      <div class="kpi-icon">◆</div>
+      <div class="kpi-label">Rupture imminente</div>
+      <div class="kpi-value">${ag.soon}</div>
+      <div class="kpi-meta down">À traiter cette semaine</div>
+    </div>
+    <div class="kpi-card c-green">
+      <div class="kpi-icon">✓</div>
+      <div class="kpi-label">Stock OK</div>
+      <div class="kpi-value">${ag.ok}</div>
+      <div class="kpi-meta up">${ag.rate}% de disponibilité</div>
+    </div>
+  </div>
 
-  // ── Detail panels ──
-  const details = {
-    produits:{
-      title:'Détail — Références produits',
-      html:`<div class="detail-grid">
-        <div class="detail-stat"><div class="detail-stat-label">Total références</div><div class="detail-stat-value" style="color:var(--cyan)">1 880</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Fournisseurs actifs</div><div class="detail-stat-value" style="color:var(--blue)">143</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Catégorie CX (principale)</div><div class="detail-stat-value" style="color:var(--amber)">1 460</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Catégories A+ (premium)</div><div class="detail-stat-value" style="color:var(--green)">20</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Catégories B</div><div class="detail-stat-value" style="color:var(--purple)">181</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Catégories A</div><div class="detail-stat-value" style="color:var(--green)">41</div></div>
-      </div>`
-    },
-    ruptures:{
-      title:'Détail — Ruptures de stock (Out of Stock)',
-      html:`<div class="detail-grid">
-        <div class="detail-stat"><div class="detail-stat-label">En rupture totale</div><div class="detail-stat-value" style="color:var(--red)">1 132</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">% du catalogue</div><div class="detail-stat-value" style="color:var(--red)">60,2 %</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Ruptures prédites (prochainement)</div><div class="detail-stat-value" style="color:var(--amber)">295</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Alertes critiques (dashboard_data)</div><div class="detail-stat-value" style="color:var(--red)">1 164</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Ruptures ML prédites</div><div class="detail-stat-value" style="color:var(--amber)">1 427</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Action requise</div><div class="detail-stat-value" style="color:var(--red);font-size:.9rem">Réappro. urgent</div></div>
-      </div>`
-    },
-    risque:{
-      title:'Détail — Ruptures imminentes (Predicted Stockout Soon)',
-      html:`<div class="detail-grid">
-        <div class="detail-stat"><div class="detail-stat-label">Références à risque</div><div class="detail-stat-value" style="color:var(--amber)">295</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">% du catalogue</div><div class="detail-stat-value" style="color:var(--amber)">15,7 %</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">À commander (Order Soon)</div><div class="detail-stat-value" style="color:var(--blue)">156</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Horizon prévision</div><div class="detail-stat-value" style="color:var(--muted);font-size:.9rem">7 à 30 jours</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Modèle utilisé</div><div class="detail-stat-value" style="color:var(--muted);font-size:.9rem">Random Forest</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Action recommandée</div><div class="detail-stat-value" style="color:var(--amber);font-size:.9rem">Lancer PO</div></div>
-      </div>`
-    },
-    ok:{
-      title:'Détail — Stock OK',
-      html:`<div class="detail-grid">
-        <div class="detail-stat"><div class="detail-stat-label">Références avec stock OK</div><div class="detail-stat-value" style="color:var(--green)">297</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">% du catalogue</div><div class="detail-stat-value" style="color:var(--green)">15,8 %</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">À commander bientôt</div><div class="detail-stat-value" style="color:var(--blue)">156</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Stock sécurisé (buffer actif)</div><div class="detail-stat-value" style="color:var(--green)">297</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Taux global de disponibilité</div><div class="detail-stat-value" style="color:var(--green)">15,8 %</div></div>
-        <div class="detail-stat"><div class="detail-stat-label">Objectif cible</div><div class="detail-stat-value" style="color:var(--muted);font-size:.9rem">> 80 %</div></div>
-      </div>`
-    }
-  };
+  <div class="two-col">
+    <div class="card"><div class="card-body">
+      <div class="card-title" style="margin-bottom:.85rem;">Mes objectifs du mois</div>
+      <div class="hbar-list">
+        <div class="hbar-row">
+          <div class="hbar-top"><span>Taux disponibilité cible</span><span style="font-weight:700">${ag.objectives.stock}%</span></div>
+          <div class="prog-track"><div class="prog-fill prog-blue" style="width:${ag.objectives.stock}%"></div></div>
+        </div>
+        <div class="hbar-row">
+          <div class="hbar-top"><span>Score qualité QAC</span><span style="font-weight:700">${ag.objectives.quality}%</span></div>
+          <div class="prog-track"><div class="prog-fill prog-green" style="width:${ag.objectives.quality}%"></div></div>
+        </div>
+        <div class="hbar-row">
+          <div class="hbar-top"><span>Délai traitement PO</span><span style="font-weight:700">${ag.objectives.delay}%</span></div>
+          <div class="prog-track"><div class="prog-fill prog-amber" style="width:${ag.objectives.delay}%"></div></div>
+        </div>
+      </div>
+      <div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--border);">
+        <div style="font-size:.72rem;color:var(--text-sec);margin-bottom:.3rem;">Réalisation actuelle vs objectif</div>
+        <div style="display:flex;gap:.5rem;">
+          <span class="badge ${ag.rate>=ag.objectives.stock?'badge-green':'badge-amber'}">${ag.rate}% / ${ag.objectives.stock}% stock</span>
+        </div>
+      </div>
+    </div></div>
 
-  function openDetail(key){
-    const d = details[key];
-    document.getElementById('detailTitle').textContent = d.title;
-    document.getElementById('detailContent').innerHTML = d.html;
-    const panel = document.getElementById('detailPanel');
-    panel.classList.add('open');
-    panel.scrollIntoView({behavior:'smooth',block:'nearest'});
-    document.querySelectorAll('.kpi').forEach(k=>k.classList.remove('selected'));
-    event.currentTarget.classList.add('selected');
-  }
+    <div class="card"><div class="card-body">
+      <div class="card-title" style="margin-bottom:.85rem;">Mes fournisseurs</div>
+      ${ag.suppliers.map(sup=>{
+        const found=DATA.suppliers.find(s=>s.name===sup)||{refs:0,ok:0,oos:0,rate:0,soon:0};
+        return`<div style="padding:.6rem 0;border-bottom:1px solid var(--border);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:.35rem;">
+            <strong style="font-size:.82rem;">${sup}</strong>
+            <span class="badge ${found.rate>=25?'badge-green':found.rate>=10?'badge-amber':'badge-red'}">${found.rate}%</span>
+          </div>
+          <div style="display:flex;gap:.4rem;">
+            <span class="badge badge-green" style="font-size:.65rem;">OK: ${found.ok}</span>
+            <span class="badge badge-amber" style="font-size:.65rem;">Immin: ${found.soon}</span>
+            <span class="badge badge-red" style="font-size:.65rem;">Rupture: ${found.oos}</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div></div>
+  </div>
 
-  function closeDetail(){
-    document.getElementById('detailPanel').classList.remove('open');
-    document.querySelectorAll('.kpi').forEach(k=>k.classList.remove('selected'));
-  }
+  <div class="card"><div class="card-body">
+    <div class="card-title" style="margin-bottom:.5rem;">Activité commandes (6 derniers mois)</div>
+    <div class="card-sub" style="margin-bottom:.85rem;">${ag.po_month} PO ce mois — ${ag.po_pending} en attente de validation</div>
+    <div style="display:flex;align-items:flex-end;gap:6px;height:80px;">
+      ${Object.values(ag.perf).map((v,i)=>{
+        const mx=Math.max(...Object.values(ag.perf));
+        const lbl=['Jan','Fév','Mar','Avr','Mai','Jun'][i];
+        return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+          <div style="width:100%;height:${(v/mx*100).toFixed(0)}%;background:var(--blue);opacity:.8;border-radius:3px 3px 0 0;min-height:4px;"></div>
+          <div style="font-size:.6rem;color:var(--text-sec);">${lbl}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div></div>`;
+}
+
+function renderAgentStock(ag){
+  return`
+  <div class="page-hd">
+    <div class="page-hd-left"><h2>Mes stocks</h2><p>Portefeuille de ${ag.name} — ${ag.refs} références, ${ag.suppliers.length} fournisseurs</p></div>
+  </div>
+  <div class="alert-strip alert-strip-danger" style="margin-bottom:1.25rem;">
+    <span class="alert-strip-icon">▲</span>
+    <div><strong>${ag.oos} références en rupture</strong> dans votre portefeuille — ${ag.order} à commander immédiatement</div>
+  </div>
+  <div class="card"><div class="card-body">
+    <div class="card-title" style="margin-bottom:.85rem;">Situation par fournisseur</div>
+    <div class="tbl-wrap">
+      <table class="data-table">
+        <thead><tr><th>Fournisseur</th><th>Références</th><th>Stock OK</th><th>Imminente</th><th>À commander</th><th>Rupture</th><th>Disponibilité</th></tr></thead>
+        <tbody>
+          ${ag.suppliers.map(sup=>{
+            const s=DATA.suppliers.find(f=>f.name===sup)||{refs:0,ok:0,soon:0,order:0,oos:0,rate:0};
+            return`<tr>
+              <td><strong>${sup}</strong></td>
+              <td>${s.refs}</td>
+              <td><span class="badge badge-green">${s.ok}</span></td>
+              <td><span class="badge badge-amber">${s.soon}</span></td>
+              <td><span class="badge badge-blue">${s.order}</span></td>
+              <td><span class="badge badge-red">${s.oos}</span></td>
+              <td><span class="badge ${s.rate>=25?'badge-green':s.rate>=10?'badge-amber':'badge-red'}">${s.rate}%</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div></div>`;
+}
+
+function renderAgentPO(ag){
+  const pos=[
+    {num:'PO-20251217-001',sup:ag.suppliers[0],date:'17/12/2025',statut:'Validé',refs:12,montant:'845 000 FCFA'},
+    {num:'PO-20251210-003',sup:ag.suppliers[1]||ag.suppliers[0],date:'10/12/2025',statut:'En attente',refs:8,montant:'632 000 FCFA'},
+    {num:'PO-20251203-002',sup:ag.suppliers[2]||ag.suppliers[0],date:'03/12/2025',statut:'En transit',refs:15,montant:'1 120 000 FCFA'},
+    {num:'PO-20251127-001',sup:ag.suppliers[0],date:'27/11/2025',statut:'Reçu',refs:10,montant:'780 000 FCFA'},
+  ];
+  return`
+  <div class="page-hd">
+    <div class="page-hd-left"><h2>Mes commandes fournisseurs</h2><p>${ag.po_month} PO ce mois — ${ag.po_pending} en attente</p></div>
+    <div class="page-hd-right"><button class="btn btn-primary btn-sm">+ Nouveau PO</button></div>
+  </div>
+  <div class="card"><div class="card-body">
+    <div class="tbl-wrap">
+      <table class="data-table">
+        <thead><tr><th>N° PO</th><th>Fournisseur</th><th>Date</th><th>Références</th><th>Montant</th><th>Statut</th></tr></thead>
+        <tbody>
+          ${pos.map(p=>{
+            const cls=p.statut==='Validé'?'badge-green':p.statut==='En attente'?'badge-amber':p.statut==='En transit'?'badge-blue':'badge-gray';
+            return`<tr>
+              <td><code style="font-size:.72rem;background:var(--bg);padding:.1rem .4rem;border-radius:4px;">${p.num}</code></td>
+              <td>${p.sup}</td><td>${p.date}</td>
+              <td>${p.refs} refs</td>
+              <td style="font-weight:600;">${p.montant}</td>
+              <td><span class="badge ${cls}">${p.statut}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div></div>`;
+}
+
+// ── DRAWER (KPI detail) ──
+const DRAWERS={
+  refs:{title:'Détail — Références du catalogue',items:[
+    {l:'Total références',v:'1 880',c:'var(--blue)'},
+    {l:'Fournisseurs actifs',v:'143',c:'var(--blue)'},
+    {l:'Catégories A+ (premium)',v:'20',c:'var(--red)'},
+    {l:'Catégories A (haute valeur)',v:'61',c:'var(--amber)'},
+    {l:'Catégories B',v:'181',c:'var(--blue)'},
+    {l:'Catégories C',v:'1 618',c:'var(--text-sec)'},
+  ]},
+  oos:{title:'Détail — Ruptures de stock actives',items:[
+    {l:'En rupture totale (OOS)',v:'1 132',c:'var(--red)'},
+    {l:'% du catalogue',v:'60,2%',c:'var(--red)'},
+    {l:'Prédites par modèle ML',v:'1 427',c:'var(--red)'},
+    {l:'Fournisseurs concernés',v:'43+',c:'var(--amber)'},
+    {l:'Agents à mobiliser',v:'4',c:'var(--blue)'},
+    {l:'Action recommandée',v:'Lancer PO urgent',c:'var(--red)'},
+  ]},
+  soon:{title:'Détail — Ruptures imminentes (7–30 jours)',items:[
+    {l:'Références à risque',v:'295',c:'var(--amber)'},
+    {l:'% du catalogue',v:'15,7%',c:'var(--amber)'},
+    {l:'À commander immédiatement',v:'156',c:'var(--blue)'},
+    {l:'Horizon prévision',v:'7 à 30 jours',c:'var(--text-sec)'},
+    {l:'Modèle de prévision',v:'Random Forest (sklearn)',c:'var(--text-sec)'},
+    {l:'Action recommandée',v:'Émettre bons de commande',c:'var(--amber)'},
+  ]},
+  ok:{title:'Détail — Stock satisfaisant',items:[
+    {l:'Références en stock OK',v:'297',c:'var(--green)'},
+    {l:'% du catalogue',v:'15,8%',c:'var(--green)'},
+    {l:'À commander bientôt',v:'156',c:'var(--blue)'},
+    {l:'Taux de disponibilité global',v:'15,8%',c:'var(--green)'},
+    {l:'Objectif cible direction',v:'> 80%',c:'var(--text-sec)'},
+    {l:'Écart vs objectif',v:'-64,2 pts',c:'var(--red)'},
+  ]},
+};
+function openDrawer(key){
+  const d=DRAWERS[key];
+  document.getElementById('drawerTitle').textContent=d.title;
+  document.getElementById('drawerContent').innerHTML=`<div class="detail-kpis">${d.items.map(i=>`
+    <div class="detail-kpi">
+      <div class="detail-kpi-label">${i.l}</div>
+      <div class="detail-kpi-value" style="color:${i.c}">${i.v}</div>
+    </div>`).join('')}</div>`;
+  const dr=document.getElementById('mainDrawer');
+  dr.classList.add('open');
+  document.querySelectorAll('.kpi-card').forEach(k=>k.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  dr.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function closeDrawer(){
+  document.getElementById('mainDrawer').classList.remove('open');
+  document.querySelectorAll('.kpi-card').forEach(k=>k.classList.remove('selected'));
+}
+
+// ── AI ASSISTANT ──
+function toggleAI(){
+  const p=document.getElementById('aiPanel');
+  p.classList.toggle('open');
+  if(p.classList.contains('open'))document.getElementById('aiInput').focus();
+}
+function openAI(){toggleAI();}
+
+const AI_KB={
+  'rupture':`D'après vos données, ${DATA.stats.oos.toLocaleString('fr')} références sont en rupture de stock, soit 60,2% du catalogue. Les fournisseurs les plus affectés sont ${DATA.suppliers.filter(s=>s.oos>50).map(s=>s.name).join(', ')}. Je recommande de lancer des PO urgents pour les classes A+ et AX en priorité.`,
+  'stock':`Le taux de disponibilité global est de 15,8% (${DATA.stats.ok} références sur ${DATA.stats.total}). L'objectif cible est >80%. Le principal problème est la classe CX (1 460 refs) qui concentre l'essentiel des ruptures.`,
+  'fournisseur':`Vos 3 meilleurs fournisseurs en disponibilité : Borodji Distribution (33,6%), Maad (37,9%), SIAD (32,1%). Les plus critiques : H&D Industries (0%), CMGA (0%), IBS (2,5%).`,
+  'agent':`${DATA.agents.map(a=>a.name+' : '+a.rate+'% ('+a.zone+')').join(' | ')}. Mamadou Diallo a le portefeuille le plus large (${DATA.agents[0].refs} refs).`,
+  'commande':`${DATA.stats.orderSoon} références sont à commander immédiatement selon le modèle ML. ${DATA.stats.soon} ruptures imminentes sont prévues dans les 30 jours.`,
+  'prevision':`Le modèle Random Forest prédit 1 427 ruptures sur 1 880 références. Les variables clés : ventes journalières, stock actuel, délai fournisseur, catégorie ABC/XYZ.`,
+};
+
+function getAIResponse(q){
+  const ql=q.toLowerCase();
+  for(const [k,v] of Object.entries(AI_KB)){if(ql.includes(k))return v;}
+  if(ql.includes('bonjour')||ql.includes('salut'))return'Bonjour ! Comment puis-je vous aider avec la gestion de votre supply chain aujourd\'hui ?';
+  if(ql.includes('po')||ql.includes('bon de commande'))return AI_KB['commande'];
+  if(ql.includes('performance'))return AI_KB['agent'];
+  return`Sur la base de vos données (${DATA.stats.total} références, ${DATA.stats.oos.toLocaleString('fr')} ruptures, ${DATA.stats.suppliers} fournisseurs), voici ce que je peux analyser : ruptures de stock, disponibilité fournisseurs, performance des agents, prévisions ML. Précisez votre question pour une réponse plus ciblée.`;
+}
+
+function sendAI(){
+  const inp=document.getElementById('aiInput');
+  const q=inp.value.trim();
+  if(!q)return;
+  const msgs=document.getElementById('aiMessages');
+  msgs.innerHTML+=`<div class="msg msg-user">${q}</div>`;
+  msgs.innerHTML+=`<div class="msg msg-bot msg-typing"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
+  msgs.scrollTop=msgs.scrollHeight;
+  inp.value='';
+  setTimeout(()=>{
+    const typing=msgs.querySelector('.msg-typing');
+    if(typing)typing.remove();
+    msgs.innerHTML+=`<div class="msg msg-bot">${getAIResponse(q)}</div>`;
+    msgs.scrollTop=msgs.scrollHeight;
+  },900);
+}
 </script>
 </body>
 </html>

@@ -5,1294 +5,845 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Supply Chain Analytics Platform</title>
 <style>
-/* ══════════════════════════════════════════════
-   DESIGN SYSTEM — Light professional theme
-══════════════════════════════════════════════ */
 :root{
-  --bg:#f1f5f9;
-  --surface:#ffffff;
-  --surface2:#f8fafc;
-  --sidebar:#1e3a5f;
-  --sidebar-hover:rgba(255,255,255,.08);
-  --sidebar-active:rgba(255,255,255,.15);
-  --border:#e2e8f0;
-  --border-dark:#cbd5e1;
-  --text:#1e293b;
-  --text-sec:#64748b;
-  --text-muted:#94a3b8;
-  --blue:#2563eb;
-  --blue-light:#eff6ff;
-  --cyan:#0891b2;
-  --green:#16a34a;
-  --green-light:#f0fdf4;
-  --amber:#d97706;
-  --amber-light:#fffbeb;
-  --red:#dc2626;
-  --red-light:#fef2f2;
-  --purple:#7c3aed;
-  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
-  --shadow-md:0 4px 6px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.05);
-  --shadow-lg:0 10px 15px rgba(0,0,0,.08),0 4px 6px rgba(0,0,0,.04);
+  --bg:#f1f5f9;--surface:#ffffff;--surface2:#f8fafc;
+  --sidebar:#1e3a5f;--sidebar-hover:rgba(255,255,255,.08);--sidebar-active:rgba(255,255,255,.15);
+  --border:#e2e8f0;--text:#1e293b;--text-sec:#64748b;--text-muted:#94a3b8;
+  --blue:#2563eb;--blue-light:#eff6ff;
+  --green:#16a34a;--green-light:#f0fdf4;
+  --amber:#d97706;--amber-light:#fffbeb;
+  --red:#dc2626;--red-light:#fef2f2;
+  --purple:#7c3aed;--teal:#0d9488;
+  --shadow:0 1px 3px rgba(0,0,0,.08);
+  --shadow-md:0 4px 6px rgba(0,0,0,.07);
+  --shadow-lg:0 10px 15px rgba(0,0,0,.08);
   --radius:10px;
 }
-
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
 button{cursor:pointer;font-family:inherit;}
-
-/* ══ LOGIN PAGE ══ */
-#loginPage{
-  display:flex;align-items:center;justify-content:center;
-  min-height:100vh;
-  background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 50%,#0891b2 100%);
-  padding:1rem;
-}
-.login-card{
-  background:var(--surface);border-radius:16px;
-  padding:2.5rem 2rem;width:100%;max-width:420px;
-  box-shadow:var(--shadow-lg);
-}
-.login-logo{
-  text-align:center;margin-bottom:2rem;
-}
-.login-logo-icon{
-  width:56px;height:56px;background:var(--blue);border-radius:14px;
-  display:inline-flex;align-items:center;justify-content:center;
-  font-size:1.5rem;color:#fff;margin-bottom:.75rem;
-  box-shadow:0 4px 12px rgba(37,99,235,.3);
-}
-.login-logo h1{font-size:1.3rem;font-weight:700;color:var(--text);}
-.login-logo p{font-size:.8rem;color:var(--text-sec);margin-top:.25rem;}
-
-.role-tabs{display:flex;gap:.5rem;margin-bottom:1.5rem;background:var(--bg);border-radius:8px;padding:.25rem;}
-.role-tab{
-  flex:1;padding:.5rem;border:none;background:none;border-radius:6px;
-  font-size:.82rem;font-weight:600;color:var(--text-sec);transition:.15s;
-}
-.role-tab.active{background:var(--surface);color:var(--blue);box-shadow:var(--shadow);}
-
+/* LOGIN */
+#loginPage{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#1e3a5f,#1e40af 55%,#0891b2);padding:1rem;}
+.login-card{background:#fff;border-radius:16px;padding:2.5rem 2rem;width:100%;max-width:420px;box-shadow:var(--shadow-lg);}
+.login-logo{text-align:center;margin-bottom:2rem;}
+.login-logo-icon{width:54px;height:54px;background:var(--blue);border-radius:14px;display:inline-flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:800;color:#fff;margin-bottom:.7rem;}
+.login-logo h1{font-size:1.25rem;font-weight:700;}
+.login-logo p{font-size:.78rem;color:var(--text-sec);margin-top:.2rem;}
+.role-tabs{display:flex;gap:.4rem;margin-bottom:1.5rem;background:var(--bg);border-radius:8px;padding:.25rem;}
+.role-tab{flex:1;padding:.45rem;border:none;background:none;border-radius:6px;font-size:.75rem;font-weight:600;color:var(--text-sec);transition:.15s;}
+.role-tab.active{background:#fff;color:var(--blue);box-shadow:var(--shadow);}
 .form-group{margin-bottom:1rem;}
-.form-label{display:block;font-size:.78rem;font-weight:600;color:var(--text-sec);margin-bottom:.4rem;}
-.form-input{
-  width:100%;padding:.65rem .9rem;border:1.5px solid var(--border);border-radius:8px;
-  font-size:.9rem;color:var(--text);background:var(--surface);transition:.15s;outline:none;
-}
-.form-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
-
-.btn-login{
-  width:100%;padding:.75rem;background:var(--blue);color:#fff;border:none;
-  border-radius:8px;font-size:.95rem;font-weight:700;
-  box-shadow:0 4px 12px rgba(37,99,235,.3);transition:.15s;margin-top:.5rem;
-}
-.btn-login:hover{background:#1d4ed8;transform:translateY(-1px);}
-.login-error{color:var(--red);font-size:.78rem;margin-top:.5rem;display:none;}
-
-.login-hint{
-  margin-top:1.5rem;padding:1rem;background:var(--bg);border-radius:8px;
-  font-size:.75rem;color:var(--text-sec);
-}
+.form-label{display:block;font-size:.75rem;font-weight:600;color:var(--text-sec);margin-bottom:.35rem;}
+.form-input{width:100%;padding:.6rem .85rem;border:1.5px solid var(--border);border-radius:8px;font-size:.88rem;color:var(--text);outline:none;transition:.15s;}
+.form-input:focus{border-color:var(--blue);}
+.btn-login{width:100%;padding:.72rem;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:.92rem;font-weight:700;transition:.15s;margin-top:.5rem;}
+.btn-login:hover{background:#1d4ed8;}
+.login-error{color:var(--red);font-size:.75rem;margin-top:.4rem;display:none;}
+.login-hint{margin-top:1.5rem;padding:.85rem;background:var(--bg);border-radius:8px;font-size:.72rem;color:var(--text-sec);line-height:1.8;}
 .login-hint strong{display:block;margin-bottom:.3rem;color:var(--text);}
-
-/* ══ APP SHELL ══ */
+/* SHELL */
 #appShell{display:none;flex-direction:column;height:100vh;}
-
-/* ── Topbar ── */
-.topbar{
-  height:56px;background:var(--surface);border-bottom:1px solid var(--border);
-  display:flex;align-items:center;padding:0 1rem;gap:1rem;
-  box-shadow:var(--shadow);z-index:40;flex-shrink:0;
-}
-.topbar-brand{
-  display:flex;align-items:center;gap:.6rem;width:220px;
-}
-.topbar-brand-icon{
-  width:32px;height:32px;background:var(--blue);border-radius:8px;
-  display:flex;align-items:center;justify-content:center;color:#fff;font-size:.9rem;font-weight:800;
-}
-.topbar-brand-name{font-size:.9rem;font-weight:700;color:var(--text);}
-.topbar-brand-sub{font-size:.65rem;color:var(--text-sec);}
+.topbar{height:54px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1rem;gap:1rem;box-shadow:var(--shadow);z-index:40;flex-shrink:0;}
+.topbar-brand{display:flex;align-items:center;gap:.6rem;width:220px;}
+.tbicon{width:30px;height:30px;background:var(--blue);border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:.75rem;font-weight:800;}
+.tbname{font-size:.88rem;font-weight:700;}
+.tbsub{font-size:.62rem;color:var(--text-sec);}
 .topbar-spacer{flex:1;}
-.topbar-status{
-  display:flex;align-items:center;gap:.4rem;font-size:.75rem;color:var(--green);
-  background:var(--green-light);border:1px solid #bbf7d0;padding:.3rem .75rem;border-radius:20px;
-}
-.status-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:blink 2s infinite;}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
-.topbar-user{
-  display:flex;align-items:center;gap:.6rem;padding:.35rem .75rem;border-radius:8px;
-  cursor:pointer;transition:.15s;border:1px solid transparent;
-}
+.topbar-status{display:flex;align-items:center;gap:.4rem;font-size:.72rem;color:var(--green);background:var(--green-light);border:1px solid #bbf7d0;padding:.28rem .7rem;border-radius:20px;}
+.sdot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:blink 2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+.topbar-user{display:flex;align-items:center;gap:.55rem;padding:.3rem .65rem;border-radius:8px;transition:.15s;border:1px solid transparent;}
 .topbar-user:hover{background:var(--bg);border-color:var(--border);}
-.user-avatar{
-  width:32px;height:32px;border-radius:8px;
-  display:flex;align-items:center;justify-content:center;
-  font-size:.75rem;font-weight:700;color:#fff;
-}
-.user-name{font-size:.82rem;font-weight:600;color:var(--text);}
-.user-role{font-size:.65rem;color:var(--text-sec);}
-.btn-logout{
-  background:none;border:1px solid var(--border);color:var(--text-sec);
-  padding:.35rem .7rem;border-radius:6px;font-size:.75rem;
-}
-.btn-logout:hover{background:var(--red-light);color:var(--red);border-color:var(--red);}
-
-/* ── Layout ── */
+.uav{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;color:#fff;}
+.uname{font-size:.8rem;font-weight:600;}
+.urole{font-size:.62rem;color:var(--text-sec);}
+.btn-logout{background:none;border:1px solid var(--border);color:var(--text-sec);padding:.3rem .65rem;border-radius:6px;font-size:.72rem;}
+.btn-logout:hover{background:var(--red-light);color:var(--red);}
 .app-body{display:flex;flex:1;overflow:hidden;}
-
-/* ── Sidebar ── */
-.sidebar{
-  width:220px;background:var(--sidebar);flex-shrink:0;
-  display:flex;flex-direction:column;overflow-y:auto;
-  padding:.75rem .5rem;
-}
-.nav-section{font-size:.6rem;color:rgba(255,255,255,.35);letter-spacing:.1em;text-transform:uppercase;padding:.75rem .75rem .3rem;}
-.nav-item{
-  display:flex;align-items:center;gap:.65rem;
-  padding:.55rem .75rem;border-radius:7px;
-  font-size:.82rem;color:rgba(255,255,255,.65);
-  background:none;border:none;width:100%;text-align:left;
-  transition:.12s;position:relative;
-}
+/* SIDEBAR */
+.sidebar{width:220px;background:var(--sidebar);flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;padding:.75rem .5rem;}
+.nav-section{font-size:.58rem;color:rgba(255,255,255,.3);letter-spacing:.1em;text-transform:uppercase;padding:.65rem .75rem .25rem;}
+.nav-item{display:flex;align-items:center;gap:.6rem;padding:.5rem .75rem;border-radius:7px;font-size:.8rem;color:rgba(255,255,255,.6);background:none;border:none;width:100%;text-align:left;transition:.12s;position:relative;}
 .nav-item:hover{background:var(--sidebar-hover);color:rgba(255,255,255,.9);}
 .nav-item.active{background:var(--sidebar-active);color:#fff;font-weight:600;}
-.nav-item.active::before{
-  content:'';position:absolute;left:0;top:25%;bottom:25%;
-  width:3px;background:#60a5fa;border-radius:0 2px 2px 0;
-}
-.nav-icon{width:18px;text-align:center;font-size:1rem;opacity:.9;}
-.nav-badge{margin-left:auto;background:rgba(239,68,68,.8);color:#fff;font-size:.6rem;padding:.1rem .4rem;border-radius:10px;font-weight:700;}
-
-/* ── Main ── */
-.main-content{flex:1;overflow-y:auto;padding:1.5rem;}
-
-/* ── Page header ── */
-.page-hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.25rem;}
-.page-hd-left h2{font-size:1.2rem;font-weight:700;color:var(--text);}
-.page-hd-left p{font-size:.78rem;color:var(--text-sec);margin-top:.15rem;}
-.page-hd-right{display:flex;gap:.5rem;align-items:center;}
-
-/* ── Buttons ── */
-.btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .9rem;border-radius:7px;font-size:.8rem;font-weight:600;border:none;transition:.15s;}
+.nav-item.active::before{content:'';position:absolute;left:0;top:25%;bottom:25%;width:3px;background:#60a5fa;border-radius:0 2px 2px 0;}
+.nav-icon{width:17px;text-align:center;}
+.nav-badge{margin-left:auto;background:rgba(239,68,68,.75);color:#fff;font-size:.58rem;padding:.1rem .38rem;border-radius:10px;font-weight:700;}
+.nav-badge-blue{background:rgba(37,99,235,.7);}
+.main-content{flex:1;overflow-y:auto;padding:1.4rem;}
+/* COMPONENTS */
+.page-hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.2rem;}
+.page-hd-left h2{font-size:1.15rem;font-weight:700;}
+.page-hd-left p{font-size:.75rem;color:var(--text-sec);margin-top:.15rem;}
+.page-hd-right{display:flex;gap:.5rem;}
+.btn{display:inline-flex;align-items:center;gap:.35rem;padding:.42rem .85rem;border-radius:7px;font-size:.78rem;font-weight:600;border:none;transition:.15s;}
 .btn-primary{background:var(--blue);color:#fff;}
 .btn-primary:hover{background:#1d4ed8;}
+.btn-success{background:var(--green);color:#fff;}
 .btn-ghost{background:none;color:var(--text-sec);border:1px solid var(--border);}
-.btn-ghost:hover{background:var(--bg);color:var(--text);}
-.btn-sm{padding:.3rem .65rem;font-size:.73rem;}
-
-/* ── Cards ── */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);}
-.card-body{padding:1.25rem;}
-.card-title{font-size:.85rem;font-weight:700;color:var(--text);margin-bottom:.2rem;}
-.card-sub{font-size:.72rem;color:var(--text-sec);}
-
-/* ── KPI GRID ── */
-.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.875rem;margin-bottom:1.25rem;}
-.kpi-card{
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:1.1rem 1.2rem;box-shadow:var(--shadow);
-  cursor:pointer;transition:.15s;position:relative;overflow:hidden;
-}
+.btn-ghost:hover{background:var(--bg);}
+.btn-sm{padding:.28rem .6rem;font-size:.7rem;}
+.card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);}
+.card-body{padding:1.15rem;}
+.card-title{font-size:.83rem;font-weight:700;margin-bottom:.18rem;}
+.card-sub{font-size:.7rem;color:var(--text-sec);}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem;margin-bottom:1.2rem;}
+.kpi-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem;box-shadow:var(--shadow);cursor:pointer;transition:.15s;position:relative;overflow:hidden;}
 .kpi-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);}
 .kpi-card.selected{border-color:var(--blue);box-shadow:0 0 0 2px rgba(37,99,235,.15);}
-.kpi-card::after{
-  content:'';position:absolute;top:0;left:0;right:0;height:4px;border-radius:var(--radius) var(--radius) 0 0;
-}
-.kpi-card.c-blue::after{background:var(--blue);}
-.kpi-card.c-red::after{background:var(--red);}
-.kpi-card.c-amber::after{background:var(--amber);}
-.kpi-card.c-green::after{background:var(--green);}
-.kpi-label{font-size:.7rem;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;}
-.kpi-value{font-size:2rem;font-weight:800;color:var(--text);margin:.35rem 0 .2rem;line-height:1;}
-.kpi-meta{font-size:.72rem;display:flex;align-items:center;gap:.3rem;}
-.kpi-meta.up{color:var(--green);}
-.kpi-meta.down{color:var(--red);}
-.kpi-meta.neutral{color:var(--text-sec);}
-.kpi-icon{
-  position:absolute;right:1rem;top:50%;transform:translateY(-50%);
-  font-size:2rem;opacity:.07;
-}
-
-/* ── Detail Drawer ── */
-.detail-drawer{
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:1.25rem;margin-bottom:1.25rem;box-shadow:var(--shadow-md);
-  display:none;
-}
+.kpi-card::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:var(--radius) var(--radius) 0 0;}
+.kpi-card.cb::after{background:var(--blue);}
+.kpi-card.cr::after{background:var(--red);}
+.kpi-card.ca::after{background:var(--amber);}
+.kpi-card.cg::after{background:var(--green);}
+.kpi-card.ct::after{background:var(--teal);}
+.kpi-label{font-size:.67rem;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;}
+.kpi-value{font-size:1.85rem;font-weight:800;color:var(--text);margin:.3rem 0 .15rem;line-height:1;}
+.kpi-meta{font-size:.7rem;}
+.up{color:var(--green);}.down{color:var(--red);}.neutral{color:var(--text-sec);}
+.detail-drawer{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.15rem;margin-bottom:1.2rem;box-shadow:var(--shadow-md);display:none;}
 .detail-drawer.open{display:block;}
-.drawer-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;padding-bottom:.75rem;border-bottom:1px solid var(--border);}
-.drawer-title{font-size:.9rem;font-weight:700;color:var(--blue);}
-.drawer-close{background:none;border:1px solid var(--border);color:var(--text-sec);padding:.25rem .6rem;border-radius:6px;font-size:.75rem;}
-.drawer-close:hover{background:var(--red-light);color:var(--red);}
-.detail-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;}
-.detail-kpi{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.85rem;}
-.detail-kpi-label{font-size:.68rem;color:var(--text-sec);margin-bottom:.3rem;}
-.detail-kpi-value{font-size:1.2rem;font-weight:700;}
-
-/* ── Two-col layout ── */
-.two-col{display:grid;grid-template-columns:1fr 1fr;gap:.875rem;margin-bottom:1.25rem;}
-.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.875rem;margin-bottom:1.25rem;}
-.col-span2{grid-column:span 2;}
-
-/* ── Tables ── */
-.data-table{width:100%;border-collapse:collapse;font-size:.8rem;}
-.data-table th{
-  font-size:.68rem;font-weight:700;color:var(--text-sec);
-  text-align:left;padding:.5rem .75rem;
-  background:var(--surface2);border-bottom:1px solid var(--border);
-  text-transform:uppercase;letter-spacing:.04em;
-  position:sticky;top:0;
-}
-.data-table td{padding:.55rem .75rem;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;}
+.drawer-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.9rem;padding-bottom:.65rem;border-bottom:1px solid var(--border);}
+.drawer-title{font-size:.88rem;font-weight:700;color:var(--blue);}
+.drawer-close{background:none;border:1px solid var(--border);color:var(--text-sec);padding:.22rem .55rem;border-radius:6px;font-size:.72rem;}
+.dkpis{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem;}
+.dkpi{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.8rem;}
+.dkpi-l{font-size:.65rem;color:var(--text-sec);margin-bottom:.25rem;}
+.dkpi-v{font-size:1.1rem;font-weight:700;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1.2rem;}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem;margin-bottom:1.2rem;}
+.data-table{width:100%;border-collapse:collapse;font-size:.78rem;}
+.data-table th{font-size:.65rem;font-weight:700;color:var(--text-sec);text-align:left;padding:.45rem .7rem;background:var(--surface2);border-bottom:1px solid var(--border);text-transform:uppercase;position:sticky;top:0;z-index:1;}
+.data-table td{padding:.5rem .7rem;border-bottom:1px solid var(--border);vertical-align:middle;}
 .data-table tr:last-child td{border-bottom:none;}
-.data-table tr:hover td{background:var(--blue-light);}
-.tbl-wrap{overflow-x:auto;max-height:320px;overflow-y:auto;}
-
-/* ── Badges ── */
-.badge{display:inline-flex;align-items:center;gap:.25rem;font-size:.68rem;font-weight:600;padding:.2rem .55rem;border-radius:20px;}
-.badge-red{background:var(--red-light);color:var(--red);}
-.badge-amber{background:var(--amber-light);color:var(--amber);}
-.badge-green{background:var(--green-light);color:var(--green);}
-.badge-blue{background:var(--blue-light);color:var(--blue);}
-.badge-gray{background:var(--bg);color:var(--text-sec);border:1px solid var(--border);}
-
-/* ── Progress bars ── */
+.data-table tr:hover td{background:#f8faff;}
+.tbl-wrap{overflow-x:auto;max-height:340px;overflow-y:auto;}
+.badge{display:inline-flex;font-size:.65rem;font-weight:600;padding:.18rem .5rem;border-radius:20px;}
+.br{background:var(--red-light);color:var(--red);}
+.ba{background:var(--amber-light);color:var(--amber);}
+.bg{background:var(--green-light);color:var(--green);}
+.bb{background:var(--blue-light);color:var(--blue);}
+.bt{background:#f0fdfa;color:var(--teal);}
+.bz{background:var(--bg);color:var(--text-sec);border:1px solid var(--border);}
 .prog-track{height:6px;background:var(--bg);border-radius:3px;overflow:hidden;}
-.prog-fill{height:100%;border-radius:3px;transition:width .4s ease;}
-.prog-blue{background:var(--blue);}
-.prog-red{background:var(--red);}
-.prog-green{background:var(--green);}
-.prog-amber{background:var(--amber);}
-
-/* ── Agent cards ── */
-.agent-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.875rem;margin-bottom:1.25rem;}
-.agent-card{
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:1.25rem;box-shadow:var(--shadow);transition:.15s;cursor:pointer;
-}
-.agent-card:hover{box-shadow:var(--shadow-md);border-color:#bfdbfe;}
-.agent-header{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;}
-.agent-avatar{
-  width:42px;height:42px;border-radius:10px;
-  display:flex;align-items:center;justify-content:center;
-  font-size:.9rem;font-weight:800;color:#fff;flex-shrink:0;
-}
-.agent-name{font-size:.9rem;font-weight:700;color:var(--text);}
-.agent-zone{font-size:.72rem;color:var(--text-sec);}
-.agent-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-top:.75rem;}
-.agent-stat{text-align:center;padding:.5rem;background:var(--bg);border-radius:7px;}
-.agent-stat-val{font-size:1.1rem;font-weight:700;}
-.agent-stat-lbl{font-size:.62rem;color:var(--text-sec);margin-top:.1rem;}
-.agent-perf{margin-top:.75rem;}
-.perf-label{display:flex;justify-content:space-between;font-size:.7rem;color:var(--text-sec);margin-bottom:.3rem;}
-
-/* ── Alert banners ── */
-.alert-strip{
-  display:flex;align-items:flex-start;gap:.6rem;padding:.7rem 1rem;border-radius:8px;
-  font-size:.78rem;margin-bottom:.5rem;
-}
-.alert-strip-danger{background:var(--red-light);border:1px solid #fecaca;color:#991b1b;}
-.alert-strip-warning{background:var(--amber-light);border:1px solid #fde68a;color:#92400e;}
-.alert-strip-info{background:var(--blue-light);border:1px solid #bfdbfe;color:#1e40af;}
-.alert-strip-icon{font-size:1rem;flex-shrink:0;margin-top:.05rem;}
-
-/* ── Donut chart ── */
-.donut-wrap{display:flex;align-items:center;gap:1.25rem;}
-.legend-list{flex:1;}
-.legend-row{display:flex;align-items:center;gap:.5rem;font-size:.75rem;color:var(--text-sec);margin-bottom:.5rem;}
-.legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
-.legend-num{margin-left:auto;font-weight:700;color:var(--text);font-size:.8rem;}
-
-/* ── Horiz bars ── */
-.hbar-list{display:flex;flex-direction:column;gap:.65rem;}
-.hbar-row{}
-.hbar-top{display:flex;justify-content:space-between;font-size:.75rem;color:var(--text-sec);margin-bottom:.3rem;}
+.prog-fill{height:100%;border-radius:3px;transition:width .4s;}
+.astrip{display:flex;align-items:flex-start;gap:.55rem;padding:.65rem .9rem;border-radius:8px;font-size:.76rem;margin-bottom:.45rem;}
+.adanger{background:var(--red-light);border:1px solid #fecaca;color:#991b1b;}
+.awarning{background:var(--amber-light);border:1px solid #fde68a;color:#92400e;}
+.ainfo{background:var(--blue-light);border:1px solid #bfdbfe;color:#1e40af;}
+.asuccess{background:var(--green-light);border:1px solid #bbf7d0;color:#14532d;}
+.aicon{flex-shrink:0;}
+.agrid{display:grid;grid-template-columns:repeat(2,1fr);gap:.8rem;margin-bottom:1.2rem;}
+.acard{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem;box-shadow:var(--shadow);transition:.15s;}
+.acard:hover{box-shadow:var(--shadow-md);border-color:#bfdbfe;}
+.ahdr{display:flex;align-items:center;gap:.7rem;margin-bottom:.9rem;}
+.aav{width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:800;color:#fff;flex-shrink:0;}
+.aname{font-size:.88rem;font-weight:700;}
+.azone{font-size:.7rem;color:var(--text-sec);}
+.astats{display:grid;grid-template-columns:repeat(4,1fr);gap:.45rem;}
+.astat{text-align:center;padding:.45rem .3rem;background:var(--bg);border-radius:7px;}
+.astat-v{font-size:.95rem;font-weight:700;}
+.astat-l{font-size:.58rem;color:var(--text-sec);margin-top:.1rem;}
+.donut-wrap{display:flex;align-items:center;gap:1.1rem;}
+.leg-list{flex:1;}
+.leg-row{display:flex;align-items:center;gap:.45rem;font-size:.73rem;color:var(--text-sec);margin-bottom:.45rem;}
+.leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.leg-num{margin-left:auto;font-weight:700;color:var(--text);}
+.hbar-list{display:flex;flex-direction:column;gap:.6rem;}
+.hbar-top{display:flex;justify-content:space-between;font-size:.73rem;color:var(--text-sec);margin-bottom:.25rem;}
 .hbar-top strong{color:var(--text);}
-
-/* ══ AI ASSISTANT ══ */
-.ai-fab{
-  position:fixed;right:1.5rem;bottom:1.5rem;z-index:200;
-  width:52px;height:52px;border-radius:50%;
-  background:var(--blue);color:#fff;border:none;
-  font-size:1.2rem;box-shadow:0 4px 16px rgba(37,99,235,.4);
-  display:none;transition:.15s;
-}
-.ai-fab:hover{background:#1d4ed8;transform:scale(1.05);}
-.ai-panel{
-  position:fixed;right:1.5rem;bottom:5rem;z-index:200;
-  width:360px;height:480px;
-  background:var(--surface);border:1px solid var(--border);border-radius:16px;
-  box-shadow:var(--shadow-lg);display:none;flex-direction:column;overflow:hidden;
-}
+.po-form{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem;margin-bottom:1.2rem;box-shadow:var(--shadow);}
+.po-form-title{font-size:.9rem;font-weight:700;margin-bottom:1rem;padding-bottom:.65rem;border-bottom:1px solid var(--border);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem;}
+.form-full{margin-bottom:.75rem;}
+.po-confirm{background:var(--green-light);border:1px solid #bbf7d0;border-radius:8px;padding:.85rem;font-size:.78rem;color:#14532d;display:none;margin-top:.75rem;}
+.po-confirm strong{display:block;margin-bottom:.3rem;}
+.pcard{background:#fff;border:1px solid var(--border);border-radius:8px;padding:.85rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.75rem;transition:.15s;}
+.pcard:hover{border-color:#bfdbfe;}
+.pcard-info{flex:1;}
+.pcard-name{font-size:.82rem;font-weight:600;margin-bottom:.2rem;}
+.pcard-meta{font-size:.7rem;color:var(--text-sec);}
+.pcard-right{text-align:right;}
+.pqty{font-size:1.1rem;font-weight:800;color:var(--blue);}
+.pqty-l{font-size:.62rem;color:var(--text-sec);}
+.mini-bars{display:flex;align-items:flex-end;gap:4px;height:60px;}
+.mini-bar{flex:1;border-radius:2px 2px 0 0;min-height:3px;opacity:.85;}
+.ai-fab{position:fixed;right:1.5rem;bottom:1.5rem;z-index:200;width:50px;height:50px;border-radius:50%;background:var(--blue);color:#fff;border:none;font-size:.85rem;font-weight:700;box-shadow:0 4px 16px rgba(37,99,235,.4);display:none;transition:.15s;}
+.ai-fab:hover{background:#1d4ed8;transform:scale(1.06);}
+.ai-panel{position:fixed;right:1.5rem;bottom:5rem;z-index:200;width:360px;height:490px;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;overflow:hidden;}
 .ai-panel.open{display:flex;}
-.ai-panel-header{
-  padding:.85rem 1rem;background:var(--blue);color:#fff;
-  display:flex;align-items:center;gap:.6rem;
-}
-.ai-panel-header h3{font-size:.88rem;font-weight:700;flex:1;}
-.ai-panel-close{background:rgba(255,255,255,.2);border:none;color:#fff;width:26px;height:26px;border-radius:6px;font-size:.85rem;}
-.ai-messages{flex:1;overflow-y:auto;padding:.75rem;display:flex;flex-direction:column;gap:.6rem;}
-.msg{max-width:88%;padding:.55rem .8rem;border-radius:10px;font-size:.8rem;line-height:1.5;}
+.ai-hd{padding:.8rem 1rem;background:var(--blue);color:#fff;display:flex;align-items:center;gap:.55rem;}
+.ai-hd h3{font-size:.85rem;font-weight:700;flex:1;}
+.ai-close{background:rgba(255,255,255,.2);border:none;color:#fff;width:24px;height:24px;border-radius:6px;font-size:.8rem;}
+.ai-msgs{flex:1;overflow-y:auto;padding:.7rem;display:flex;flex-direction:column;gap:.55rem;}
+.msg{max-width:90%;padding:.5rem .75rem;border-radius:10px;font-size:.78rem;line-height:1.5;}
 .msg-bot{background:var(--bg);color:var(--text);align-self:flex-start;border-bottom-left-radius:3px;}
 .msg-user{background:var(--blue);color:#fff;align-self:flex-end;border-bottom-right-radius:3px;}
-.msg-typing{display:flex;gap:.3rem;align-items:center;padding:.55rem .8rem;}
-.typing-dot{width:6px;height:6px;border-radius:50%;background:var(--text-sec);animation:typing .9s infinite;}
-.typing-dot:nth-child(2){animation-delay:.2s;}
-.typing-dot:nth-child(3){animation-delay:.4s;}
+.msg-typing{display:flex;gap:.3rem;align-items:center;padding:.5rem .75rem;}
+.tdot{width:6px;height:6px;border-radius:50%;background:var(--text-sec);animation:typing .9s infinite;}
+.tdot:nth-child(2){animation-delay:.2s;}
+.tdot:nth-child(3){animation-delay:.4s;}
 @keyframes typing{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
-.ai-input-row{padding:.75rem;border-top:1px solid var(--border);display:flex;gap:.5rem;}
-.ai-input{
-  flex:1;padding:.5rem .75rem;border:1.5px solid var(--border);border-radius:8px;
-  font-size:.8rem;color:var(--text);outline:none;
-}
-.ai-input:focus{border-color:var(--blue);}
-.ai-send{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:.5rem .75rem;font-size:.8rem;font-weight:600;}
-.ai-send:hover{background:#1d4ed8;}
-
-/* ══ VIEWS TOGGLE ══ */
-.view{display:none;}
-.view.active{display:block;}
-
-/* ══ RESPONSIVE ══ */
-@media(max-width:1024px){
-  .kpi-grid{grid-template-columns:repeat(2,1fr);}
-  .two-col,.three-col,.agent-grid{grid-template-columns:1fr;}
-  .col-span2{grid-column:span 1;}
-}
-@media(max-width:768px){
-  .sidebar{display:none;}
-  .ai-panel{width:calc(100vw - 2rem);right:1rem;}
-}
+.ai-inp-row{padding:.65rem;border-top:1px solid var(--border);display:flex;gap:.45rem;}
+.ai-inp{flex:1;padding:.45rem .7rem;border:1.5px solid var(--border);border-radius:8px;font-size:.78rem;color:var(--text);outline:none;}
+.ai-inp:focus{border-color:var(--blue);}
+.ai-send{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:.45rem .7rem;font-size:.78rem;font-weight:600;}
+@media(max-width:1024px){.kpi-grid{grid-template-columns:repeat(2,1fr);}.two-col,.three-col,.agrid{grid-template-columns:1fr;}.form-row{grid-template-columns:1fr;}}
+@media(max-width:768px){.sidebar{display:none;}.ai-panel{width:calc(100vw - 2rem);right:1rem;}}
 </style>
 </head>
 <body>
 
-<!-- ════════════════════════════════════
-     LOGIN PAGE
-════════════════════════════════════ -->
 <div id="loginPage">
   <div class="login-card">
     <div class="login-logo">
       <div class="login-logo-icon">SC</div>
       <h1>Supply Chain Analytics</h1>
-      <p>Plateforme de gestion des stocks & approvisionnements</p>
+      <p>Gestion des stocks &amp; approvisionnements</p>
     </div>
-
     <div class="role-tabs">
-      <button class="role-tab active" onclick="selectRole('manager',this)">Manager</button>
-      <button class="role-tab" onclick="selectRole('agent',this)">Agent commercial</button>
+      <button class="role-tab active" onclick="selRole(this)">Manager</button>
+      <button class="role-tab" onclick="selRole(this)">Agent commercial</button>
+      <button class="role-tab" onclick="selRole(this)">Agent acheteur</button>
     </div>
-
     <div class="form-group">
       <label class="form-label">Identifiant</label>
-      <input class="form-input" id="loginUser" type="text" placeholder="Entrez votre identifiant" autocomplete="username"/>
+      <input class="form-input" id="liU" type="text" placeholder="Identifiant" autocomplete="username"/>
     </div>
     <div class="form-group">
       <label class="form-label">Mot de passe</label>
-      <input class="form-input" id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password"/>
+      <input class="form-input" id="liP" type="password" placeholder="••••••••" autocomplete="current-password"/>
     </div>
-    <div class="login-error" id="loginError">Identifiant ou mot de passe incorrect.</div>
+    <div class="login-error" id="liErr">Identifiant ou mot de passe incorrect.</div>
     <button class="btn-login" onclick="doLogin()">Se connecter</button>
-
     <div class="login-hint">
-      <strong>Accès de démonstration</strong>
-      Manager : <code>manager</code> / <code>scm2025</code><br/>
-      Agent : <code>agent1</code> / <code>scm2025</code> &nbsp;|&nbsp; <code>agent2</code> / <code>scm2025</code>
+      <strong>Acces de demonstration</strong>
+      Manager : <b>manager</b> / <b>scm2025</b><br/>
+      Agent commercial : <b>agent1</b> a <b>agent4</b> / <b>scm2025</b><br/>
+      Agent acheteur : <b>acheteur1</b> a <b>acheteur3</b> / <b>scm2025</b>
     </div>
   </div>
 </div>
 
-<!-- ════════════════════════════════════
-     APP SHELL
-════════════════════════════════════ -->
 <div id="appShell" style="display:none;flex-direction:column;height:100vh;">
-
-  <!-- TOPBAR -->
   <div class="topbar">
     <div class="topbar-brand">
-      <div class="topbar-brand-icon">SC</div>
-      <div>
-        <div class="topbar-brand-name">Supply Chain</div>
-        <div class="topbar-brand-sub">Analytics Platform</div>
-      </div>
+      <div class="tbicon">SC</div>
+      <div><div class="tbname">Supply Chain</div><div class="tbsub">Analytics Platform</div></div>
     </div>
     <div class="topbar-spacer"></div>
-    <div class="topbar-status"><div class="status-dot"></div>Données synchronisées</div>
-    <div class="topbar-user" onclick="openAI()">
-      <div class="user-avatar" id="uAvatar" style="background:var(--blue)">M</div>
-      <div>
-        <div class="user-name" id="uName">—</div>
-        <div class="user-role" id="uRole">—</div>
-      </div>
+    <div class="topbar-status"><div class="sdot"></div>Donnees synchronisees</div>
+    <div class="topbar-user">
+      <div class="uav" id="uAv">M</div>
+      <div><div class="uname" id="uNm">-</div><div class="urole" id="uRl">-</div></div>
     </div>
-    <button class="btn-logout" onclick="doLogout()">Déconnexion</button>
+    <button class="btn-logout" onclick="doLogout()">Deconnexion</button>
   </div>
-
   <div class="app-body">
-    <!-- SIDEBAR -->
-    <nav class="sidebar" id="sidebarNav"></nav>
-
-    <!-- MAIN -->
-    <main class="main-content" id="mainContent"></main>
+    <nav class="sidebar" id="sNav"></nav>
+    <main class="main-content" id="mC"></main>
   </div>
 </div>
 
-<!-- AI FAB -->
-<button class="ai-fab" id="aiFab" onclick="toggleAI()">✦</button>
-
-<!-- AI PANEL -->
-<div class="ai-panel" id="aiPanel">
-  <div class="ai-panel-header">
-    <span>✦</span>
-    <h3>Assistant IA — Supply Chain</h3>
-    <button class="ai-panel-close" onclick="toggleAI()">✕</button>
-  </div>
-  <div class="ai-messages" id="aiMessages">
-    <div class="msg msg-bot">Bonjour ! Je suis votre assistant Supply Chain. Posez-moi vos questions sur les stocks, ruptures, fournisseurs ou prévisions.</div>
-  </div>
-  <div class="ai-input-row">
-    <input class="ai-input" id="aiInput" placeholder="Votre question..." onkeydown="if(event.key==='Enter')sendAI()"/>
-    <button class="ai-send" onclick="sendAI()">Envoyer</button>
+<button class="ai-fab" id="aiFab" onclick="togAI()">IA</button>
+<div class="ai-panel" id="aiP">
+  <div class="ai-hd"><span>*</span><h3>Assistant IA Supply Chain</h3><button class="ai-close" onclick="togAI()">X</button></div>
+  <div class="ai-msgs" id="aiM"><div class="msg msg-bot">Bonjour ! Posez vos questions sur les stocks, ruptures, commandes ou fournisseurs.</div></div>
+  <div class="ai-inp-row">
+    <input class="ai-inp" id="aiI" placeholder="Votre question..." onkeydown="if(event.key==='Enter')sndAI()"/>
+    <button class="ai-send" onclick="sndAI()">Envoyer</button>
   </div>
 </div>
 
-<!-- ════════════════════════════════════
-     DATA & LOGIC
-════════════════════════════════════ -->
 <script>
-// ── DATA ──
-const DATA = {
-  stats:{total:1880,oos:1132,soon:295,orderSoon:156,ok:297,suppliers:143},
-  suppliers:[
-    {name:'Borodji Distribution',refs:107,ok:36,soon:16,order:14,oos:41,rate:33.6},
-    {name:'ARIMEX',refs:94,ok:12,soon:6,order:13,oos:63,rate:12.8},
-    {name:'SENICO',refs:89,ok:7,soon:10,order:23,oos:49,rate:7.9},
-    {name:'Maad',refs:66,ok:25,soon:1,order:1,oos:39,rate:37.9},
-    {name:'SIAGRO',refs:66,ok:11,soon:16,order:3,oos:36,rate:16.7},
-    {name:'LSB',refs:65,ok:6,soon:5,order:2,oos:52,rate:9.2},
-    {name:'Patisen',refs:58,ok:5,soon:5,order:8,oos:40,rate:8.6},
-    {name:'SIAD',refs:53,ok:17,soon:8,order:3,oos:25,rate:32.1},
-    {name:'H&D Industries',refs:51,ok:0,soon:20,order:0,oos:31,rate:0},
-    {name:'CMGA',refs:46,ok:0,soon:17,order:3,oos:26,rate:0},
-    {name:'SOCOMAF',refs:41,ok:8,soon:12,order:4,oos:17,rate:19.5},
-    {name:'IBS',refs:40,ok:1,soon:16,order:0,oos:23,rate:2.5},
+var D={
+  stats:{total:1880,oos:1132,soon:295,orderSoon:156,ok:297,suppliers:143,toOrder:451},
+  sup:[
+    {n:'Borodji Distribution',r:107,ok:36,s:16,o:14,x:41,p:33.6},
+    {n:'ARIMEX',r:94,ok:12,s:6,o:13,x:63,p:12.8},
+    {n:'SENICO',r:89,ok:7,s:10,o:23,x:49,p:7.9},
+    {n:'Maad',r:66,ok:25,s:1,o:1,x:39,p:37.9},
+    {n:'SIAGRO',r:66,ok:11,s:16,o:3,x:36,p:16.7},
+    {n:'LSB',r:65,ok:6,s:5,o:2,x:52,p:9.2},
+    {n:'Patisen',r:58,ok:5,s:5,o:8,x:40,p:8.6},
+    {n:'SIAD',r:53,ok:17,s:8,o:3,x:25,p:32.1},
+    {n:'H&D Industries',r:51,ok:0,s:20,o:0,x:31,p:0},
+    {n:'CMGA',r:46,ok:0,s:17,o:3,x:26,p:0},
+    {n:'IBS',r:40,ok:1,s:16,o:0,x:23,p:2.5},
+    {n:'FKS',r:38,ok:3,s:19,o:0,x:16,p:7.9},
   ],
-  categories:[
-    {name:'CX',refs:1460,sales:5.71,cov:72020},
-    {name:'BX',refs:93,sales:30.07,cov:22},
-    {name:'CZ',refs:92,sales:12.43,cov:27.4},
-    {name:'CY',refs:66,sales:11.66,cov:76.5},
-    {name:'BY',refs:48,sales:26.45,cov:167.2},
-    {name:'BZ',refs:40,sales:21.57,cov:76},
-    {name:'AZ',refs:23,sales:58.43,cov:9.3},
-    {name:'AX',refs:25,sales:115.60,cov:5.4},
-    {name:'AY',refs:13,sales:67.87,cov:8.6},
-    {name:'A+X',refs:7,sales:544.27,cov:4},
-    {name:'A+Z',refs:10,sales:84.48,cov:4.4},
+  cat:[
+    {n:'A+X',r:7,v:544,c:4},{n:'A+Z',r:10,v:84,c:4},
+    {n:'AX',r:25,v:115,c:5},{n:'AY',r:13,v:67,c:8},{n:'AZ',r:23,v:58,c:9},
+    {n:'BX',r:93,v:30,c:22},{n:'BY',r:48,v:26,c:167},{n:'BZ',r:40,v:21,c:76},
+    {n:'CX',r:1460,v:5,c:999},{n:'CY',r:66,v:11,c:76},{n:'CZ',r:92,v:12,c:27},
   ],
   agents:[
-    {
-      id:'agent1',name:'Mamadou Diallo',zone:'Dakar Centre',color:'#2563eb',
-      suppliers:['Borodji Distribution','ARIMEX','SENICO'],
-      refs:290,ok:55,soon:32,order:50,oos:153,rate:19,
-      po_month:12,po_pending:4,
-      objectives:{stock:75,quality:88,delay:72},
-      perf:{jan:62,fev:68,mar:71,avr:74,mai:70,jun:73}
-    },
-    {
-      id:'agent2',name:'Fatou Seck',zone:'Pikine / Guédiawaye',color:'#7c3aed',
-      suppliers:['Maad','SIAGRO','LSB'],
-      refs:197,ok:42,soon:22,order:6,oos:127,rate:21.3,
-      po_month:8,po_pending:2,
-      objectives:{stock:80,quality:90,delay:68},
-      perf:{jan:55,fev:60,mar:65,avr:68,mai:72,jun:75}
-    },
-    {
-      id:'agent3',name:'Ibrahima Ndiaye',zone:'Thiès / Mbour',color:'#0891b2',
-      suppliers:['Patisen','SIAD','H&D Industries'],
-      refs:162,ok:22,soon:33,order:11,oos:96,rate:13.6,
-      po_month:6,po_pending:3,
-      objectives:{stock:70,quality:82,delay:65},
-      perf:{jan:48,fev:52,mar:58,avr:61,mai:63,jun:65}
-    },
-    {
-      id:'agent4',name:'Aminata Ba',zone:'Saint-Louis / Louga',color:'#16a34a',
-      suppliers:['CMGA','SOCOMAF','IBS'],
-      refs:127,ok:9,soon:45,order:7,oos:66,rate:7.1,
-      po_month:4,po_pending:5,
-      objectives:{stock:65,quality:78,delay:60},
-      perf:{jan:38,fev:42,mar:47,avr:49,mai:52,jun:55}
-    },
+    {id:'agent1',nm:'Mamadou Diallo',z:'Dakar Centre',cl:'#2563eb',
+     sups:['Borodji Distribution','ARIMEX','SENICO'],
+     r:290,ok:55,s:32,o:50,x:153,p:19,pm:12,pp:4,
+     obj:{st:75,q:88,d:72},pf:[62,68,71,74,70,73]},
+    {id:'agent2',nm:'Fatou Seck',z:'Pikine / Guediawaye',cl:'#7c3aed',
+     sups:['Maad','SIAGRO','LSB'],
+     r:197,ok:42,s:22,o:6,x:127,p:21.3,pm:8,pp:2,
+     obj:{st:80,q:90,d:68},pf:[55,60,65,68,72,75]},
+    {id:'agent3',nm:'Ibrahima Ndiaye',z:'Thies / Mbour',cl:'#0891b2',
+     sups:['Patisen','SIAD','H&D Industries'],
+     r:162,ok:22,s:33,o:11,x:96,p:13.6,pm:6,pp:3,
+     obj:{st:70,q:82,d:65},pf:[48,52,58,61,63,65]},
+    {id:'agent4',nm:'Aminata Ba',z:'Saint-Louis / Louga',cl:'#16a34a',
+     sups:['CMGA','SOCOMAF','IBS'],
+     r:127,ok:9,s:45,o:7,x:66,p:7.1,pm:4,pp:5,
+     obj:{st:65,q:78,d:60},pf:[38,42,47,49,52,55]},
+  ],
+  ach:[
+    {id:'acheteur1',nm:'Ousmane Faye',rl:'Acheteur Alimentation',cl:'#0d9488',
+     sups:['SENICO','Borodji Distribution','COSEDI'],
+     r:237,to:73,x:116,ok:48,qty:4258,pm:9,pp:3,pv:6,bm:12500000,bc:7800000,
+     obj:{ts:85,dp:3},pf:[71,75,78,80,77,82],
+     prods:[
+      {n:'The flecha vert pm 25g x100',s:'SENICO',st:481,q:1205,vj:105.4,lt:16,sts:'Predicted Stockout Soon',c:'AY'},
+      {n:'Chapelet lait halib pm 20g x10',s:'SENICO',st:1350,q:828,vj:136.1,lt:16,sts:'Order Soon',c:'CX'},
+      {n:'Chocolat delia stick 12g x60',s:'SENICO',st:125,q:325,vj:28.1,lt:16,sts:'Predicted Stockout Soon',c:'CX'},
+      {n:'Pates amira spaghetti gm 500g x10',s:'SENICO',st:90,q:273,vj:22.7,lt:16,sts:'Predicted Stockout Soon',c:'CX'},
+      {n:'Pates amira macaroni lisse sac 5kg',s:'SENICO',st:93,q:197,vj:18.1,lt:16,sts:'Predicted Stockout Soon',c:'CX'},
+      {n:'Kadi epices 60g x60',s:'SENICO',st:192,q:195,vj:24.2,lt:16,sts:'Predicted Stockout Soon',c:'AZ'},
+      {n:'Pates amira spaghetti pm 250g x20',s:'SENICO',st:399,q:188,vj:36.7,lt:16,sts:'Order Soon',c:'CX'},
+      {n:'Beurre jadida 500g x12',s:'SENICO',st:145,q:149,vj:18.4,lt:16,sts:'Predicted Stockout Soon',c:'AY'},
+      {n:'Vinaigre kadi gm 1l x12',s:'SENICO',st:328,q:142,vj:29.4,lt:16,sts:'Order Soon',c:'BZ'},
+      {n:'Seau chocolat delia 5kg',s:'SENICO',st:131,q:111,vj:15.1,lt:16,sts:'Order Soon',c:'CX'},
+      {n:'Bougie 100f x10',s:'Borodji Distribution',st:164,q:73,vj:59.3,lt:4,sts:'Predicted Stockout Soon',c:'CX'},
+      {n:'Seau mayonnaise jadida 5l',s:'SENICO',st:582,q:60,vj:40.1,lt:16,sts:'Order Soon',c:'AY'},
+      {n:'Savon bienco gm x24',s:'Borodji Distribution',st:1,q:55,vj:14.1,lt:4,sts:'Predicted Stockout Soon',c:'CX'},
+      {n:'Chocolat delia 250g x6',s:'SENICO',st:43,q:27,vj:4.4,lt:16,sts:'Order Soon',c:'CX'},
+      {n:'Lait lalia pm 20g x50',s:'COSEDI',st:27,q:18,vj:2.1,lt:5,sts:'Order Soon',c:'CX'},
+     ]},
+    {id:'acheteur2',nm:'Mariama Diop',rl:'Acheteur Grande Consommation',cl:'#7c3aed',
+     sups:['ARIMEX','FKS','H&D Industries'],
+     r:224,to:74,x:129,ok:21,qty:5827,pm:7,pp:4,pv:3,bm:15000000,bc:9200000,
+     obj:{ts:82,dp:4},pf:[65,68,70,73,75,78],
+     prods:[
+      {n:'Biscuits hay hay chocolat x24',s:'ARIMEX',st:190,q:1186,vj:172,lt:8,sts:'Predicted Stockout Soon',c:'BZ'},
+      {n:'Beignets crevettes prima 170g',s:'ARIMEX',st:489,q:1114,vj:200.4,lt:8,sts:'Predicted Stockout Soon',c:'CX'},
+      {n:'Savon ordinaire 275g x18',s:'H&D Industries',st:251,q:340,vj:59.1,lt:10,sts:'Predicted Stockout Soon',c:'BX'},
+      {n:'Biscuits carnaval cacao 22g x24',s:'FKS',st:42,q:320,vj:45.2,lt:8,sts:'Predicted Stockout Soon',c:'CY'},
+      {n:'Eau de javel madar seau 65ml x100',s:'H&D Industries',st:60,q:219,vj:27.9,lt:10,sts:'Predicted Stockout Soon',c:'BX'},
+      {n:'Liquide madar gm renzo 900ml x12',s:'H&D Industries',st:3,q:212,vj:21.5,lt:10,sts:'Predicted Stockout Soon',c:'BX'},
+      {n:'Biscuits empire plain 40g x24',s:'FKS',st:1,q:205,vj:25.8,lt:8,sts:'Predicted Stockout Soon',c:'CX'},
+      {n:'Biscuits empire cacao 40g x24',s:'FKS',st:1,q:165,vj:20.7,lt:8,sts:'Predicted Stockout Soon',c:'CY'},
+      {n:'Liquide madar moyen 400ml x12',s:'H&D Industries',st:15,q:162,vj:17.7,lt:10,sts:'Predicted Stockout Soon',c:'BX'},
+      {n:'Liquide madar gm platinum 900ml',s:'H&D Industries',st:69,q:142,vj:21.1,lt:10,sts:'Predicted Stockout Soon',c:'BX'},
+      {n:'Biscuits hay hay fraise x24',s:'ARIMEX',st:726,q:141,vj:108.4,lt:8,sts:'Order Soon',c:'CZ'},
+      {n:'Liquide madar pm platinum 200ml',s:'H&D Industries',st:1,q:137,vj:13.8,lt:10,sts:'Predicted Stockout Soon',c:'BX'},
+      {n:'Biscuits carnaval banane 22g x24',s:'FKS',st:22,q:134,vj:19.5,lt:8,sts:'Predicted Stockout Soon',c:'CY'},
+      {n:'Liquide madar seau renzo 40ml',s:'H&D Industries',st:90,q:131,vj:22.1,lt:10,sts:'Predicted Stockout Soon',c:'CX'},
+      {n:'Poudre noura 10kg',s:'H&D Industries',st:9,q:116,vj:12.5,lt:10,sts:'Predicted Stockout Soon',c:'BY'},
+     ]},
+    {id:'acheteur3',nm:'Babacar Sow',rl:'Acheteur Boissons et Divers',cl:'#16a34a',
+     sups:['CMGA','IBS','Patisen'],
+     r:263,to:79,x:150,ok:34,qty:6447,pm:11,pp:2,pv:9,bm:18000000,bc:13500000,
+     obj:{ts:80,dp:3},pf:[68,72,75,77,79,83],
+     prods:[
+      {n:'Eau SEO 1.5l x6',s:'CMGA',st:643,q:838,vj:164.5,lt:9,sts:'Predicted Stockout Soon',c:'CY'},
+      {n:'PM Coca Cola 30cl x12',s:'IBS',st:2,q:748,vj:107.1,lt:7,sts:'Predicted Stockout Soon',c:'BX'},
+      {n:'PM Sprite 30cl x12',s:'IBS',st:1,q:555,vj:79.4,lt:7,sts:'Predicted Stockout Soon',c:'BX'},
+      {n:'Can Fanta Orange 33cl x24',s:'IBS',st:1,q:520,vj:74.5,lt:7,sts:'Predicted Stockout Soon',c:'AX'},
+      {n:'Can Coca Cola 33cl x24',s:'IBS',st:35,q:470,vj:72.1,lt:7,sts:'Predicted Stockout Soon',c:'AX'},
+      {n:'Can Schweppes agrumes 25cl x24',s:'IBS',st:3,q:353,vj:50.8,lt:7,sts:'Predicted Stockout Soon',c:'AX'},
+      {n:'Can Sprite 33cl x24',s:'IBS',st:123,q:333,vj:65.1,lt:7,sts:'Predicted Stockout Soon',c:'AX'},
+      {n:'GM Sprite 1.25l x6',s:'IBS',st:460,q:267,vj:103.8,lt:7,sts:'Predicted Stockout Soon',c:'AX'},
+      {n:'GM Fanta ananas 1.25l x6',s:'IBS',st:1,q:208,vj:29.9,lt:7,sts:'Predicted Stockout Soon',c:'CX'},
+      {n:'PM Fanta Orange 30cl x12',s:'IBS',st:65,q:202,vj:38.1,lt:7,sts:'Predicted Stockout Soon',c:'CX'},
+      {n:'Can mixte 33cl x24',s:'IBS',st:2,q:181,vj:26.2,lt:7,sts:'Predicted Stockout Soon',c:'CX'},
+      {n:'Seau chocolat chocopain 5kg',s:'Patisen',st:563,q:167,vj:81.1,lt:9,sts:'Predicted Stockout Soon',c:'AY'},
+      {n:'Lait Candia brique vanille 20cl',s:'Patisen',st:3,q:160,vj:81.7,lt:9,sts:'Predicted Stockout Soon',c:'AY'},
+      {n:'Eau SEO 4.5l',s:'CMGA',st:503,q:138,vj:71.2,lt:9,sts:'Order Soon',c:'CZ'},
+      {n:'GM Coca Cola 1.25l x6',s:'IBS',st:443,q:116,vj:79.8,lt:7,sts:'Predicted Stockout Soon',c:'AX'},
+     ]},
+  ],
+  pos:[
+    {num:'PO-20251217-001',ach:'acheteur1',s:'SENICO',d:'17/12/2025',st:'Valide',r:8,q:3200,m:'4 850 000'},
+    {num:'PO-20251215-002',ach:'acheteur2',s:'H&D Industries',d:'15/12/2025',st:'En transit',r:6,q:1100,m:'3 200 000'},
+    {num:'PO-20251212-003',ach:'acheteur3',s:'IBS',d:'12/12/2025',st:'Recu',r:10,q:4500,m:'6 750 000'},
+    {num:'PO-20251210-004',ach:'acheteur1',s:'Borodji Distribution',d:'10/12/2025',st:'En attente',r:4,q:180,m:'950 000'},
+    {num:'PO-20251208-005',ach:'acheteur2',s:'ARIMEX',d:'08/12/2025',st:'Valide',r:5,q:2300,m:'2 800 000'},
+    {num:'PO-20251205-006',ach:'acheteur3',s:'CMGA',d:'05/12/2025',st:'Recu',r:3,q:1500,m:'3 100 000'},
+    {num:'PO-20251203-007',ach:'acheteur2',s:'FKS',d:'03/12/2025',st:'En attente',r:7,q:900,m:'1 400 000'},
+    {num:'PO-20251201-008',ach:'acheteur3',s:'Patisen',d:'01/12/2025',st:'Valide',r:4,q:380,m:'1 900 000'},
   ]
 };
-
-// ── AUTH ──
-const USERS={
-  manager:{pass:'scm2025',role:'manager',name:'Admin Manager',zone:'Direction'},
-  agent1:{pass:'scm2025',role:'agent',agentId:'agent1'},
-  agent2:{pass:'scm2025',role:'agent',agentId:'agent2'},
-  agent3:{pass:'scm2025',role:'agent',agentId:'agent3'},
-  agent4:{pass:'scm2025',role:'agent',agentId:'agent4'},
+var USERS={
+  manager:{pw:'scm2025',role:'manager'},
+  agent1:{pw:'scm2025',role:'agent',id:'agent1'},
+  agent2:{pw:'scm2025',role:'agent',id:'agent2'},
+  agent3:{pw:'scm2025',role:'agent',id:'agent3'},
+  agent4:{pw:'scm2025',role:'agent',id:'agent4'},
+  acheteur1:{pw:'scm2025',role:'acheteur',id:'acheteur1'},
+  acheteur2:{pw:'scm2025',role:'acheteur',id:'acheteur2'},
+  acheteur3:{pw:'scm2025',role:'acheteur',id:'acheteur3'},
 };
+var role=null,ctx=null,MOIS=['Jan','Fev','Mar','Avr','Mai','Jun'];
 
-let currentUser=null, currentRole=null, currentPage='dashboard';
-let selectedRole='manager';
-
-function selectRole(r,el){
-  selectedRole=r;
-  document.querySelectorAll('.role-tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById('loginUser').value='';
-  document.getElementById('loginPass').value='';
-}
+function selRole(el){d('.role-tab').forEach(function(t){t.classList.remove('active');});el.classList.add('active');}
+function d(s,p){return (p||document).querySelectorAll(s);}
+function g(id){return document.getElementById(id);}
+function ini(n){return n.split(' ').map(function(w){return w[0];}).join('');}
+function bdg(t,c){return '<span class="badge '+c+'">'+t+'</span>';}
+function as(tp,html){return '<div class="astrip a'+tp+'"><span class="aicon">!</span><div>'+html+'</div></div>';}
+function pg(pct,col){return '<div class="prog-track"><div class="prog-fill" style="width:'+pct+'%;background:var(--'+col+')"></div></div>';}
+function hb(lbl,pct,col,rt){return '<div><div class="hbar-top"><strong>'+lbl+'</strong><span>'+rt+'</span></div>'+pg(pct,col)+'</div>';}
+function mb(vals){var mx=Math.max.apply(null,vals);return '<div class="mini-bars">'+vals.map(function(v,i){return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;"><div class="mini-bar" style="width:100%;height:'+Math.round(v/mx*54)+'px;background:var(--blue)"></div><div style="font-size:.55rem;color:var(--text-sec)">'+MOIS[i]+'</div></div>';}).join('')+'</div>';}
+function sb(s){if(s==='Predicted Stockout Soon')return bdg('Rupture imminente','ba');if(s==='Order Soon')return bdg('A commander','bb');if(s==='Out of Stock')return bdg('Rupture','br');return bdg('Stock OK','bg');}
+function kc(l,v,m,mc,cc,dk){var cl=dk?'onclick="oD(\''+dk+'\')"':'';return '<div class="kpi-card '+cc+'" '+cl+'><div class="kpi-label">'+l+'</div><div class="kpi-value">'+v+'</div><div class="kpi-meta '+mc+'">'+m+'</div></div>';}
 
 function doLogin(){
-  const u=document.getElementById('loginUser').value.trim();
-  const p=document.getElementById('loginPass').value;
-  const err=document.getElementById('loginError');
-  const record=USERS[u];
-  if(!record||record.pass!==p){err.style.display='block';return;}
-  err.style.display='none';
-  currentUser=u;currentRole=record.role;
-  initApp(record);
+  var u=g('liU').value.trim(),p=g('liP').value,e=g('liErr'),rec=USERS[u];
+  if(!rec||rec.pw!==p){e.style.display='block';return;}
+  e.style.display='none';role=rec.role;
+  if(role==='manager'){ctx=null;setUI('MG','Admin Manager','Direction','#1e3a5f');bNav('manager');rnd('m-db');}
+  else if(role==='agent'){ctx=D.agents.filter(function(a){return a.id===rec.id;})[0];setUI(ini(ctx.nm),ctx.nm,'Agent - '+ctx.z,ctx.cl);bNav('agent');rnd('a-db');}
+  else{ctx=D.ach.filter(function(a){return a.id===rec.id;})[0];setUI(ini(ctx.nm),ctx.nm,ctx.rl,ctx.cl);bNav('ach');rnd('c-db');}
+  g('loginPage').style.display='none';g('appShell').style.display='flex';g('aiFab').style.display='flex';
+}
+g('liP').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
+
+function doLogout(){role=null;ctx=null;g('loginPage').style.display='flex';g('appShell').style.display='none';g('aiFab').style.display='none';g('aiP').classList.remove('open');}
+
+function setUI(av,nm,rl,cl){g('uAv').textContent=av;g('uAv').style.background=cl;g('uNm').textContent=nm;g('uRl').textContent=rl;}
+
+function bNav(r){
+  var n=g('sNav');
+  if(r==='manager'){n.innerHTML='<div class="nav-section">Dashboard</div>'+
+    '<button class="nav-item active" onclick="nv(this,\'m-db\')"><span class="nav-icon">*</span>Vue globale</button>'+
+    '<button class="nav-item" onclick="nv(this,\'m-ag\')"><span class="nav-icon">o</span>Agents commerciaux<span class="nav-badge">4</span></button>'+
+    '<button class="nav-item" onclick="nv(this,\'m-ac\')"><span class="nav-icon">+</span>Agents acheteurs<span class="nav-badge nav-badge-blue">3</span></button>'+
+    '<div class="nav-section">Stocks</div>'+
+    '<button class="nav-item" onclick="nv(this,\'m-st\')"><span class="nav-icon">=</span>Niveaux de stock<span class="nav-badge">'+D.stats.oos+'</span></button>'+
+    '<button class="nav-item" onclick="nv(this,\'m-fo\')"><span class="nav-icon">^</span>Fournisseurs</button>'+
+    '<div class="nav-section">Achats</div>'+
+    '<button class="nav-item" onclick="nv(this,\'m-po\')"><span class="nav-icon">P</span>Suivi PO</button>'+
+    '<button class="nav-item" onclick="nv(this,\'m-ml\')"><span class="nav-icon">~</span>Previsions ML</button>'+
+    '<div class="nav-section">Outils</div>'+
+    '<button class="nav-item" onclick="togAI()"><span class="nav-icon">A</span>Assistant IA</button>';}
+  else if(r==='agent'){n.innerHTML='<div class="nav-section">Mon espace</div>'+
+    '<button class="nav-item active" onclick="nv(this,\'a-db\')"><span class="nav-icon">*</span>Tableau de bord</button>'+
+    '<button class="nav-item" onclick="nv(this,\'a-st\')"><span class="nav-icon">=</span>Mes stocks</button>'+
+    '<button class="nav-item" onclick="nv(this,\'a-fo\')"><span class="nav-icon">o</span>Mes fournisseurs</button>'+
+    '<div class="nav-section">Outils</div>'+
+    '<button class="nav-item" onclick="togAI()"><span class="nav-icon">A</span>Assistant IA</button>';}
+  else{var nb=ctx?ctx.to:0;n.innerHTML='<div class="nav-section">Mon espace</div>'+
+    '<button class="nav-item active" onclick="nv(this,\'c-db\')"><span class="nav-icon">*</span>Tableau de bord</button>'+
+    '<button class="nav-item" onclick="nv(this,\'c-cm\')"><span class="nav-icon">=</span>Produits a commander<span class="nav-badge">'+nb+'</span></button>'+
+    '<button class="nav-item" onclick="nv(this,\'c-np\')"><span class="nav-icon">+</span>Nouveau bon de commande</button>'+
+    '<button class="nav-item" onclick="nv(this,\'c-hi\')"><span class="nav-icon">H</span>Historique PO</button>'+
+    '<div class="nav-section">Outils</div>'+
+    '<button class="nav-item" onclick="togAI()"><span class="nav-icon">A</span>Assistant IA</button>';}
 }
 
-document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+function nv(el,pg){d('.nav-item').forEach(function(n){n.classList.remove('active');});el.classList.add('active');rnd(pg);}
 
-function doLogout(){
-  currentUser=null;currentRole=null;currentPage='dashboard';
-  document.getElementById('loginPage').style.display='flex';
-  document.getElementById('appShell').style.display='none';
-  document.getElementById('aiFab').style.display='none';
-  document.getElementById('aiPanel').classList.remove('open');
+function rnd(pg){
+  var el=g('mC'),h='';
+  var m={'m-db':mDb,'m-ag':mAg,'m-ac':mAc,'m-st':mSt,'m-fo':mFo,'m-po':mPo,'m-ml':mMl,
+         'a-db':aDb,'a-st':aSt,'a-fo':aFo,
+         'c-db':cDb,'c-cm':cCm,'c-np':cNp,'c-hi':cHi};
+  if(m[pg])h=m[pg]();
+  el.innerHTML=h;el.scrollTop=0;
 }
 
-function initApp(record){
-  document.getElementById('loginPage').style.display='none';
-  document.getElementById('appShell').style.display='flex';
-  document.getElementById('aiFab').style.display='flex';
+function phd(t,s,btn){return '<div class="page-hd"><div class="page-hd-left"><h2>'+t+'</h2><p>'+s+'</p></div>'+(btn?'<div class="page-hd-right">'+btn+'</div>':'')+'</div>';}
+function today(){return new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});}
 
-  if(record.role==='manager'){
-    document.getElementById('uName').textContent='Admin Manager';
-    document.getElementById('uRole').textContent='Direction générale';
-    document.getElementById('uAvatar').textContent='MG';
-    document.getElementById('uAvatar').style.background='#1e3a5f';
-    buildManagerSidebar();
-    renderPage('dashboard');
-  } else {
-    const ag=DATA.agents.find(a=>a.id===record.agentId);
-    document.getElementById('uName').textContent=ag.name;
-    document.getElementById('uRole').textContent='Agent — '+ag.zone;
-    document.getElementById('uAvatar').textContent=ag.name.split(' ').map(w=>w[0]).join('');
-    document.getElementById('uAvatar').style.background=ag.color;
-    buildAgentSidebar();
-    renderPage('agent-dashboard',ag);
-  }
+function mDb(){
+  var s=D.stats;
+  return phd('Tableau de bord - Vue globale',today(),'<button class="btn btn-ghost btn-sm" onclick="rnd(\'m-db\')">Actualiser</button>')+
+  '<div style="margin-bottom:1.2rem;">'+
+    as('danger','<strong>'+s.oos.toLocaleString('fr')+' references en rupture</strong> — Reapprovisionnement urgent requis')+
+    as('warning','<strong>'+s.soon+' ruptures imminentes</strong> — Horizon 7-30 jours')+
+    as('info','<strong>Acheteurs :</strong> '+s.toOrder+' references a commander — 9 bons de commande actifs ce mois')+
+  '</div>'+
+  '<div class="kpi-grid">'+
+    kc('References totales',s.total.toLocaleString('fr'),s.suppliers+' fournisseurs actifs','neutral','cb','refs')+
+    kc('En rupture de stock',s.oos.toLocaleString('fr'),((s.oos/s.total)*100).toFixed(1)+'% du catalogue','down','cr','oos')+
+    kc('Rupture imminente',s.soon,'Horizon 7-30 jours','down','ca','soon')+
+    kc('Stock satisfaisant',s.ok,((s.ok/s.total)*100).toFixed(1)+'% du catalogue','up','cg','ok')+
+  '</div>'+
+  '<div class="detail-drawer" id="mDraw"><div class="drawer-header"><div class="drawer-title" id="dT">-</div><button class="drawer-close" onclick="cD()">Fermer</button></div><div id="dC"></div></div>'+
+  '<div class="two-col">'+
+    '<div class="card"><div class="card-body">'+
+      '<div class="card-title">Repartition des statuts</div>'+
+      '<div class="card-sub" style="margin-bottom:.9rem">Sur '+s.total.toLocaleString('fr')+' references</div>'+
+      '<div class="donut-wrap">'+
+        '<svg viewBox="0 0 100 100" width="105" height="105">'+
+          '<circle cx="50" cy="50" r="35" fill="none" stroke="#f1f5f9" stroke-width="20"/>'+
+          '<circle cx="50" cy="50" r="35" fill="none" stroke="#dc2626" stroke-width="20" stroke-dasharray="132.2 87.8" stroke-dashoffset="0" transform="rotate(-90 50 50)"/>'+
+          '<circle cx="50" cy="50" r="35" fill="none" stroke="#d97706" stroke-width="20" stroke-dasharray="34.5 185.5" stroke-dashoffset="-132.2" transform="rotate(-90 50 50)"/>'+
+          '<circle cx="50" cy="50" r="35" fill="none" stroke="#2563eb" stroke-width="20" stroke-dasharray="18.2 201.8" stroke-dashoffset="-166.7" transform="rotate(-90 50 50)"/>'+
+          '<circle cx="50" cy="50" r="35" fill="none" stroke="#16a34a" stroke-width="20" stroke-dasharray="34.7 185.3" stroke-dashoffset="-184.9" transform="rotate(-90 50 50)"/>'+
+          '<text x="50" y="53" text-anchor="middle" fill="#1e293b" font-size="8" font-weight="800">'+s.total+'</text>'+
+        '</svg>'+
+        '<div class="leg-list">'+
+          '<div class="leg-row"><div class="leg-dot" style="background:#dc2626"></div>En rupture<span class="leg-num">'+s.oos.toLocaleString('fr')+'</span></div>'+
+          '<div class="leg-row"><div class="leg-dot" style="background:#d97706"></div>Rupture imminente<span class="leg-num">'+s.soon+'</span></div>'+
+          '<div class="leg-row"><div class="leg-dot" style="background:#2563eb"></div>A commander<span class="leg-num">'+s.orderSoon+'</span></div>'+
+          '<div class="leg-row"><div class="leg-dot" style="background:#16a34a"></div>Stock OK<span class="leg-num">'+s.ok+'</span></div>'+
+        '</div>'+
+      '</div>'+
+    '</div></div>'+
+    '<div class="card"><div class="card-body">'+
+      '<div class="card-title">Performance agents commerciaux</div>'+
+      '<div class="card-sub" style="margin-bottom:.9rem">Taux de disponibilite stock</div>'+
+      '<div class="hbar-list">'+D.agents.map(function(a){return hb(a.nm,a.p,a.p>=25?'green':a.p>=15?'amber':'red',a.p+'%');}).join('')+'</div>'+
+    '</div></div>'+
+  '</div>'+
+  '<div class="two-col">'+
+    '<div class="card"><div class="card-body">'+
+      '<div class="card-title">Agents acheteurs — Budget & PO</div>'+
+      '<div class="card-sub" style="margin-bottom:.9rem">Budget consomme et bons de commande</div>'+
+      '<div class="hbar-list">'+D.ach.map(function(a){var p=Math.round(a.bc/a.bm*100);return hb(a.nm,p,'teal',a.pm+' PO — '+a.pp+' en attente');}).join('')+'</div>'+
+    '</div></div>'+
+    '<div class="card"><div class="card-body">'+
+      '<div class="card-title">Produits a commander (ML)</div>'+
+      '<div class="card-sub" style="margin-bottom:.9rem">Repartition par acheteur</div>'+
+      '<div class="hbar-list">'+D.ach.map(function(a){return hb(a.nm,Math.round(a.to/D.stats.toOrder*100),'purple',a.to+' refs — qty: '+a.qty.toLocaleString('fr'));}).join('')+'</div>'+
+    '</div></div>'+
+  '</div>';
 }
 
-// ── SIDEBARS ──
-function buildManagerSidebar(){
-  document.getElementById('sidebarNav').innerHTML=`
-    <div class="nav-section">Vue globale</div>
-    <button class="nav-item active" onclick="navTo('dashboard',this)"><span class="nav-icon">⊞</span>Tableau de bord</button>
-    <button class="nav-item" onclick="navTo('agents',this)"><span class="nav-icon">◉</span>Agents &amp; Comptes<span class="nav-badge">4</span></button>
-
-    <div class="nav-section">Stocks</div>
-    <button class="nav-item" onclick="navTo('stock',this)"><span class="nav-icon">≡</span>Niveaux de stock<span class="nav-badge">1132</span></button>
-    <button class="nav-item" onclick="navTo('categories',this)"><span class="nav-icon">◫</span>Catégories ABC/XYZ</button>
-
-    <div class="nav-section">Achats</div>
-    <button class="nav-item" onclick="navTo('fournisseurs',this)"><span class="nav-icon">↑</span>Fournisseurs</button>
-
-    <div class="nav-section">Analyse</div>
-    <button class="nav-item" onclick="navTo('previsions',this)"><span class="nav-icon">~</span>Prévisions ML</button>
-    <button class="nav-item" onclick="toggleAI()"><span class="nav-icon">✦</span>Assistant IA</button>
-  `;
+function mAg(){
+  return phd('Agents commerciaux','Performance et portefeuilles')+
+  '<div class="agrid">'+D.agents.map(function(a){
+    return '<div class="acard">'+
+      '<div class="ahdr"><div class="aav" style="background:'+a.cl+'">'+ini(a.nm)+'</div>'+
+      '<div><div class="aname">'+a.nm+'</div><div class="azone">'+a.z+'</div></div>'+
+      '<div style="margin-left:auto">'+bdg(a.p+'% dispo',a.p>=25?'bg':a.p>=15?'ba':'br')+'</div></div>'+
+      '<div class="astats">'+
+        '<div class="astat"><div class="astat-v">'+a.r+'</div><div class="astat-l">Refs</div></div>'+
+        '<div class="astat"><div class="astat-v" style="color:var(--red)">'+a.x+'</div><div class="astat-l">Rupture</div></div>'+
+        '<div class="astat"><div class="astat-v" style="color:var(--amber)">'+a.s+'</div><div class="astat-l">Imminente</div></div>'+
+        '<div class="astat"><div class="astat-v" style="color:var(--green)">'+a.ok+'</div><div class="astat-l">Stock OK</div></div>'+
+      '</div>'+
+      '<div style="margin-top:.85rem">'+mb(a.pf)+'</div>'+
+      '<div style="margin-top:.65rem;font-size:.7rem;color:var(--text-sec)">'+a.sups.join(' · ')+'</div>'+
+      '<div style="margin-top:.65rem;display:flex;gap:.4rem">'+bdg('PO: '+a.pm,'bb')+bdg(a.pp+' en attente',a.pp>3?'ba':'bz')+'</div>'+
+    '</div>';
+  }).join('')+'</div>';
 }
 
-function buildAgentSidebar(){
-  document.getElementById('sidebarNav').innerHTML=`
-    <div class="nav-section">Mon espace</div>
-    <button class="nav-item active" onclick="navTo('agent-dashboard',this)"><span class="nav-icon">⊞</span>Mon tableau de bord</button>
-    <button class="nav-item" onclick="navTo('agent-stock',this)"><span class="nav-icon">≡</span>Mes stocks<span class="nav-badge" id="agentBadgeStock">—</span></button>
-    <button class="nav-item" onclick="navTo('agent-po',this)"><span class="nav-icon">↑</span>Mes commandes PO</button>
-
-    <div class="nav-section">Outils</div>
-    <button class="nav-item" onclick="toggleAI()"><span class="nav-icon">✦</span>Assistant IA</button>
-  `;
+function mAc(){
+  return phd('Agents acheteurs','Activite commandes et performance')+
+  '<div class="agrid">'+D.ach.map(function(a){
+    var bp=Math.round(a.bc/a.bm*100);
+    return '<div class="acard">'+
+      '<div class="ahdr"><div class="aav" style="background:'+a.cl+'">'+ini(a.nm)+'</div>'+
+      '<div><div class="aname">'+a.nm+'</div><div class="azone">'+a.rl+'</div></div>'+
+      '<div style="margin-left:auto">'+bdg(a.pp+' en attente',a.pp>3?'ba':'bb')+'</div></div>'+
+      '<div class="astats">'+
+        '<div class="astat"><div class="astat-v">'+a.r+'</div><div class="astat-l">Refs</div></div>'+
+        '<div class="astat"><div class="astat-v" style="color:var(--red)">'+a.x+'</div><div class="astat-l">Rupture</div></div>'+
+        '<div class="astat"><div class="astat-v" style="color:var(--amber)">'+a.to+'</div><div class="astat-l">A commander</div></div>'+
+        '<div class="astat"><div class="astat-v" style="color:var(--teal)">'+a.pm+'</div><div class="astat-l">PO mois</div></div>'+
+      '</div>'+
+      '<div style="margin-top:.75rem"><div class="hbar-top" style="margin-bottom:.25rem"><span>Budget</span><span>'+bp+'%</span></div>'+pg(bp,'teal')+'</div>'+
+      '<div style="margin-top:.65rem">'+mb(a.pf)+'</div>'+
+      '<div style="margin-top:.65rem;font-size:.7rem;color:var(--text-sec)">'+a.sups.join(' · ')+'</div>'+
+      '<div style="margin-top:.6rem;display:flex;gap:.35rem;flex-wrap:wrap">'+bdg('Valides: '+a.pv,'bg')+bdg('Attente: '+a.pp,a.pp>3?'ba':'bb')+bdg('Ce mois: '+a.pm,'bz')+'</div>'+
+    '</div>';
+  }).join('')+'</div>';
 }
 
-function navTo(page,el){
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  el.classList.add('active');
-  if(currentRole==='agent'){
-    const ag=DATA.agents.find(a=>a.id===currentUser);
-    renderPage(page,ag);
-  } else {
-    renderPage(page);
-  }
+function mSt(){
+  return phd('Niveaux de stock',D.stats.oos+' ruptures sur '+D.stats.total+' references')+
+  as('danger','<strong>'+D.stats.oos.toLocaleString('fr')+' ruptures actives</strong> — Classe CX concentre l\'essentiel')+
+  '<div class="card" style="margin-top:1rem"><div class="card-body"><div class="card-title" style="margin-bottom:.8rem">Situation par classe ABC/XYZ</div>'+
+  '<div class="tbl-wrap"><table class="data-table"><thead><tr><th>Classe</th><th>Refs</th><th>Ventes/j</th><th>Couverture</th><th>Priorite</th></tr></thead><tbody>'+
+  D.cat.map(function(c){
+    var p=c.n.indexOf('A+')===0||c.n==='AX'?'Critique':c.n[0]==='A'||c.n==='BX'?'Haute':'Standard';
+    return '<tr><td><strong>'+c.n+'</strong></td><td>'+c.r+'</td><td>'+c.v+' u/j</td><td>'+(c.c>500?'>500 j':c.c+' j')+'</td><td>'+bdg(p,p==='Critique'?'br':p==='Haute'?'ba':'bz')+'</td></tr>';
+  }).join('')+'</tbody></table></div></div></div>';
 }
 
-// ── RENDER ROUTER ──
-function renderPage(page,ctx){
-  currentPage=page;
-  const el=document.getElementById('mainContent');
-  if(page==='dashboard') el.innerHTML=renderManagerDashboard();
-  else if(page==='agents') el.innerHTML=renderAgents();
-  else if(page==='stock') el.innerHTML=renderStock();
-  else if(page==='categories') el.innerHTML=renderCategories();
-  else if(page==='fournisseurs') el.innerHTML=renderFournisseurs();
-  else if(page==='previsions') el.innerHTML=renderPrevisions();
-  else if(page==='agent-dashboard') el.innerHTML=renderAgentDashboard(ctx);
-  else if(page==='agent-stock') el.innerHTML=renderAgentStock(ctx);
-  else if(page==='agent-po') el.innerHTML=renderAgentPO(ctx);
+function mFo(){
+  return phd('Fournisseurs','143 fournisseurs actifs — Top 12')+
+  '<div class="card"><div class="card-body"><div class="tbl-wrap"><table class="data-table">'+
+  '<thead><tr><th>Fournisseur</th><th>Refs</th><th>OK</th><th>Imminente</th><th>Commander</th><th>Rupture</th><th>Dispo</th><th>Statut</th></tr></thead><tbody>'+
+  D.sup.map(function(s){
+    return '<tr><td><strong>'+s.n+'</strong></td><td>'+s.r+'</td>'+
+      '<td>'+bdg(s.ok,'bg')+'</td><td>'+bdg(s.s,'ba')+'</td><td>'+bdg(s.o,'bb')+'</td><td>'+bdg(s.x,'br')+'</td>'+
+      '<td><div style="display:flex;align-items:center;gap:.4rem"><div class="prog-track" style="width:50px"><div class="prog-fill" style="width:'+s.p+'%;background:'+(s.p>=30?'var(--green)':s.p>=10?'var(--amber)':'var(--red)')+'"></div></div><span style="font-size:.7rem;font-weight:700">'+s.p+'%</span></div></td>'+
+      '<td>'+bdg(s.p>=30?'Bon':s.p>=10?'A surveiller':'Critique',s.p>=30?'bg':s.p>=10?'ba':'br')+'</td></tr>';
+  }).join('')+'</tbody></table></div></div></div>';
 }
 
-// ══════════════════════════════════════
-// MANAGER VIEWS
-// ══════════════════════════════════════
-function renderManagerDashboard(){
-  const s=DATA.stats;
-  return`
-  <div class="page-hd">
-    <div class="page-hd-left">
-      <h2>Tableau de bord — Vue globale</h2>
-      <p>Situation au ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</p>
-    </div>
-    <div class="page-hd-right">
-      <button class="btn btn-ghost btn-sm" onclick="renderPage('dashboard')">Actualiser</button>
-    </div>
-  </div>
-
-  <!-- Alerts -->
-  <div style="margin-bottom:1.25rem;">
-    <div class="alert-strip alert-strip-danger">
-      <span class="alert-strip-icon">▲</span>
-      <div><strong>Ruptures critiques :</strong> ${s.oos.toLocaleString('fr')} références en rupture de stock — réapprovisionnement urgent requis</div>
-    </div>
-    <div class="alert-strip alert-strip-warning">
-      <span class="alert-strip-icon">◆</span>
-      <div><strong>Ruptures imminentes :</strong> ${s.soon} références atteignent le stock de sécurité dans les 7 à 30 jours</div>
-    </div>
-    <div class="alert-strip alert-strip-info">
-      <span class="alert-strip-icon">●</span>
-      <div><strong>Recommandation ML :</strong> ${s.orderSoon} références à commander cette semaine pour éviter des ruptures</div>
-    </div>
-  </div>
-
-  <!-- KPIs -->
-  <div class="kpi-grid">
-    <div class="kpi-card c-blue" onclick="openDrawer('refs')">
-      <div class="kpi-icon">≡</div>
-      <div class="kpi-label">Références totales</div>
-      <div class="kpi-value">${s.total.toLocaleString('fr')}</div>
-      <div class="kpi-meta neutral">${s.suppliers} fournisseurs actifs</div>
-    </div>
-    <div class="kpi-card c-red" onclick="openDrawer('oos')">
-      <div class="kpi-icon">!</div>
-      <div class="kpi-label">En rupture de stock</div>
-      <div class="kpi-value">${s.oos.toLocaleString('fr')}</div>
-      <div class="kpi-meta down">${((s.oos/s.total)*100).toFixed(1)} % du catalogue</div>
-    </div>
-    <div class="kpi-card c-amber" onclick="openDrawer('soon')">
-      <div class="kpi-icon">◆</div>
-      <div class="kpi-label">Rupture imminente</div>
-      <div class="kpi-value">${s.soon}</div>
-      <div class="kpi-meta down">Horizon 7–30 jours</div>
-    </div>
-    <div class="kpi-card c-green" onclick="openDrawer('ok')">
-      <div class="kpi-icon">✓</div>
-      <div class="kpi-label">Stock satisfaisant</div>
-      <div class="kpi-value">${s.ok}</div>
-      <div class="kpi-meta up">${((s.ok/s.total)*100).toFixed(1)} % du catalogue</div>
-    </div>
-  </div>
-
-  <!-- Detail drawer -->
-  <div class="detail-drawer" id="mainDrawer">
-    <div class="drawer-header">
-      <div class="drawer-title" id="drawerTitle">—</div>
-      <button class="drawer-close" onclick="closeDrawer()">Fermer ✕</button>
-    </div>
-    <div id="drawerContent"></div>
-  </div>
-
-  <!-- Two col -->
-  <div class="two-col">
-    <!-- Donut -->
-    <div class="card">
-      <div class="card-body">
-        <div class="card-title">Répartition des statuts</div>
-        <div class="card-sub" style="margin-bottom:1rem;">Sur ${s.total.toLocaleString('fr')} références</div>
-        <div class="donut-wrap">
-          <svg viewBox="0 0 100 100" width="110" height="110">
-            <circle cx="50" cy="50" r="35" fill="none" stroke="#f1f5f9" stroke-width="20"/>
-            <circle cx="50" cy="50" r="35" fill="none" stroke="#dc2626" stroke-width="20"
-              stroke-dasharray="132.2 87.8" stroke-dashoffset="0" transform="rotate(-90 50 50)"/>
-            <circle cx="50" cy="50" r="35" fill="none" stroke="#d97706" stroke-width="20"
-              stroke-dasharray="34.5 185.5" stroke-dashoffset="-132.2" transform="rotate(-90 50 50)"/>
-            <circle cx="50" cy="50" r="35" fill="none" stroke="#2563eb" stroke-width="20"
-              stroke-dasharray="18.2 201.8" stroke-dashoffset="-166.7" transform="rotate(-90 50 50)"/>
-            <circle cx="50" cy="50" r="35" fill="none" stroke="#16a34a" stroke-width="20"
-              stroke-dasharray="34.7 185.3" stroke-dashoffset="-184.9" transform="rotate(-90 50 50)"/>
-            <text x="50" y="53" text-anchor="middle" fill="#1e293b" font-size="8" font-weight="800">${s.total.toLocaleString('fr')}</text>
-          </svg>
-          <div class="legend-list">
-            <div class="legend-row"><div class="legend-dot" style="background:#dc2626"></div>Rupture de stock<span class="legend-num">${s.oos.toLocaleString('fr')}</span></div>
-            <div class="legend-row"><div class="legend-dot" style="background:#d97706"></div>Rupture imminente<span class="legend-num">${s.soon}</span></div>
-            <div class="legend-row"><div class="legend-dot" style="background:#2563eb"></div>À commander<span class="legend-num">${s.orderSoon}</span></div>
-            <div class="legend-row"><div class="legend-dot" style="background:#16a34a"></div>Stock OK<span class="legend-num">${s.ok}</span></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Performance agents -->
-    <div class="card">
-      <div class="card-body">
-        <div class="card-title">Performance des agents</div>
-        <div class="card-sub" style="margin-bottom:1rem;">Taux de disponibilité stock moyen</div>
-        <div class="hbar-list">
-          ${DATA.agents.map(ag=>`
-          <div class="hbar-row">
-            <div class="hbar-top"><strong>${ag.name}</strong><span>${ag.zone}</span><span style="margin-left:auto;font-weight:700;color:${ag.rate>=25?'var(--green)':ag.rate>=15?'var(--amber)':'var(--red)'}">${ag.rate}%</span></div>
-            <div class="prog-track"><div class="prog-fill" style="width:${ag.rate}%;background:${ag.rate>=25?'var(--green)':ag.rate>=15?'var(--amber)':'var(--red)'}"></div></div>
-          </div>`).join('')}
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Agents summary -->
-  <div class="card" style="margin-bottom:1.25rem;">
-    <div class="card-body">
-      <div class="card-title" style="margin-bottom:.85rem;">Synthèse par agent</div>
-      <div class="tbl-wrap">
-        <table class="data-table">
-          <thead><tr>
-            <th>Agent</th><th>Zone</th><th>Fournisseurs</th><th>Références</th>
-            <th>Stock OK</th><th>À commander</th><th>Rupture imminente</th><th>En rupture</th><th>Disponibilité</th>
-          </tr></thead>
-          <tbody>
-            ${DATA.agents.map(ag=>`<tr>
-              <td><strong style="color:${ag.color}">${ag.name}</strong></td>
-              <td>${ag.zone}</td>
-              <td>${ag.suppliers.length}</td>
-              <td>${ag.refs}</td>
-              <td><span class="badge badge-green">${ag.ok}</span></td>
-              <td><span class="badge badge-blue">${ag.order}</span></td>
-              <td><span class="badge badge-amber">${ag.soon}</span></td>
-              <td><span class="badge badge-red">${ag.oos}</span></td>
-              <td><span class="badge ${ag.rate>=25?'badge-green':ag.rate>=15?'badge-amber':'badge-red'}">${ag.rate}%</span></td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- Top fournisseurs -->
-  <div class="card">
-    <div class="card-body">
-      <div class="card-title" style="margin-bottom:.85rem;">Top 12 fournisseurs par références</div>
-      <div class="tbl-wrap">
-        <table class="data-table">
-          <thead><tr><th>Fournisseur</th><th>Références</th><th>Stock OK</th><th>Imminente</th><th>À commander</th><th>Rupture</th><th>Dispo.</th></tr></thead>
-          <tbody>
-            ${DATA.suppliers.map(s=>`<tr>
-              <td><strong>${s.name}</strong></td>
-              <td>${s.refs}</td>
-              <td><span class="badge badge-green">${s.ok}</span></td>
-              <td><span class="badge badge-amber">${s.soon}</span></td>
-              <td><span class="badge badge-blue">${s.order}</span></td>
-              <td><span class="badge badge-red">${s.oos}</span></td>
-              <td><span class="badge ${s.rate>=25?'badge-green':s.rate>=10?'badge-amber':'badge-red'}">${s.rate}%</span></td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-  `;
+function mPo(){
+  var at=D.pos.filter(function(p){return p.st==='En attente';}).length;
+  var tr=D.pos.filter(function(p){return p.st==='En transit';}).length;
+  var rc=D.pos.filter(function(p){return p.st==='Recu';}).length;
+  return phd('Suivi des bons de commande','Tous les PO des agents acheteurs')+
+  '<div class="kpi-grid">'+
+    kc('PO ce mois',D.pos.length,'Tous acheteurs','neutral','cb')+
+    kc('En attente',at,'Validation requise','down','ca')+
+    kc('En transit',tr,'En cours de livraison','neutral','ct')+
+    kc('Recus',rc,'Ce mois','up','cg')+
+  '</div>'+
+  '<div class="card"><div class="card-body"><div class="tbl-wrap"><table class="data-table">'+
+  '<thead><tr><th>N PO</th><th>Acheteur</th><th>Fournisseur</th><th>Date</th><th>Refs</th><th>Qty</th><th>Montant FCFA</th><th>Statut</th></tr></thead><tbody>'+
+  D.pos.map(function(p){
+    var ac=D.ach.filter(function(a){return a.id===p.ach;})[0];
+    var sc=p.st==='Valide'?'bg':p.st==='En attente'?'ba':p.st==='En transit'?'bb':'bz';
+    return '<tr><td><code style="font-size:.68rem;background:var(--bg);padding:.1rem .35rem;border-radius:4px">'+p.num+'</code></td>'+
+      '<td><span style="color:'+ac.cl+';font-weight:600">'+ac.nm+'</span></td>'+
+      '<td>'+p.s+'</td><td>'+p.d+'</td><td>'+p.r+'</td><td>'+p.q.toLocaleString('fr')+'</td>'+
+      '<td style="font-weight:600">'+p.m+'</td><td>'+bdg(p.st,sc)+'</td></tr>';
+  }).join('')+'</tbody></table></div></div></div>';
 }
 
-function renderAgents(){
-  return`
-  <div class="page-hd">
-    <div class="page-hd-left"><h2>Agents &amp; Comptes</h2><p>Suivi de la performance par agent commercial</p></div>
-  </div>
-  <div class="agent-grid">
-    ${DATA.agents.map(ag=>`
-    <div class="agent-card">
-      <div class="agent-header">
-        <div class="agent-avatar" style="background:${ag.color}">${ag.name.split(' ').map(w=>w[0]).join('')}</div>
-        <div>
-          <div class="agent-name">${ag.name}</div>
-          <div class="agent-zone">${ag.zone}</div>
-        </div>
-        <div style="margin-left:auto;">
-          <span class="badge ${ag.rate>=25?'badge-green':ag.rate>=15?'badge-amber':'badge-red'}" style="font-size:.75rem;">${ag.rate}% dispo</span>
-        </div>
-      </div>
-
-      <div class="agent-stats">
-        <div class="agent-stat">
-          <div class="agent-stat-val" style="color:var(--text)">${ag.refs}</div>
-          <div class="agent-stat-lbl">Références</div>
-        </div>
-        <div class="agent-stat">
-          <div class="agent-stat-val" style="color:var(--red)">${ag.oos}</div>
-          <div class="agent-stat-lbl">En rupture</div>
-        </div>
-        <div class="agent-stat">
-          <div class="agent-stat-val" style="color:var(--green)">${ag.ok}</div>
-          <div class="agent-stat-lbl">Stock OK</div>
-        </div>
-      </div>
-
-      <div class="agent-perf" style="margin-top:1rem;">
-        <div class="perf-label"><span>Taux de disponibilité</span><span style="font-weight:700">${ag.rate}%</span></div>
-        <div class="prog-track"><div class="prog-fill prog-blue" style="width:${ag.rate}%"></div></div>
-      </div>
-      <div class="agent-perf">
-        <div class="perf-label"><span>Objectif stock</span><span>${ag.objectives.stock}%</span></div>
-        <div class="prog-track"><div class="prog-fill prog-amber" style="width:${ag.objectives.stock}%"></div></div>
-      </div>
-      <div class="agent-perf">
-        <div class="perf-label"><span>Score qualité</span><span>${ag.objectives.quality}%</span></div>
-        <div class="prog-track"><div class="prog-fill prog-green" style="width:${ag.objectives.quality}%"></div></div>
-      </div>
-
-      <div style="margin-top:.85rem;padding-top:.75rem;border-top:1px solid var(--border);font-size:.72rem;color:var(--text-sec);">
-        Fournisseurs : ${ag.suppliers.join(', ')}
-      </div>
-      <div style="margin-top:.75rem;display:flex;gap:.4rem;">
-        <span class="badge badge-blue">PO mois : ${ag.po_month}</span>
-        <span class="badge ${ag.po_pending>3?'badge-amber':'badge-gray'}">En attente : ${ag.po_pending}</span>
-      </div>
-    </div>
-    `).join('')}
-  </div>`;
+function mMl(){
+  return phd('Previsions ML','Modele Random Forest — sklearn')+
+  '<div class="two-col">'+
+    '<div class="card"><div class="card-body"><div class="card-title">Ruptures predites</div>'+
+      '<div class="kpi-value" style="font-size:2.2rem;color:var(--red);margin:.5rem 0">1 427</div>'+
+      '<div style="font-size:.73rem;color:var(--text-sec)">Sur 1 880 references — precision ~94%</div></div></div>'+
+    '<div class="card"><div class="card-body"><div class="card-title">Recommandations de commande</div>'+
+      '<div class="kpi-value" style="font-size:2.2rem;color:var(--blue);margin:.5rem 0">451</div>'+
+      '<div style="font-size:.73rem;color:var(--text-sec)">Refs a approvisionner — qty: 16 532 unites</div></div></div>'+
+  '</div>';
 }
 
-function renderStock(){
-  const s=DATA.stats;
-  return`
-  <div class="page-hd">
-    <div class="page-hd-left"><h2>Niveaux de stock</h2><p>${s.oos} références en rupture sur ${s.total} — Catégories A+, A, B, C analysées</p></div>
-  </div>
-  <div class="alert-strip alert-strip-danger" style="margin-bottom:1.25rem;">
-    <span class="alert-strip-icon">▲</span>
-    <div><strong>${s.oos.toLocaleString('fr')} ruptures actives</strong> — La classe CX représente 77,7% du catalogue (1 460 refs) avec un taux de disponibilité critique</div>
-  </div>
-  <div class="card">
-    <div class="card-body">
-      <div class="card-title" style="margin-bottom:.85rem;">Situation par classe ABC/XYZ</div>
-      <div class="tbl-wrap">
-        <table class="data-table">
-          <thead><tr><th>Classe</th><th>Références</th><th>Ventes moy/j</th><th>Couverture moy</th><th>Priorité</th></tr></thead>
-          <tbody>
-            ${DATA.categories.map(c=>{
-              const prio=c.name.startsWith('A+')||c.name.startsWith('AX')?'Critique':c.name.startsWith('A')||c.name.startsWith('BX')?'Haute':'Standard';
-              const cls=prio==='Critique'?'badge-red':prio==='Haute'?'badge-amber':'badge-gray';
-              return`<tr>
-                <td><strong>${c.name}</strong></td>
-                <td>${c.refs}</td>
-                <td>${c.sales.toFixed(2)} u/j</td>
-                <td>${c.cov>1000?'>1 000 j':(c.cov.toFixed(1)+' j')}</td>
-                <td><span class="badge ${cls}">${prio}</span></td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>`;
+function aDb(){
+  var a=ctx;
+  return phd('Tableau de bord',a.nm+' — '+a.z)+
+  '<div style="margin-bottom:1.1rem;">'+
+    (a.x>100?as('danger','<strong>'+a.x+' references en rupture</strong> dans votre portefeuille'):'')+
+    (a.s>15?as('warning','<strong>'+a.s+' ruptures imminentes</strong> — preparer les commandes'):'')+
+  '</div>'+
+  '<div class="kpi-grid">'+
+    kc('Mes references',a.r,a.sups.length+' fournisseurs','neutral','cb')+
+    kc('En rupture',a.x,((a.x/a.r)*100).toFixed(1)+'% du portefeuille','down','cr')+
+    kc('Rupture imminente',a.s,'A traiter cette semaine','down','ca')+
+    kc('Stock OK',a.ok,a.p+'% de disponibilite','up','cg')+
+  '</div>'+
+  '<div class="two-col">'+
+    '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.8rem">Mes objectifs du mois</div>'+
+      '<div class="hbar-list">'+hb('Disponibilite cible',a.obj.st,'blue',a.obj.st+'%')+hb('Score qualite QAC',a.obj.q,'green',a.obj.q+'%')+hb('Delai traitement PO',a.obj.d,'amber',a.obj.d+'%')+'</div>'+
+      '<div style="margin-top:.75rem">'+bdg('Dispo actuelle: '+a.p+'%',a.p>=a.obj.st?'bg':'ba')+'</div>'+
+    '</div></div>'+
+    '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.8rem">Activite 6 mois</div>'+
+      mb(a.pf)+
+      '<div style="margin-top:.75rem;display:flex;gap:.4rem">'+bdg('PO: '+a.pm,'bb')+bdg(a.pp+' en attente',a.pp>3?'ba':'bz')+'</div>'+
+    '</div></div>'+
+  '</div>';
 }
 
-function renderCategories(){
-  return`
-  <div class="page-hd">
-    <div class="page-hd-left"><h2>Analyse ABC / XYZ</h2><p>Segmentation des références par valeur et variabilité de la demande</p></div>
-  </div>
-  <div class="three-col">
-    <div class="card"><div class="card-body">
-      <div class="card-title">Classe A+ (premium)</div>
-      <div class="card-sub">Fort volume, demande régulière</div>
-      <div style="margin-top:.75rem;">
-        <div class="kpi-value" style="font-size:1.5rem;color:var(--red)">20</div>
-        <div style="font-size:.75rem;color:var(--text-sec);margin-top:.3rem;">Ventes moy : 270 u/j — Couverture : 4 j</div>
-        <div class="badge badge-red" style="margin-top:.5rem;">Priorité maximale</div>
-      </div>
-    </div></div>
-    <div class="card"><div class="card-body">
-      <div class="card-title">Classe A (haute valeur)</div>
-      <div class="card-sub">Volume significatif</div>
-      <div style="margin-top:.75rem;">
-        <div class="kpi-value" style="font-size:1.5rem;color:var(--amber)">61</div>
-        <div style="font-size:.75rem;color:var(--text-sec);margin-top:.3rem;">Ventes moy : 80 u/j — Couverture : 7 j</div>
-        <div class="badge badge-amber" style="margin-top:.5rem;">Priorité haute</div>
-      </div>
-    </div></div>
-    <div class="card"><div class="card-body">
-      <div class="card-title">Classe B (valeur moyenne)</div>
-      <div class="card-sub">Rotation intermédiaire</div>
-      <div style="margin-top:.75rem;">
-        <div class="kpi-value" style="font-size:1.5rem;color:var(--blue)">181</div>
-        <div style="font-size:.75rem;color:var(--text-sec);margin-top:.3rem;">Ventes moy : 26 u/j — Couverture : 88 j</div>
-        <div class="badge badge-blue" style="margin-top:.5rem;">Priorité standard</div>
-      </div>
-    </div></div>
-  </div>
-  <div class="card"><div class="card-body">
-    <div class="card-title" style="margin-bottom:.85rem;">Classe C — Détail par sous-catégorie</div>
-    <div class="hbar-list">
-      ${[{n:'CX',v:1460,max:1460},{n:'CY',v:66,max:1460},{n:'CZ',v:92,max:1460}].map(c=>`
-      <div class="hbar-row">
-        <div class="hbar-top"><strong>${c.n}</strong><span>${c.v} références</span></div>
-        <div class="prog-track"><div class="prog-fill prog-blue" style="width:${(c.v/c.max*100).toFixed(1)}%"></div></div>
-      </div>`).join('')}
-    </div>
-    <div style="margin-top:.75rem;font-size:.75rem;color:var(--text-sec);">La classe CX (1 460 refs, 77,7% du catalogue) représente les produits de faible valeur à forte variabilité. Taux de rupture : 60,2%.</div>
-  </div></div>`;
+function aSt(){
+  var a=ctx;
+  return phd('Mes stocks',a.r+' references — '+a.sups.length+' fournisseurs')+
+  '<div class="card"><div class="card-body"><div class="tbl-wrap"><table class="data-table">'+
+  '<thead><tr><th>Fournisseur</th><th>Refs</th><th>OK</th><th>Imminente</th><th>Commander</th><th>Rupture</th><th>Dispo</th></tr></thead><tbody>'+
+  a.sups.map(function(sn){
+    var s=D.sup.filter(function(f){return f.n===sn;})[0]||{r:0,ok:0,s:0,o:0,x:0,p:0};
+    return '<tr><td><strong>'+sn+'</strong></td><td>'+s.r+'</td>'+
+      '<td>'+bdg(s.ok,'bg')+'</td><td>'+bdg(s.s,'ba')+'</td><td>'+bdg(s.o,'bb')+'</td><td>'+bdg(s.x,'br')+'</td>'+
+      '<td>'+bdg(s.p+'%',s.p>=25?'bg':s.p>=10?'ba':'br')+'</td></tr>';
+  }).join('')+'</tbody></table></div></div></div>';
 }
 
-function renderFournisseurs(){
-  return`
-  <div class="page-hd">
-    <div class="page-hd-left"><h2>Fournisseurs</h2><p>143 fournisseurs actifs — Top 12 par nombre de références</p></div>
-  </div>
-  <div class="card"><div class="card-body">
-    <div class="card-title" style="margin-bottom:.85rem;">Performance fournisseurs</div>
-    <div class="tbl-wrap">
-      <table class="data-table">
-        <thead><tr>
-          <th>Fournisseur</th><th>Références</th><th>Stock OK</th>
-          <th>Rupture imminente</th><th>À commander</th><th>En rupture</th>
-          <th>Taux dispo.</th><th>Statut</th>
-        </tr></thead>
-        <tbody>
-          ${DATA.suppliers.map(s=>{
-            const status=s.rate>=30?'Bon':s.rate>=10?'À surveiller':'Critique';
-            const cls=s.rate>=30?'badge-green':s.rate>=10?'badge-amber':'badge-red';
-            return`<tr>
-              <td><strong>${s.name}</strong></td>
-              <td>${s.refs}</td>
-              <td><span class="badge badge-green">${s.ok}</span></td>
-              <td><span class="badge badge-amber">${s.soon}</span></td>
-              <td><span class="badge badge-blue">${s.order}</span></td>
-              <td><span class="badge badge-red">${s.oos}</span></td>
-              <td>
-                <div style="display:flex;align-items:center;gap:.5rem;">
-                  <div class="prog-track" style="width:60px;"><div class="prog-fill" style="width:${s.rate}%;background:${s.rate>=30?'var(--green)':s.rate>=10?'var(--amber)':'var(--red)'}"></div></div>
-                  <span style="font-size:.75rem;font-weight:700">${s.rate}%</span>
-                </div>
-              </td>
-              <td><span class="badge ${cls}">${status}</span></td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-  </div></div>`;
+function aFo(){
+  var a=ctx;
+  return phd('Mes fournisseurs',a.sups.length+' fournisseurs dans votre portefeuille')+
+  a.sups.map(function(sn){
+    var s=D.sup.filter(function(f){return f.n===sn;})[0]||{r:0,ok:0,s:0,o:0,x:0,p:0};
+    return '<div class="card" style="margin-bottom:.75rem"><div class="card-body">'+
+      '<div style="display:flex;justify-content:space-between;margin-bottom:.75rem">'+
+        '<div><div class="card-title">'+sn+'</div><div class="card-sub">'+s.r+' references</div></div>'+
+        bdg(s.p+'%',s.p>=25?'bg':s.p>=10?'ba':'br')+
+      '</div>'+
+      '<div style="display:flex;gap:.4rem;flex-wrap:wrap">'+bdg('OK: '+s.ok,'bg')+bdg('Imminente: '+s.s,'ba')+bdg('Commander: '+s.o,'bb')+bdg('Rupture: '+s.x,'br')+'</div>'+
+    '</div></div>';
+  }).join('');
 }
 
-function renderPrevisions(){
-  return`
-  <div class="page-hd">
-    <div class="page-hd-left"><h2>Prévisions ML</h2><p>Modèle Random Forest — prévision de demande et détection des ruptures</p></div>
-  </div>
-  <div class="two-col" style="margin-bottom:1.25rem;">
-    <div class="card"><div class="card-body">
-      <div class="card-title">Ruptures prédites (modèle ML)</div>
-      <div class="card-sub" style="margin-bottom:.75rem;">Références détectées comme étant en risque par le modèle</div>
-      <div class="kpi-value" style="font-size:2.5rem;color:var(--red)">1 427</div>
-      <div style="font-size:.75rem;color:var(--text-sec);margin-top:.3rem;">Sur 1 880 références — précision modèle : ~94%</div>
-      <div class="badge badge-red" style="margin-top:.75rem;">Random Forest — sklearn</div>
-    </div></div>
-    <div class="card"><div class="card-body">
-      <div class="card-title">Recommandations de commande</div>
-      <div class="card-sub" style="margin-bottom:.75rem;">Références à approvisionner cette semaine</div>
-      <div class="kpi-value" style="font-size:2.5rem;color:var(--blue)">156</div>
-      <div style="font-size:.75rem;color:var(--text-sec);margin-top:.3rem;">Quantités calculées selon stock optimal et délais fournisseur</div>
-      <div class="badge badge-blue" style="margin-top:.75rem;">Order Soon</div>
-    </div></div>
-  </div>
-  <div class="card"><div class="card-body">
-    <div class="card-title" style="margin-bottom:.5rem;">Variables du modèle</div>
-    <div style="font-size:.78rem;color:var(--text-sec);margin-bottom:.85rem;">Le modèle utilise les variables suivantes pour prédire les ruptures</div>
-    <div style="display:flex;flex-wrap:wrap;gap:.4rem;">
-      ${['Ventes moyennes journalières','Stock actuel','Délai fournisseur','Point de réapprovisionnement optimal','Taux OOS (30 jours)','Buffer de sécurité','Catégorie ABC/XYZ','Jours de couverture','Saisonnalité'].map(v=>`<span class="badge badge-gray" style="font-size:.73rem;">${v}</span>`).join('')}
-    </div>
-  </div></div>`;
+function cDb(){
+  var a=ctx,bp=Math.round(a.bc/a.bm*100);
+  return phd('Tableau de bord',a.nm+' — '+a.rl,'<button class="btn btn-primary btn-sm" onclick="rnd(\'c-np\')">+ Nouveau PO</button>')+
+  '<div style="margin-bottom:1.1rem;">'+
+    as('danger','<strong>'+a.to+' references a commander</strong> — qty totale: '+a.qty.toLocaleString('fr')+' u')+
+    (a.pp>2?as('warning','<strong>'+a.pp+' bons de commande en attente</strong> de validation manager'):'')+
+    as('info','Budget: <strong>'+Math.round(a.bc/1000000*10)/10+' M</strong> / '+a.bm/1000000+' M FCFA ('+bp+'%)')+
+  '</div>'+
+  '<div class="kpi-grid">'+
+    kc('References',a.r,a.sups.length+' fournisseurs','neutral','ct')+
+    kc('A commander',a.to,'Qty: '+a.qty.toLocaleString('fr'),'down','cr')+
+    kc('PO ce mois',a.pm,a.pv+' valides — '+a.pp+' en attente','neutral','cb')+
+    kc('Budget',bp+'%',Math.round(a.bc/1000).toLocaleString('fr')+' K FCFA',bp>80?'down':'up','ca')+
+  '</div>'+
+  '<div class="two-col">'+
+    '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.8rem">Mes fournisseurs</div>'+
+      a.sups.map(function(sn){
+        var s=D.sup.filter(function(f){return f.n===sn;})[0]||{r:0,ok:0,s:0,o:0,x:0,p:0};
+        return '<div style="padding:.55rem 0;border-bottom:1px solid var(--border)">'+
+          '<div style="display:flex;justify-content:space-between;margin-bottom:.3rem"><strong style="font-size:.8rem">'+sn+'</strong>'+bdg(s.p+'%',s.p>=25?'bg':s.p>=10?'ba':'br')+'</div>'+
+          '<div style="display:flex;gap:.35rem">'+bdg('Cmd: '+(s.s+s.o),'bb')+bdg('Rupture: '+s.x,'br')+'</div></div>';
+      }).join('')+
+    '</div></div>'+
+    '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.8rem">Performance 6 mois</div>'+
+      mb(a.pf)+
+      '<div style="margin-top:.85rem">'+
+        '<div class="hbar-top" style="margin-bottom:.25rem"><span>Budget</span><span>'+bp+'%</span></div>'+pg(bp,'teal')+
+      '</div>'+
+    '</div></div>'+
+  '</div>'+
+  '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.8rem">Top 5 produits urgents</div>'+
+    a.prods.slice(0,5).map(function(p){
+      return '<div class="pcard">'+
+        '<div class="pcard-info"><div class="pcard-name">'+p.n+'</div>'+
+        '<div class="pcard-meta">'+p.s+' — Cat '+p.c+' — '+p.vj+' u/j — Delai: '+p.lt+'j — Stock: '+p.st+'</div>'+
+        '<div style="margin-top:.3rem">'+sb(p.sts)+'</div></div>'+
+        '<div class="pcard-right"><div class="pqty">'+p.q+'</div><div class="pqty-l">u a commander</div></div>'+
+      '</div>';
+    }).join('')+
+    '<button class="btn btn-ghost btn-sm" style="margin-top:.5rem" onclick="rnd(\'c-cm\')">Voir toutes les references</button>'+
+  '</div></div>';
 }
 
-// ══════════════════════════════════════
-// AGENT VIEWS
-// ══════════════════════════════════════
-function renderAgentDashboard(ag){
-  document.getElementById('agentBadgeStock') && (document.getElementById('agentBadgeStock').textContent=ag.oos);
-  return`
-  <div class="page-hd">
-    <div class="page-hd-left">
-      <h2>Mon tableau de bord</h2>
-      <p>${ag.name} — ${ag.zone} — ${new Date().toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'})}</p>
-    </div>
-  </div>
-
-  <div style="margin-bottom:1.25rem;">
-    ${ag.oos>100?`<div class="alert-strip alert-strip-danger"><span class="alert-strip-icon">▲</span><div><strong>${ag.oos} références en rupture</strong> sur ${ag.refs} dans votre portefeuille — action requise</div></div>`:''}
-    ${ag.soon>10?`<div class="alert-strip alert-strip-warning"><span class="alert-strip-icon">◆</span><div><strong>${ag.soon} ruptures imminentes</strong> — préparer les bons de commande</div></div>`:''}
-    ${ag.po_pending>3?`<div class="alert-strip alert-strip-info"><span class="alert-strip-icon">●</span><div><strong>${ag.po_pending} commandes PO en attente</strong> de validation</div></div>`:''}
-  </div>
-
-  <div class="kpi-grid">
-    <div class="kpi-card c-blue">
-      <div class="kpi-icon">≡</div>
-      <div class="kpi-label">Mes références</div>
-      <div class="kpi-value">${ag.refs}</div>
-      <div class="kpi-meta neutral">${ag.suppliers.length} fournisseurs</div>
-    </div>
-    <div class="kpi-card c-red">
-      <div class="kpi-icon">!</div>
-      <div class="kpi-label">En rupture</div>
-      <div class="kpi-value">${ag.oos}</div>
-      <div class="kpi-meta down">${((ag.oos/ag.refs)*100).toFixed(1)} % du portefeuille</div>
-    </div>
-    <div class="kpi-card c-amber">
-      <div class="kpi-icon">◆</div>
-      <div class="kpi-label">Rupture imminente</div>
-      <div class="kpi-value">${ag.soon}</div>
-      <div class="kpi-meta down">À traiter cette semaine</div>
-    </div>
-    <div class="kpi-card c-green">
-      <div class="kpi-icon">✓</div>
-      <div class="kpi-label">Stock OK</div>
-      <div class="kpi-value">${ag.ok}</div>
-      <div class="kpi-meta up">${ag.rate}% de disponibilité</div>
-    </div>
-  </div>
-
-  <div class="two-col">
-    <div class="card"><div class="card-body">
-      <div class="card-title" style="margin-bottom:.85rem;">Mes objectifs du mois</div>
-      <div class="hbar-list">
-        <div class="hbar-row">
-          <div class="hbar-top"><span>Taux disponibilité cible</span><span style="font-weight:700">${ag.objectives.stock}%</span></div>
-          <div class="prog-track"><div class="prog-fill prog-blue" style="width:${ag.objectives.stock}%"></div></div>
-        </div>
-        <div class="hbar-row">
-          <div class="hbar-top"><span>Score qualité QAC</span><span style="font-weight:700">${ag.objectives.quality}%</span></div>
-          <div class="prog-track"><div class="prog-fill prog-green" style="width:${ag.objectives.quality}%"></div></div>
-        </div>
-        <div class="hbar-row">
-          <div class="hbar-top"><span>Délai traitement PO</span><span style="font-weight:700">${ag.objectives.delay}%</span></div>
-          <div class="prog-track"><div class="prog-fill prog-amber" style="width:${ag.objectives.delay}%"></div></div>
-        </div>
-      </div>
-      <div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--border);">
-        <div style="font-size:.72rem;color:var(--text-sec);margin-bottom:.3rem;">Réalisation actuelle vs objectif</div>
-        <div style="display:flex;gap:.5rem;">
-          <span class="badge ${ag.rate>=ag.objectives.stock?'badge-green':'badge-amber'}">${ag.rate}% / ${ag.objectives.stock}% stock</span>
-        </div>
-      </div>
-    </div></div>
-
-    <div class="card"><div class="card-body">
-      <div class="card-title" style="margin-bottom:.85rem;">Mes fournisseurs</div>
-      ${ag.suppliers.map(sup=>{
-        const found=DATA.suppliers.find(s=>s.name===sup)||{refs:0,ok:0,oos:0,rate:0,soon:0};
-        return`<div style="padding:.6rem 0;border-bottom:1px solid var(--border);">
-          <div style="display:flex;justify-content:space-between;margin-bottom:.35rem;">
-            <strong style="font-size:.82rem;">${sup}</strong>
-            <span class="badge ${found.rate>=25?'badge-green':found.rate>=10?'badge-amber':'badge-red'}">${found.rate}%</span>
-          </div>
-          <div style="display:flex;gap:.4rem;">
-            <span class="badge badge-green" style="font-size:.65rem;">OK: ${found.ok}</span>
-            <span class="badge badge-amber" style="font-size:.65rem;">Immin: ${found.soon}</span>
-            <span class="badge badge-red" style="font-size:.65rem;">Rupture: ${found.oos}</span>
-          </div>
-        </div>`;
-      }).join('')}
-    </div></div>
-  </div>
-
-  <div class="card"><div class="card-body">
-    <div class="card-title" style="margin-bottom:.5rem;">Activité commandes (6 derniers mois)</div>
-    <div class="card-sub" style="margin-bottom:.85rem;">${ag.po_month} PO ce mois — ${ag.po_pending} en attente de validation</div>
-    <div style="display:flex;align-items:flex-end;gap:6px;height:80px;">
-      ${Object.values(ag.perf).map((v,i)=>{
-        const mx=Math.max(...Object.values(ag.perf));
-        const lbl=['Jan','Fév','Mar','Avr','Mai','Jun'][i];
-        return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
-          <div style="width:100%;height:${(v/mx*100).toFixed(0)}%;background:var(--blue);opacity:.8;border-radius:3px 3px 0 0;min-height:4px;"></div>
-          <div style="font-size:.6rem;color:var(--text-sec);">${lbl}</div>
-        </div>`;
-      }).join('')}
-    </div>
-  </div></div>`;
+function cCm(){
+  var a=ctx;
+  return phd('Produits a commander',a.to+' references — Qty: '+a.qty.toLocaleString('fr')+' u','<button class="btn btn-primary btn-sm" onclick="rnd(\'c-np\')">+ Creer un PO</button>')+
+  as('warning',a.prods.length+' references avec quantite calculee par le modele ML.')+
+  '<div class="card" style="margin-top:1rem"><div class="card-body"><div class="tbl-wrap"><table class="data-table">'+
+  '<thead><tr><th>Produit</th><th>Fournisseur</th><th>Cat</th><th>Stock</th><th>Ventes/j</th><th>Delai</th><th>Qty commander</th><th>Statut</th></tr></thead><tbody>'+
+  a.prods.map(function(p){
+    return '<tr>'+
+      '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong>'+p.n+'</strong></td>'+
+      '<td>'+p.s+'</td><td>'+bdg(p.c,'bz')+'</td>'+
+      '<td style="color:'+(p.st<10?'var(--red)':'inherit')+';font-weight:'+(p.st<10?700:400)+'">'+p.st+'</td>'+
+      '<td>'+p.vj+'</td><td>'+p.lt+'</td>'+
+      '<td><strong style="color:var(--blue)">'+p.q+'</strong></td>'+
+      '<td>'+sb(p.sts)+'</td></tr>';
+  }).join('')+'</tbody></table></div></div></div>';
 }
 
-function renderAgentStock(ag){
-  return`
-  <div class="page-hd">
-    <div class="page-hd-left"><h2>Mes stocks</h2><p>Portefeuille de ${ag.name} — ${ag.refs} références, ${ag.suppliers.length} fournisseurs</p></div>
-  </div>
-  <div class="alert-strip alert-strip-danger" style="margin-bottom:1.25rem;">
-    <span class="alert-strip-icon">▲</span>
-    <div><strong>${ag.oos} références en rupture</strong> dans votre portefeuille — ${ag.order} à commander immédiatement</div>
-  </div>
-  <div class="card"><div class="card-body">
-    <div class="card-title" style="margin-bottom:.85rem;">Situation par fournisseur</div>
-    <div class="tbl-wrap">
-      <table class="data-table">
-        <thead><tr><th>Fournisseur</th><th>Références</th><th>Stock OK</th><th>Imminente</th><th>À commander</th><th>Rupture</th><th>Disponibilité</th></tr></thead>
-        <tbody>
-          ${ag.suppliers.map(sup=>{
-            const s=DATA.suppliers.find(f=>f.name===sup)||{refs:0,ok:0,soon:0,order:0,oos:0,rate:0};
-            return`<tr>
-              <td><strong>${sup}</strong></td>
-              <td>${s.refs}</td>
-              <td><span class="badge badge-green">${s.ok}</span></td>
-              <td><span class="badge badge-amber">${s.soon}</span></td>
-              <td><span class="badge badge-blue">${s.order}</span></td>
-              <td><span class="badge badge-red">${s.oos}</span></td>
-              <td><span class="badge ${s.rate>=25?'badge-green':s.rate>=10?'badge-amber':'badge-red'}">${s.rate}%</span></td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-  </div></div>`;
+function cNp(){
+  var a=ctx,dv=new Date(Date.now()+15*86400000).toISOString().split('T')[0];
+  return phd('Nouveau bon de commande','Creer un PO a partir de votre portefeuille')+
+  '<div class="po-form"><div class="po-form-title">Informations generales</div>'+
+    '<div class="form-row">'+
+      '<div><label class="form-label">Fournisseur</label>'+
+        '<select class="form-input" id="poS" onchange="updPO()">'+
+          '<option value="">-- Selectionner --</option>'+
+          a.sups.map(function(s){return '<option value="'+s+'">'+s+'</option>';}).join('')+
+        '</select></div>'+
+      '<div><label class="form-label">Date livraison souhaitee</label>'+
+        '<input class="form-input" type="date" id="poD" value="'+dv+'"/></div>'+
+    '</div>'+
+    '<div class="form-full"><label class="form-label">Observations</label>'+
+      '<input class="form-input" type="text" id="poN" placeholder="Urgence, conditions..."/></div>'+
+  '</div>'+
+  '<div class="card" style="margin-bottom:1.2rem"><div class="card-body">'+
+    '<div class="card-title" style="margin-bottom:.8rem">Lignes de commande</div>'+
+    '<div id="poL"><div style="color:var(--text-muted);font-size:.8rem;text-align:center;padding:2rem 0">Selectionnez un fournisseur</div></div>'+
+  '</div></div>'+
+  '<div class="po-confirm" id="poOK"><strong>Bon de commande soumis avec succes</strong><div id="poOKd"></div></div>'+
+  '<div style="display:flex;gap:.75rem;justify-content:flex-end">'+
+    '<button class="btn btn-ghost" onclick="rnd(\'c-hi\')">Annuler</button>'+
+    '<button class="btn btn-success" onclick="subPO()">Soumettre le bon de commande</button>'+
+  '</div>';
 }
 
-function renderAgentPO(ag){
-  const pos=[
-    {num:'PO-20251217-001',sup:ag.suppliers[0],date:'17/12/2025',statut:'Validé',refs:12,montant:'845 000 FCFA'},
-    {num:'PO-20251210-003',sup:ag.suppliers[1]||ag.suppliers[0],date:'10/12/2025',statut:'En attente',refs:8,montant:'632 000 FCFA'},
-    {num:'PO-20251203-002',sup:ag.suppliers[2]||ag.suppliers[0],date:'03/12/2025',statut:'En transit',refs:15,montant:'1 120 000 FCFA'},
-    {num:'PO-20251127-001',sup:ag.suppliers[0],date:'27/11/2025',statut:'Reçu',refs:10,montant:'780 000 FCFA'},
-  ];
-  return`
-  <div class="page-hd">
-    <div class="page-hd-left"><h2>Mes commandes fournisseurs</h2><p>${ag.po_month} PO ce mois — ${ag.po_pending} en attente</p></div>
-    <div class="page-hd-right"><button class="btn btn-primary btn-sm">+ Nouveau PO</button></div>
-  </div>
-  <div class="card"><div class="card-body">
-    <div class="tbl-wrap">
-      <table class="data-table">
-        <thead><tr><th>N° PO</th><th>Fournisseur</th><th>Date</th><th>Références</th><th>Montant</th><th>Statut</th></tr></thead>
-        <tbody>
-          ${pos.map(p=>{
-            const cls=p.statut==='Validé'?'badge-green':p.statut==='En attente'?'badge-amber':p.statut==='En transit'?'badge-blue':'badge-gray';
-            return`<tr>
-              <td><code style="font-size:.72rem;background:var(--bg);padding:.1rem .4rem;border-radius:4px;">${p.num}</code></td>
-              <td>${p.sup}</td><td>${p.date}</td>
-              <td>${p.refs} refs</td>
-              <td style="font-weight:600;">${p.montant}</td>
-              <td><span class="badge ${cls}">${p.statut}</span></td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-  </div></div>`;
+function updPO(){
+  var sup=g('poS').value,a=ctx;
+  if(!sup){g('poL').innerHTML='<div style="color:var(--text-muted);font-size:.8rem;text-align:center;padding:2rem 0">Selectionnez un fournisseur</div>';return;}
+  var pr=a.prods.filter(function(p){return p.s===sup;});
+  if(!pr.length){g('poL').innerHTML='<div style="font-size:.8rem;color:var(--text-sec);padding:1rem">Aucun produit urgent pour ce fournisseur.</div>';return;}
+  g('poL').innerHTML='<table class="data-table"><thead><tr>'+
+    '<th><input type="checkbox" id="chkA" onchange="tAll(this)" checked/></th>'+
+    '<th>Produit</th><th>Stock</th><th>Qty recommandee</th><th>Qty commandee</th></tr></thead><tbody>'+
+    pr.map(function(p,i){
+      return '<tr><td><input type="checkbox" class="po-chk" data-i="'+i+'" checked/></td>'+
+        '<td><div style="font-size:.78rem;font-weight:600">'+p.n+'</div>'+
+        '<div style="font-size:.67rem;color:var(--text-sec)">'+p.c+' — '+p.vj+' u/j — Delai '+p.lt+'j</div></td>'+
+        '<td style="color:'+(p.st<10?'var(--red)':'inherit')+';font-weight:'+(p.st<10?700:400)+'">'+p.st+'</td>'+
+        '<td><strong style="color:var(--blue)">'+p.q+'</strong></td>'+
+        '<td><input type="number" class="form-input po-qty" data-i="'+i+'" value="'+p.q+'" min="1" style="width:80px;padding:.3rem .5rem;font-size:.8rem"/></td></tr>';
+    }).join('')+'</tbody></table>';
 }
 
-// ── DRAWER (KPI detail) ──
-const DRAWERS={
-  refs:{title:'Détail — Références du catalogue',items:[
-    {l:'Total références',v:'1 880',c:'var(--blue)'},
-    {l:'Fournisseurs actifs',v:'143',c:'var(--blue)'},
-    {l:'Catégories A+ (premium)',v:'20',c:'var(--red)'},
-    {l:'Catégories A (haute valeur)',v:'61',c:'var(--amber)'},
-    {l:'Catégories B',v:'181',c:'var(--blue)'},
-    {l:'Catégories C',v:'1 618',c:'var(--text-sec)'},
-  ]},
-  oos:{title:'Détail — Ruptures de stock actives',items:[
-    {l:'En rupture totale (OOS)',v:'1 132',c:'var(--red)'},
-    {l:'% du catalogue',v:'60,2%',c:'var(--red)'},
-    {l:'Prédites par modèle ML',v:'1 427',c:'var(--red)'},
-    {l:'Fournisseurs concernés',v:'43+',c:'var(--amber)'},
-    {l:'Agents à mobiliser',v:'4',c:'var(--blue)'},
-    {l:'Action recommandée',v:'Lancer PO urgent',c:'var(--red)'},
-  ]},
-  soon:{title:'Détail — Ruptures imminentes (7–30 jours)',items:[
-    {l:'Références à risque',v:'295',c:'var(--amber)'},
-    {l:'% du catalogue',v:'15,7%',c:'var(--amber)'},
-    {l:'À commander immédiatement',v:'156',c:'var(--blue)'},
-    {l:'Horizon prévision',v:'7 à 30 jours',c:'var(--text-sec)'},
-    {l:'Modèle de prévision',v:'Random Forest (sklearn)',c:'var(--text-sec)'},
-    {l:'Action recommandée',v:'Émettre bons de commande',c:'var(--amber)'},
-  ]},
-  ok:{title:'Détail — Stock satisfaisant',items:[
-    {l:'Références en stock OK',v:'297',c:'var(--green)'},
-    {l:'% du catalogue',v:'15,8%',c:'var(--green)'},
-    {l:'À commander bientôt',v:'156',c:'var(--blue)'},
-    {l:'Taux de disponibilité global',v:'15,8%',c:'var(--green)'},
-    {l:'Objectif cible direction',v:'> 80%',c:'var(--text-sec)'},
-    {l:'Écart vs objectif',v:'-64,2 pts',c:'var(--red)'},
-  ]},
+function tAll(cb){d('.po-chk').forEach(function(c){c.checked=cb.checked;});}
+
+function subPO(){
+  var s=g('poS');if(!s||!s.value){alert('Selectionnez un fournisseur.');return;}
+  var cks=d('.po-chk:checked');if(!cks.length){alert('Selectionnez au moins un produit.');return;}
+  var now=new Date(),nd=now.getFullYear()+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0');
+  var num='PO-'+nd+'-'+String(Math.floor(Math.random()*900)+100);
+  var tq=0;cks.forEach(function(c){var q=d('.po-qty[data-i="'+c.dataset.i+'"]')[0];if(q)tq+=parseInt(q.value)||0;});
+  var dv=g('poD').value,nt=g('poN').value;
+  var conf=g('poOK');
+  g('poOKd').innerHTML='N: <strong>'+num+'</strong> — Fournisseur: <strong>'+s.value+'</strong> — '+cks.length+' references — Qty: <strong>'+tq.toLocaleString('fr')+'</strong>'+(dv?' — Livraison: <strong>'+new Date(dv).toLocaleDateString('fr-FR')+'</strong>':'')+(nt?' — Note: '+nt:'');
+  conf.style.display='block';conf.scrollIntoView({behavior:'smooth'});
+}
+
+function cHi(){
+  var a=ctx,myPOs=D.pos.filter(function(p){return p.ach===a.id;});
+  return phd('Historique des bons de commande',a.pm+' PO ce mois — '+a.pv+' valides · '+a.pp+' en attente',
+    '<button class="btn btn-primary btn-sm" onclick="rnd(\'c-np\')">+ Nouveau PO</button>')+
+  '<div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">'+
+    kc('PO ce mois',a.pm,'Tous statuts','neutral','cb')+
+    kc('En attente',a.pp,'Validation manager','down','ca')+
+    kc('Valides',a.pv,'Traites','up','cg')+
+  '</div>'+
+  '<div class="card"><div class="card-body"><div class="tbl-wrap"><table class="data-table">'+
+  '<thead><tr><th>N PO</th><th>Fournisseur</th><th>Date</th><th>Refs</th><th>Qty</th><th>Montant FCFA</th><th>Statut</th></tr></thead><tbody>'+
+  (myPOs.length?myPOs.map(function(p){
+    var sc=p.st==='Valide'?'bg':p.st==='En attente'?'ba':p.st==='En transit'?'bb':'bz';
+    return '<tr><td><code style="font-size:.68rem;background:var(--bg);padding:.1rem .35rem;border-radius:4px">'+p.num+'</code></td>'+
+      '<td>'+p.s+'</td><td>'+p.d+'</td><td>'+p.r+'</td><td>'+p.q.toLocaleString('fr')+'</td>'+
+      '<td style="font-weight:600">'+p.m+'</td><td>'+bdg(p.st,sc)+'</td></tr>';
+  }).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:2rem">Aucun PO enregistre</td></tr>')+
+  '</tbody></table></div></div></div>';
+}
+
+var DRW={
+  refs:{t:'Detail — References du catalogue',it:[{l:'Total',v:'1 880',c:'blue'},{l:'Fournisseurs actifs',v:'143',c:'blue'},{l:'Classe A+',v:'20',c:'red'},{l:'Classe A',v:'61',c:'amber'},{l:'Classe B',v:'181',c:'blue'},{l:'Classe C',v:'1 618',c:'text-sec'}]},
+  oos:{t:'Detail — Ruptures de stock',it:[{l:'En rupture (OOS)',v:'1 132',c:'red'},{l:'% du catalogue',v:'60,2%',c:'red'},{l:'Predites ML',v:'1 427',c:'red'},{l:'Fournisseurs',v:'43+',c:'amber'},{l:'A reapprovisionner',v:'451',c:'blue'},{l:'Action',v:'PO urgent',c:'red'}]},
+  soon:{t:'Detail — Ruptures imminentes',it:[{l:'References a risque',v:'295',c:'amber'},{l:'% du catalogue',v:'15,7%',c:'amber'},{l:'A commander',v:'156',c:'blue'},{l:'Horizon',v:'7-30 jours',c:'text-sec'},{l:'Modele',v:'Random Forest',c:'text-sec'},{l:'Action',v:'Bons de commande',c:'amber'}]},
+  ok:{t:'Detail — Stock satisfaisant',it:[{l:'Stock OK',v:'297',c:'green'},{l:'% du catalogue',v:'15,8%',c:'green'},{l:'A commander bientot',v:'156',c:'blue'},{l:'Objectif cible',v:'> 80%',c:'text-sec'},{l:'Ecart',v:'-64 pts',c:'red'},{l:'Action',v:'Maintenir',c:'green'}]},
 };
-function openDrawer(key){
-  const d=DRAWERS[key];
-  document.getElementById('drawerTitle').textContent=d.title;
-  document.getElementById('drawerContent').innerHTML=`<div class="detail-kpis">${d.items.map(i=>`
-    <div class="detail-kpi">
-      <div class="detail-kpi-label">${i.l}</div>
-      <div class="detail-kpi-value" style="color:${i.c}">${i.v}</div>
-    </div>`).join('')}</div>`;
-  const dr=document.getElementById('mainDrawer');
-  dr.classList.add('open');
-  document.querySelectorAll('.kpi-card').forEach(k=>k.classList.remove('selected'));
+function oD(k){
+  var dw=DRW[k];if(!dw)return;
+  g('dT').textContent=dw.t;
+  g('dC').innerHTML='<div class="dkpis">'+dw.it.map(function(i){return '<div class="dkpi"><div class="dkpi-l">'+i.l+'</div><div class="dkpi-v" style="color:var(--'+i.c+')">'+i.v+'</div></div>';}).join('')+'</div>';
+  var dr=g('mDraw');dr.classList.add('open');
+  d('.kpi-card').forEach(function(k){k.classList.remove('selected');});
   event.currentTarget.classList.add('selected');
   dr.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
-function closeDrawer(){
-  document.getElementById('mainDrawer').classList.remove('open');
-  document.querySelectorAll('.kpi-card').forEach(k=>k.classList.remove('selected'));
-}
+function cD(){var dr=g('mDraw');if(dr)dr.classList.remove('open');d('.kpi-card').forEach(function(k){k.classList.remove('selected');});}
 
-// ── AI ASSISTANT ──
-function toggleAI(){
-  const p=document.getElementById('aiPanel');
-  p.classList.toggle('open');
-  if(p.classList.contains('open'))document.getElementById('aiInput').focus();
-}
-function openAI(){toggleAI();}
-
-const AI_KB={
-  'rupture':`D'après vos données, ${DATA.stats.oos.toLocaleString('fr')} références sont en rupture de stock, soit 60,2% du catalogue. Les fournisseurs les plus affectés sont ${DATA.suppliers.filter(s=>s.oos>50).map(s=>s.name).join(', ')}. Je recommande de lancer des PO urgents pour les classes A+ et AX en priorité.`,
-  'stock':`Le taux de disponibilité global est de 15,8% (${DATA.stats.ok} références sur ${DATA.stats.total}). L'objectif cible est >80%. Le principal problème est la classe CX (1 460 refs) qui concentre l'essentiel des ruptures.`,
-  'fournisseur':`Vos 3 meilleurs fournisseurs en disponibilité : Borodji Distribution (33,6%), Maad (37,9%), SIAD (32,1%). Les plus critiques : H&D Industries (0%), CMGA (0%), IBS (2,5%).`,
-  'agent':`${DATA.agents.map(a=>a.name+' : '+a.rate+'% ('+a.zone+')').join(' | ')}. Mamadou Diallo a le portefeuille le plus large (${DATA.agents[0].refs} refs).`,
-  'commande':`${DATA.stats.orderSoon} références sont à commander immédiatement selon le modèle ML. ${DATA.stats.soon} ruptures imminentes sont prévues dans les 30 jours.`,
-  'prevision':`Le modèle Random Forest prédit 1 427 ruptures sur 1 880 références. Les variables clés : ventes journalières, stock actuel, délai fournisseur, catégorie ABC/XYZ.`,
+function togAI(){var p=g('aiP');p.classList.toggle('open');if(p.classList.contains('open'))g('aiI').focus();}
+var AIK={
+  'rupture':'1 132 references en rupture (60,2%). Fournisseurs critiques: ARIMEX (63), LSB (52), SENICO (49). Recommandation: PO urgents sur classes A+ et AX.',
+  'stock':'Taux de disponibilite: 15,8% (297/1 880). Objectif >80%. Classe CX (1 460 refs) concentre l\'essentiel des ruptures.',
+  'fournisseur':'Meilleurs: Maad 37,9%, Borodji Distribution 33,6%, SIAD 32,1%. Critiques: H&D Industries 0%, CMGA 0%, IBS 2,5%.',
+  'agent':'Mamadou Diallo: 19% (Dakar) | Fatou Seck: 21,3% (Pikine) | Ibrahima Ndiaye: 13,6% (Thies) | Aminata Ba: 7,1% (Saint-Louis).',
+  'acheteur':'Ousmane Faye: 73 refs a commander, 9 PO | Mariama Diop: 74 refs, 7 PO | Babacar Sow: 79 refs, 11 PO.',
+  'commande':'451 references a commander. Qty totale: 16 532 u. 9 PO actifs ce mois. 3 en attente de validation.',
+  'budget':'Budget mensuel total: 45,5 M FCFA. Consomme: 30,5 M FCFA (67%).',
+  'po':'8 PO ce mois: 3 recus, 3 valides, 1 en transit, 3 en attente.',
+  'prevision':'Random Forest predit 1 427 ruptures. Variables: ventes/j, stock, delai, ABC/XYZ. Precision ~94%.',
 };
-
-function getAIResponse(q){
-  const ql=q.toLowerCase();
-  for(const [k,v] of Object.entries(AI_KB)){if(ql.includes(k))return v;}
-  if(ql.includes('bonjour')||ql.includes('salut'))return'Bonjour ! Comment puis-je vous aider avec la gestion de votre supply chain aujourd\'hui ?';
-  if(ql.includes('po')||ql.includes('bon de commande'))return AI_KB['commande'];
-  if(ql.includes('performance'))return AI_KB['agent'];
-  return`Sur la base de vos données (${DATA.stats.total} références, ${DATA.stats.oos.toLocaleString('fr')} ruptures, ${DATA.stats.suppliers} fournisseurs), voici ce que je peux analyser : ruptures de stock, disponibilité fournisseurs, performance des agents, prévisions ML. Précisez votre question pour une réponse plus ciblée.`;
+function getAIR(q){
+  var ql=q.toLowerCase(),ks=Object.keys(AIK);
+  for(var i=0;i<ks.length;i++){if(ql.indexOf(ks[i])>=0)return AIK[ks[i]];}
+  if(ql.match(/bonjour|salut/))return 'Bonjour ! Posez vos questions sur les stocks, ruptures, fournisseurs, commandes ou les agents.';
+  return 'Je peux analyser: ruptures, fournisseurs, bons de commande, previsions ML ou performance des agents. Precisez votre question.';
 }
-
-function sendAI(){
-  const inp=document.getElementById('aiInput');
-  const q=inp.value.trim();
-  if(!q)return;
-  const msgs=document.getElementById('aiMessages');
-  msgs.innerHTML+=`<div class="msg msg-user">${q}</div>`;
-  msgs.innerHTML+=`<div class="msg msg-bot msg-typing"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
-  msgs.scrollTop=msgs.scrollHeight;
-  inp.value='';
-  setTimeout(()=>{
-    const typing=msgs.querySelector('.msg-typing');
-    if(typing)typing.remove();
-    msgs.innerHTML+=`<div class="msg msg-bot">${getAIResponse(q)}</div>`;
-    msgs.scrollTop=msgs.scrollHeight;
-  },900);
+function sndAI(){
+  var i=g('aiI'),q=i.value.trim();if(!q)return;
+  var m=g('aiM');
+  m.innerHTML+='<div class="msg msg-user">'+q+'</div>';
+  m.innerHTML+='<div class="msg msg-bot msg-typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>';
+  m.scrollTop=m.scrollHeight;i.value='';
+  setTimeout(function(){var t=m.querySelector('.msg-typing');if(t)t.remove();m.innerHTML+='<div class="msg msg-bot">'+getAIR(q)+'</div>';m.scrollTop=m.scrollHeight;},800);
 }
 </script>
 </body>

@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MAAD Supply Chain Analytics — Tableau de Bord</title>
+  <style>
+    :root {
+      --primary: #0d6efd;
+      --dark: #0a1628;
+      --accent: #00d4ff;
+      --card-bg: #111e35;
+      --text: #e2e8f0;
+      --muted: #8899aa;
+      --border: rgba(0,212,255,0.15);
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--dark);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── NAVBAR ── */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 2rem;
+      background: rgba(10,22,40,0.95);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(8px);
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.05em;
+    }
+    .nav-brand span { color: var(--text); }
+    .nav-links { display: flex; gap: 1.5rem; }
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--accent); }
+    .nav-badge {
+      background: var(--primary);
+      color: #fff;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      padding: 5rem 2rem 3rem;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(0,212,255,0.1), transparent);
+    }
+    .hero-badge {
+      display: inline-block;
+      background: rgba(0,212,255,0.1);
+      border: 1px solid var(--border);
+      color: var(--accent);
+      font-size: 0.75rem;
+      padding: 0.3rem 0.9rem;
+      border-radius: 999px;
+      margin-bottom: 1.5rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 1rem;
+    }
+    .hero h1 em {
+      font-style: normal;
+      background: linear-gradient(90deg, var(--accent), var(--primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      max-width: 600px;
+      margin: 0 auto 2rem;
+      color: var(--muted);
+      font-size: 1.1rem;
+      line-height: 1.7;
+    }
+    .btn-group { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.75rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      border: none;
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── STATS BAR ── */
+    .stats-bar {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      flex-wrap: wrap;
+      padding: 2rem;
+      background: rgba(17,30,53,0.6);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .stat { text-align: center; }
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--accent);
+    }
+    .stat-label { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+
+    /* ── SECTION ── */
+    section { padding: 4rem 2rem; max-width: 1200px; margin: 0 auto; }
+    .section-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .section-sub { color: var(--muted); margin-bottom: 2.5rem; }
+
+    /* ── CARDS GRID ── */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .card:hover { border-color: var(--accent); transform: translateY(-3px); }
+    .card-icon {
+      font-size: 2rem;
+      margin-bottom: 0.75rem;
+    }
+    .card h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+    .card p { color: var(--muted); font-size: 0.9rem; line-height: 1.6; }
+    .card-tag {
+      display: inline-block;
+      background: rgba(0,212,255,0.08);
+      color: var(--accent);
+      border: 1px solid var(--border);
+      font-size: 0.7rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      margin-top: 0.75rem;
+    }
+
+    /* ── DASHBOARD PREVIEW ── */
+    .preview-container {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-top: 2rem;
+    }
+    .preview-bar {
+      background: #0a1628;
+      padding: 0.6rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot-r { background: #ef4444; }
+    .dot-y { background: #f59e0b; }
+    .dot-g { background: #22c55e; }
+    .preview-url {
+      flex: 1;
+      background: rgba(255,255,255,0.04);
+      border-radius: 4px;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-left: 0.5rem;
+    }
+    .preview-body {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      min-height: 420px;
+    }
+    .preview-sidebar {
+      background: #0d1e36;
+      border-right: 1px solid var(--border);
+      padding: 1rem;
+    }
+    .sidebar-logo {
+      font-weight: 800;
+      font-size: 1rem;
+      color: var(--accent);
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.55rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 0.3rem;
+      cursor: default;
+      transition: background 0.15s;
+    }
+    .sidebar-item.active {
+      background: rgba(0,212,255,0.12);
+      color: var(--accent);
+    }
+    .preview-main { padding: 1.25rem; overflow: hidden; }
+    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
+    .kpi {
+      background: #0a1628;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem;
+    }
+    .kpi-label { font-size: 0.7rem; color: var(--muted); }
+    .kpi-value { font-size: 1.3rem; font-weight: 700; color: var(--accent); margin: 0.2rem 0; }
+    .kpi-change { font-size: 0.7rem; }
+    .kpi-change.up { color: var(--success); }
+    .kpi-change.down { color: var(--danger); }
+    .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .chart-box {
+      background: #0a1628;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem;
+      height: 160px;
+      position: relative;
+      overflow: hidden;
+    }
+    .chart-box-title { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.5rem; }
+    .bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 100px; }
+    .bar {
+      flex: 1;
+      border-radius: 3px 3px 0 0;
+      background: linear-gradient(to top, var(--primary), var(--accent));
+      opacity: 0.8;
+      animation: growBar 0.8s ease-out both;
+    }
+    @keyframes growBar {
+      from { transform: scaleY(0); transform-origin: bottom; }
+      to   { transform: scaleY(1); transform-origin: bottom; }
+    }
+    .line-chart { position: relative; width: 100%; height: 100px; }
+    .line-chart svg { width: 100%; height: 100%; }
+    .donut-chart { display: flex; align-items: center; gap: 0.75rem; height: 100px; }
+    .donut-chart svg { flex-shrink: 0; }
+    .donut-legend { font-size: 0.7rem; }
+    .donut-legend li { list-style: none; display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; color: var(--muted); }
+    .donut-legend li::before { content: ''; display: block; width: 8px; height: 8px; border-radius: 50%; }
+    .donut-legend li:nth-child(1)::before { background: var(--accent); }
+    .donut-legend li:nth-child(2)::before { background: var(--primary); }
+    .donut-legend li:nth-child(3)::before { background: var(--warning); }
+
+    /* ── TECH STACK ── */
+    .tech-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+    .tech-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+
+    @media (max-width: 768px) {
+      .preview-body { grid-template-columns: 1fr; }
+      .preview-sidebar { display: none; }
+      .kpi-row { grid-template-columns: repeat(2, 1fr); }
+      .chart-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav>
+  <div class="nav-brand">
+    ⛓️ <span>MAAD Supply Chain</span>
+  </div>
+  <div class="nav-links">
+    <a href="#features">Fonctionnalités</a>
+    <a href="#dashboard">Aperçu</a>
+    <a href="#stack">Stack</a>
+    <a href="https://github.com/tony-sarre/mon_projet_supply_chain_2025" target="_blank">GitHub</a>
+    <span class="nav-badge">v2.0</span>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge">🚀 Plateforme Analytics Supply Chain</div>
+  <h1>Pilotez votre chaîne d'approvisionnement<br/>avec <em>l'intelligence des données</em></h1>
+  <p>Dashboard interactif temps-réel pour le suivi des stocks, des commandes fournisseurs, de la qualité et des prévisions ML — conçu pour les équipes SCM.</p>
+  <div class="btn-group">
+    <a class="btn btn-primary" href="https://github.com/tony-sarre/mon_projet_supply_chain_2025" target="_blank">
+      ⭐ Voir le code source
+    </a>
+    <a class="btn btn-outline" href="#dashboard">🖥️ Aperçu du Dashboard</a>
+  </div>
+</div>
+
+<!-- STATS BAR -->
+<div class="stats-bar">
+  <div class="stat"><div class="stat-value">10+</div><div class="stat-label">Modules métier</div></div>
+  <div class="stat"><div class="stat-value">ML</div><div class="stat-label">Prévisions IA</div></div>
+  <div class="stat"><div class="stat-value">PDF/XLSX</div><div class="stat-label">Export rapports</div></div>
+  <div class="stat"><div class="stat-value">Gemini</div><div class="stat-label">IA intégrée</div></div>
+  <div class="stat"><div class="stat-value">Multi</div><div class="stat-label">Utilisateurs</div></div>
+</div>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="section-title">Fonctionnalités principales</div>
+  <div class="section-sub">Une suite complète d'outils pour la gestion de la chaîne d'approvisionnement</div>
+  <div class="cards">
+    <div class="card">
+      <div class="card-icon">📦</div>
+      <h3>Gestion des Stocks</h3>
+      <p>Suivi en temps réel des niveaux de stock, alertes ruptures, analyse de rotation et optimisation des réapprovisionnements.</p>
+      <span class="card-tag">STOCK</span>
+    </div>
+    <div class="card">
+      <div class="card-icon">🛒</div>
+      <h3>Commandes Fournisseurs (PO)</h3>
+      <p>Création, suivi et validation des Purchase Orders avec génération automatique de numéros PO et export PDF/Word.</p>
+      <span class="card-tag">ACHATS</span>
+    </div>
+    <div class="card">
+      <div class="card-icon">🔬</div>
+      <h3>Contrôle Qualité</h3>
+      <p>Tableaux de bord QAC, analyse des non-conformités, suivi des fournisseurs et indicateurs qualité en temps réel.</p>
+      <span class="card-tag">QUALITÉ</span>
+    </div>
+    <div class="card">
+      <div class="card-icon">🤖</div>
+      <h3>Prévisions ML</h3>
+      <p>Modèles Random Forest pour anticiper la demande, optimiser les stocks et réduire les coûts de surstock.</p>
+      <span class="card-tag">ML / IA</span>
+    </div>
+    <div class="card">
+      <div class="card-icon">💬</div>
+      <h3>Assistant IA Gemini</h3>
+      <p>Chatbot intégré propulsé par Google Gemini pour analyser vos données SCM et répondre à vos questions métier.</p>
+      <span class="card-tag">GEMINI</span>
+    </div>
+    <div class="card">
+      <div class="card-icon">📊</div>
+      <h3>Rapports & Exports</h3>
+      <p>Génération de rapports PDF professionnels, exports Excel formatés et envoi automatique par email.</p>
+      <span class="card-tag">REPORTING</span>
+    </div>
+    <div class="card">
+      <div class="card-icon">🏭</div>
+      <h3>Suivi des Réceptions</h3>
+      <p>Enregistrement et validation des réceptions fournisseurs avec historique complet et réconciliation automatique.</p>
+      <span class="card-tag">LOGISTIQUE</span>
+    </div>
+    <div class="card">
+      <div class="card-icon">📈</div>
+      <h3>Analyse des Ventes</h3>
+      <p>Visualisation des tendances de vente, analyse ABC des produits, et corrélation stock/ventes interactives.</p>
+      <span class="card-tag">VENTES</span>
+    </div>
+    <div class="card">
+      <div class="card-icon">🔒</div>
+      <h3>Authentification Multi-Utilisateurs</h3>
+      <p>Gestion des accès avec rôles différenciés, sessions sécurisées et tracking via Supabase.</p>
+      <span class="card-tag">SÉCURITÉ</span>
+    </div>
+  </div>
+</section>
+
+<!-- DASHBOARD PREVIEW -->
+<section id="dashboard" style="padding-top: 0;">
+  <div class="section-title">Aperçu du tableau de bord</div>
+  <div class="section-sub">Interface interactive construite avec Plotly Dash & Bootstrap</div>
+  <div class="preview-container">
+    <!-- Browser chrome -->
+    <div class="preview-bar">
+      <div class="dot dot-r"></div>
+      <div class="dot dot-y"></div>
+      <div class="dot dot-g"></div>
+      <div class="preview-url">🔒 maad-supply-chain.onrender.com</div>
+    </div>
+    <!-- App layout -->
+    <div class="preview-body">
+      <!-- Sidebar -->
+      <div class="preview-sidebar">
+        <div class="sidebar-logo">⛓️ MAAD SCM</div>
+        <div class="sidebar-item active">📊 Dashboard</div>
+        <div class="sidebar-item">📦 Stocks</div>
+        <div class="sidebar-item">🛒 Commandes PO</div>
+        <div class="sidebar-item">🔬 Qualité QAC</div>
+        <div class="sidebar-item">🏭 Réceptions</div>
+        <div class="sidebar-item">📈 Ventes</div>
+        <div class="sidebar-item">🤖 Prévisions ML</div>
+        <div class="sidebar-item">💬 Assistant IA</div>
+        <div class="sidebar-item">📄 Rapports</div>
+      </div>
+      <!-- Main content -->
+      <div class="preview-main">
+        <!-- KPIs -->
+        <div class="kpi-row">
+          <div class="kpi">
+            <div class="kpi-label">Stock Total</div>
+            <div class="kpi-value">24 830</div>
+            <div class="kpi-change up">↑ 5.2%</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">PO en cours</div>
+            <div class="kpi-value">142</div>
+            <div class="kpi-change up">↑ 12 ce mois</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Taux Qualité</div>
+            <div class="kpi-value">97.4%</div>
+            <div class="kpi-change up">↑ 0.8%</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Ruptures</div>
+            <div class="kpi-value">3</div>
+            <div class="kpi-change down">↓ vs 8 mois dernier</div>
+          </div>
+        </div>
+        <!-- Charts -->
+        <div class="chart-row">
+          <div class="chart-box">
+            <div class="chart-box-title">Évolution Stock — 6 mois</div>
+            <div class="bar-chart">
+              <div class="bar" style="height:55%;animation-delay:0.0s"></div>
+              <div class="bar" style="height:68%;animation-delay:0.08s"></div>
+              <div class="bar" style="height:45%;animation-delay:0.16s"></div>
+              <div class="bar" style="height:80%;animation-delay:0.24s"></div>
+              <div class="bar" style="height:72%;animation-delay:0.32s"></div>
+              <div class="bar" style="height:90%;animation-delay:0.40s"></div>
+              <div class="bar" style="height:60%;animation-delay:0.48s"></div>
+              <div class="bar" style="height:75%;animation-delay:0.56s"></div>
+              <div class="bar" style="height:85%;animation-delay:0.64s"></div>
+              <div class="bar" style="height:95%;animation-delay:0.72s"></div>
+            </div>
+          </div>
+          <div class="chart-box">
+            <div class="chart-box-title">Prévisions ML — 3 mois</div>
+            <div class="line-chart">
+              <svg viewBox="0 0 260 100" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.3"/>
+                    <stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <!-- Area fill -->
+                <path d="M0,80 L40,60 L80,40 L120,55 L160,30 L200,20 L260,35 L260,100 L0,100 Z"
+                      fill="url(#lineGrad)"/>
+                <!-- Actual line -->
+                <polyline points="0,80 40,60 80,40 120,55 160,30 200,20 260,35"
+                          fill="none" stroke="#00d4ff" stroke-width="2" stroke-linejoin="round"/>
+                <!-- Forecast dashed -->
+                <polyline points="200,20 230,10 260,18"
+                          fill="none" stroke="#f59e0b" stroke-width="2"
+                          stroke-dasharray="5,3" stroke-linejoin="round"/>
+                <!-- Dots -->
+                <circle cx="0"   cy="80" r="3" fill="#00d4ff"/>
+                <circle cx="40"  cy="60" r="3" fill="#00d4ff"/>
+                <circle cx="80"  cy="40" r="3" fill="#00d4ff"/>
+                <circle cx="120" cy="55" r="3" fill="#00d4ff"/>
+                <circle cx="160" cy="30" r="3" fill="#00d4ff"/>
+                <circle cx="200" cy="20" r="3" fill="#00d4ff"/>
+              </svg>
+            </div>
+          </div>
+          <div class="chart-box">
+            <div class="chart-box-title">Répartition par Catégorie</div>
+            <div class="donut-chart">
+              <svg viewBox="0 0 100 100" width="90" height="90">
+                <!-- Simple donut approximation using stroke-dasharray -->
+                <circle cx="50" cy="50" r="35" fill="none" stroke="#0a1628" stroke-width="18"/>
+                <circle cx="50" cy="50" r="35" fill="none" stroke="#00d4ff" stroke-width="18"
+                        stroke-dasharray="88 132" stroke-dashoffset="0" transform="rotate(-90 50 50)"/>
+                <circle cx="50" cy="50" r="35" fill="none" stroke="#0d6efd" stroke-width="18"
+                        stroke-dasharray="55 165" stroke-dashoffset="-88" transform="rotate(-90 50 50)"/>
+                <circle cx="50" cy="50" r="35" fill="none" stroke="#f59e0b" stroke-width="18"
+                        stroke-dasharray="77 143" stroke-dashoffset="-143" transform="rotate(-90 50 50)"/>
+                <text x="50" y="54" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="bold">SCM</text>
+              </svg>
+              <ul class="donut-legend">
+                <li>Matières premières (40%)</li>
+                <li>Produits finis (25%)</li>
+                <li>Emballages (35%)</li>
+              </ul>
+            </div>
+          </div>
+          <div class="chart-box">
+            <div class="chart-box-title">Qualité Fournisseurs — Top 5</div>
+            <div class="bar-chart" style="height:90px;">
+              <div class="bar" style="height:95%;background:linear-gradient(to top,#22c55e,#86efac);animation-delay:0.0s"></div>
+              <div class="bar" style="height:88%;background:linear-gradient(to top,#22c55e,#86efac);animation-delay:0.1s"></div>
+              <div class="bar" style="height:72%;background:linear-gradient(to top,#f59e0b,#fcd34d);animation-delay:0.2s"></div>
+              <div class="bar" style="height:65%;background:linear-gradient(to top,#f59e0b,#fcd34d);animation-delay:0.3s"></div>
+              <div class="bar" style="height:45%;background:linear-gradient(to top,#ef4444,#fca5a5);animation-delay:0.4s"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section id="stack">
+  <div class="section-title">Stack Technique</div>
+  <div class="section-sub">Technologies modernes pour une performance maximale</div>
+  <div class="tech-grid">
+    <div class="tech-pill">🐍 Python 3.11</div>
+    <div class="tech-pill">📊 Plotly Dash 2.x</div>
+    <div class="tech-pill">🎨 Bootstrap 5</div>
+    <div class="tech-pill">🐼 Pandas 2.x</div>
+    <div class="tech-pill">🔢 NumPy 2.x</div>
+    <div class="tech-pill">🤖 scikit-learn</div>
+    <div class="tech-pill">🔥 Flask</div>
+    <div class="tech-pill">⚡ Gunicorn</div>
+    <div class="tech-pill">🗄️ Supabase</div>
+    <div class="tech-pill">🌐 Google Gemini</div>
+    <div class="tech-pill">📄 ReportLab PDF</div>
+    <div class="tech-pill">📋 python-docx</div>
+    <div class="tech-pill">📊 OpenPyXL</div>
+    <div class="tech-pill">🚀 Render.com</div>
+    <div class="tech-pill">☁️ Google Sheets API</div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p>© 2025 MAAD Supply Chain Analytics &mdash; Développé avec ❤️ &mdash;
+    <a href="https://github.com/tony-sarre/mon_projet_supply_chain_2025" target="_blank">GitHub Repository</a>
+  </p>
+</footer>
+
+</body>
+</html>

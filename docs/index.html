@@ -994,7 +994,7 @@ function aFo(){
 function cDb(){
   var a=ctx,bp=Math.round(a.bc/a.bm*100);
   var urgents=a.prods.filter(function(p){return p.sts==='Predicted Stockout Soon'||p.st<=0;});
-  return phd('Tableau de bord',a.nm+' — '+a.rl,'<button class="btn btn-primary btn-sm" onclick="rnd('c-np')">+ Nouveau BC</button>')+
+  return phd('Tableau de bord',a.nm+' — '+a.rl,'<button class="btn btn-primary btn-sm" onclick="rnd(\'c-np\')">+ Nouveau BC</button>')+
   '<div style="margin-bottom:1.1rem;">'+
     (urgents.length?as('danger','<strong>'+urgents.length+' references en rupture imminente</strong> dans votre portefeuille — Bon de commande requis'):'')+
     (a.pp>2?as('warning','<strong>'+a.pp+' bons de commande en attente</strong> de validation manager'):'')+
@@ -1036,7 +1036,7 @@ function cDb(){
     '</div></div>'+
   '</div>'+
   '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.8rem">Top 5 produits urgents a commander'+
-    '<button class="btn btn-ghost btn-sm" style="float:right" onclick="rnd('c-cm')">Voir tout</button></div>'+
+    '<button class="btn btn-ghost btn-sm" style="float:right" onclick="rnd(\'c-cm\')">Voir tout</button></div>'+
     '<div class="tbl-wrap"><table class="data-table">'+
     '<thead><tr><th>Produit</th><th>Fournisseur</th><th>Stock</th><th>Couverture</th><th>Qty ML</th><th>MOQ</th><th>Statut</th><th></th></tr></thead><tbody>'+
     urgents.slice(0,5).map(function(p){
@@ -1049,7 +1049,7 @@ function cDb(){
         '<td><strong style="color:var(--blue)">'+p.q+'</strong></td>'+
         '<td>'+p.moq+'</td>'+
         '<td>'+sb(p.sts)+'</td>'+
-        '<td><button class="btn btn-primary btn-sm" onclick="rnd('c-np')">BC</button></td></tr>';
+        '<td><button class="btn btn-primary btn-sm" onclick="rnd(\'c-np\')">BC</button></td></tr>';
     }).join('')+
     '</tbody></table></div></div></div>';
 }
@@ -1059,7 +1059,7 @@ function cCm(){
   var a=ctx;
   var urgents=a.prods.filter(function(p){return p.sts==='Predicted Stockout Soon'||p.st<=0;});
   var cmd=a.prods.filter(function(p){return p.sts==='Order Soon';});
-  return phd('Catalogue produits',a.r+' refs — '+a.sups.join(', '),'<button class="btn btn-primary btn-sm" onclick="rnd('c-np')">+ Nouveau BC</button>')+
+  return phd('Catalogue produits',a.r+' refs — '+a.sups.join(', '),'<button class="btn btn-primary btn-sm" onclick="rnd(\'c-np\')">+ Nouveau BC</button>')+
   '<div style="display:flex;gap:.6rem;margin-bottom:1rem;flex-wrap:wrap">'+
     '<button class="btn btn-ghost btn-sm" id="fAll" onclick="fltPr('all')">Tous ('+a.prods.length+')</button>'+
     '<button class="btn btn-sm" id="fUr" onclick="fltPr('ur')" style="background:var(--red-light);color:var(--red);border:1px solid #fecaca">Rupture imminente ('+urgents.length+')</button>'+
@@ -1159,7 +1159,7 @@ function cNp(){
   '</div></div>'+
   '<div class="po-confirm" id="poOK"></div>'+
   '<div style="display:flex;gap:.75rem;justify-content:flex-end">'+
-    '<button class="btn btn-ghost" onclick="rnd('c-hi')">Annuler</button>'+
+    '<button class="btn btn-ghost" onclick="rnd(\'c-hi\')">Annuler</button>'+
     '<button class="btn btn-success" onclick="subPO()">Generer le bon de commande</button>'+
   '</div>';
 }

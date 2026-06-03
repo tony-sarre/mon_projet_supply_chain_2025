@@ -15,109 +15,60 @@
 # ============================================================
 
 import csv
-import os, sys
-import uuid
-from functools import lru_cache
-import hashlib  # ✅ NOUVEAU: Pour l'authentification
-import gzip
-from io import BytesIO
-
-from dash.exceptions import PreventUpdate
-
-# ============================================================
-# 🔧 CONFIGURATION PERFORMANCE GLOBALE
-# ============================================================
-PERFORMANCE_CONFIG = {
-    "PARALLEL_LOADING": True,           # Chargement CSV en parallèle
-    "MAX_WORKERS": 6,                   # Threads pour chargement parallèle
-    "CACHE_TTL_SECONDS": 600,           # Cache 10 minutes
-    "BACKGROUND_REFRESH": True,         # Refresh cache en arrière-plan
-    "COMPRESS_RESPONSES": True,         # Compression gzip
-    "CONNECTION_TIMEOUT": 15,           # Timeout connexions HTTP
-    "READ_TIMEOUT": 30,                 # Timeout lecture HTTP
-    "CHUNK_SIZE": 50000,                # Taille des chunks pour gros DataFrames
-    "DEBOUNCE_MS": 300,                 # Debounce pour callbacks UI
-}
-
-# ✅ NOUVEAU: Import Supabase pour tracking utilisateurs
-try:
-    from supabase import create_client, Client
-    SUPABASE_AVAILABLE = True
-except ImportError:
-    SUPABASE_AVAILABLE = False
-    print("⚠️ Supabase non installé. Exécuter: pip install supabase")
-
-#import MATCH
-
-print("CWD:", os.getcwd())
-print("Dir files:", os.listdir("."))
-print("sys.path[0]:", sys.path[0])
-
-from dash import Dash
-import dash_bootstrap_components as dbc
 import os
-import google.generativeai as genai
-import orjson
-
-ORJSON_OPTS = orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY
-
-app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP], prevent_initial_callbacks='initial_duplicate')
-
-# ⚠️ Très important pour Render/Gunicorn
-server = app.server
-
-# ✅ NOUVEAU: Secret key pour les sessions Flask (authentification)
-server.secret_key = os.getenv("SECRET_KEY", "maad-supply-chain-secret-key-change-in-production-2024")
-
-# ============================================================
-# 🚀 OPTIMISATIONS SERVEUR FLASK
-# ============================================================
-
-# Compression gzip des réponses
-try:
-    from flask_compress import Compress
-    Compress(server)
-    print("✅ Compression gzip activée")
-except ImportError:
-    print("⚠️ flask-compress non installé - compression désactivée")
-
-# Configuration pour performance
-server.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000  # Cache statique 1 an
-server.config['JSON_SORT_KEYS'] = False  # Plus rapide sans tri
-
-# ✅ NOTE: L'authentification est intégrée directement dans ce fichier (voir section AUTH_USERS plus bas)
-# Pas besoin d'importer depuis auth.py
-
+import sys
 import re
-from dotenv import load_dotenv
 import io
-import base64
-from datetime import datetime, timedelta
+import uuid
+import gzip
 import json
+import time
+import base64
+import hashlib
+import smtplib
 import threading
+import warnings
+from io import BytesIO
 from pathlib import Path
+from queue import Queue
+from datetime import datetime, timedelta
+from functools import lru_cache, wraps
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+
 import numpy as np
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import orjson
+import google.generativeai as genai
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from dotenv import load_dotenv
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 from flask_caching import Cache
-# from dash_extensions import Cache
 import dash
 from dash import Dash, html, dcc, Input, Output, State, dash_table, no_update, MATCH
 from dash.dependencies import Input, Output, State, ALL
+from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
-import plotly.express as px
-import warnings
+
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.utils import ImageReader
-from pathlib import Path
 from reportlab.lib.units import mm
-from reportlab.platypus import Image
-import smtplib
+from reportlab.lib.utils import ImageReader
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer, Image
+
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
+warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
+
+ORJSON_OPTS = orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY
+
 # --- Word / python-docx (import paresseux & sûr) ---
 DOCX_AVAILABLE = False
 DOCX_IMPORT_ERROR = None
@@ -131,37 +82,61 @@ try:
 except Exception as _e:
     DOCX_AVAILABLE = False
     DOCX_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
-# Imports existants + ces nouveaux
-#import anthropic
-import json
-from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
-# from openai import OpenAI
-import requests
-# ✅ AJOUTER POUR WINDOWS
-import threading
-import plotly.graph_objects as go
-import time
-import threading
-from queue import Queue
-from functools import wraps
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-warnings.filterwarnings("ignore", message="Parsing dates.*ambiguous", category=DeprecationWarning)
+# ✅ Import Supabase pour tracking utilisateurs
+try:
+    from supabase import create_client, Client
+    SUPABASE_AVAILABLE = True
+except ImportError:
+    SUPABASE_AVAILABLE = False
+    print("⚠️ Supabase non installé. Exécuter: pip install supabase")
+
+print("CWD:", os.getcwd())
+print("Dir files:", os.listdir("."))
+print("sys.path[0]:", sys.path[0])
+
+# ============================================================
+# 🔧 CONFIGURATION PERFORMANCE GLOBALE
+# ============================================================
+PERFORMANCE_CONFIG = {
+    "PARALLEL_LOADING": True,
+    "MAX_WORKERS": 6,
+    "CACHE_TTL_SECONDS": 600,
+    "BACKGROUND_REFRESH": True,
+    "COMPRESS_RESPONSES": True,
+    "CONNECTION_TIMEOUT": 15,
+    "READ_TIMEOUT": 30,
+    "CHUNK_SIZE": 50000,
+    "DEBOUNCE_MS": 300,
+}
+
+app = Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[dbc.themes.BOOTSTRAP], prevent_initial_callbacks='initial_duplicate')
+
+# ⚠️ Très important pour Render/Gunicorn
+server = app.server
+
+server.secret_key = os.getenv("SECRET_KEY", "maad-supply-chain-secret-key-change-in-production-2024")
+
+# ============================================================
+# 🚀 OPTIMISATIONS SERVEUR FLASK
+# ============================================================
+
+try:
+    from flask_compress import Compress
+    Compress(server)
+    print("✅ Compression gzip activée")
+except ImportError:
+    print("⚠️ flask-compress non installé - compression désactivée")
+
+server.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000
+server.config['JSON_SORT_KEYS'] = False
 
 # ============================================================
 # 🔒 CONFIGURATION CACHE ULTRA-PERFORMANT MULTI-UTILISATEURS
 # ============================================================
 
-# ✅ CACHE EN MÉMOIRE GLOBAL (plus rapide que FileSystemCache)
-# Structure: {"key": {"data": df, "timestamp": time, "refreshing": False}}
 _GLOBAL_DATA_CACHE = {}
 _GLOBAL_CACHE_LOCK = threading.Lock()
-
-# Session HTTP avec connection pooling (réutilise les connexions)
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 def create_http_session():
     """Crée une session HTTP optimisée avec pooling et retry"""
@@ -1436,10 +1411,8 @@ def run_with_timeout(func, args=(), kwargs=None, timeout_seconds=30):
         raise exception[0]
 
     return result[0]
-# ------------- OpenAI client (clé hardcodée à ta demande) ----------------
-# OPENAI_API_KEY_HARDCODED = "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"
-# Ligne ~45 dans votre code
-# api_key = os.getenv("OPENAI_API_KEY_HARDCODED")
+# ------------- OpenAI client ----------------
+# api_key = os.getenv("OPENAI_API_KEY")
 
 # AJOUTER CES LIGNES DE DEBUG
 # print("=" * 60)

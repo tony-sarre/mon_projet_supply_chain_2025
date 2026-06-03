@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Supply Chain Analytics Platform</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
 :root{
   --bg:#f0f4f8;--surface:#fff;--surface2:#f8fafc;
@@ -240,6 +241,31 @@ input,select,textarea{font-family:inherit;}
 .chart-container{width:100%;overflow:hidden;}
 svg.chart{width:100%;overflow:visible;}
 
+/* DATA CENTER */
+.drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:3rem 2rem;text-align:center;cursor:pointer;transition:.2s;background:var(--bg);}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--blue);background:var(--blue-light);}
+.drop-zone-icon{font-size:2.5rem;margin-bottom:.75rem;opacity:.4;}
+.drop-zone h3{font-size:.95rem;font-weight:700;margin-bottom:.35rem;}
+.drop-zone p{font-size:.78rem;color:var(--text-sec);}
+.file-chip{display:inline-flex;align-items:center;gap:.5rem;background:var(--blue-light);border:1px solid #bfdbfe;border-radius:8px;padding:.4rem .8rem;font-size:.78rem;font-weight:600;color:var(--blue);margin:.3rem;}
+.file-chip-remove{background:none;border:none;color:var(--blue);font-size:.9rem;cursor:pointer;padding:0 .2rem;}
+.col-map{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.65rem;}
+.col-map-row{display:flex;align-items:center;gap:.5rem;font-size:.78rem;}
+.col-map-label{flex:1;color:var(--text-sec);}
+.preview-tbl{font-size:.72rem;}
+/* PRESENCE */
+.presence-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1.3rem;}
+.presence-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1rem;box-shadow:var(--shadow);position:relative;}
+.presence-dot{width:10px;height:10px;border-radius:50%;position:absolute;top:1rem;right:1rem;}
+.presence-dot.online{background:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.2);animation:blink 2s infinite;}
+.presence-dot.recent{background:var(--amber);}
+.presence-dot.offline{background:var(--text-muted);}
+.presence-name{font-size:.88rem;font-weight:700;margin-bottom:.2rem;}
+.presence-role{font-size:.7rem;color:var(--text-sec);}
+.presence-time{font-size:.72rem;color:var(--text-sec);margin-top:.6rem;}
+.presence-bar{height:4px;border-radius:2px;margin-top:.6rem;}
+/* EXPORT */
+.export-bar{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;}
 @media(max-width:1200px){.kpi-grid{grid-template-columns:repeat(2,1fr);}.three-col{grid-template-columns:1fr 1fr;}.col-6040{grid-template-columns:1fr;}}
 @media(max-width:900px){.two-col,.agrid{grid-template-columns:1fr;}.form-row{grid-template-columns:1fr;}.hero-stats{grid-template-columns:1fr 1fr;}}
 @media(max-width:768px){.sidebar{display:none;}.ai-panel{width:calc(100vw - 2rem);right:1rem;}.kpi-grid{grid-template-columns:repeat(2,1fr);}}
@@ -491,9 +517,15 @@ function doLogin(){
   else if(role==='agent'){ctx=D.agents.filter(function(a){return a.id===rec.id;})[0];setUI(ini(ctx.nm),ctx.nm,'Agent Commercial',ctx.cl);bNav('agent');rnd('a-db');}
   else{ctx=D.ach.filter(function(a){return a.id===rec.id;})[0];setUI(ini(ctx.nm),ctx.nm,ctx.rl,ctx.cl);bNav('ach');rnd('c-db');}
   g('loginPage').style.display='none';g('appShell').style.display='flex';g('aiFab').style.display='flex';
+  trackPresence(u,'login');
 }
 g('liP').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
-function doLogout(){role=null;ctx=null;g('loginPage').style.display='flex';g('appShell').style.display='none';g('aiFab').style.display='none';g('aiP').classList.remove('open');}
+function doLogout(){
+  trackPresence(g('uNm').textContent,'logout');
+  role=null;ctx=null;
+  g('loginPage').style.display='flex';g('appShell').style.display='none';
+  g('aiFab').style.display='none';g('aiP').classList.remove('open');
+}
 function setUI(av,nm,rl,cl){g('uAv').textContent=av;g('uAv').style.background=cl;g('uNm').textContent=nm;g('uRl').textContent=rl;}
 
 function bNav(r){
@@ -510,7 +542,9 @@ function bNav(r){
     '<button class="nav-item" onclick="nv(this,\'m-fo\')"><span class="nav-icon">&#9679;</span>Fournisseurs</button>'+
     '<button class="nav-item" onclick="nv(this,\'m-po\')"><span class="nav-icon">&#9658;</span>Suivi PO</button>'+
     '<button class="nav-item" onclick="nv(this,\'m-ml\')"><span class="nav-icon">&#9670;</span>Previsions ML</button>'+
-    '<div class="nav-section">Outils</div>'+
+    '<div class="nav-section">Donnees & Outils</div>'+
+    '<button class="nav-item" onclick="nv(this,\'m-dc\')"><span class="nav-icon">&#8635;</span>Data Center</button>'+
+    '<button class="nav-item" onclick="nv(this,\'m-pr\')"><span class="nav-icon">&#9899;</span>Presences agents</button>'+
     '<button class="nav-item" onclick="togAI()"><span class="nav-icon">&#9998;</span>Assistant IA</button>';}
   else if(r==='agent'){n.innerHTML=
     '<div class="nav-section">Mon espace</div>'+
@@ -532,7 +566,7 @@ function bNav(r){
 function nv(el,pg){d('.nav-item').forEach(function(n){n.classList.remove('active');});el.classList.add('active');rnd(pg);}
 function rnd(pg){
   var el=g('mC'),h='';
-  var m={'m-db':mDb,'m-al':mAl,'m-ag':mAg,'m-ac':mAc,'m-st':mSt,'m-fo':mFo,'m-po':mPo,'m-ml':mMl,
+  var m={'m-db':mDb,'m-al':mAl,'m-ag':mAg,'m-ac':mAc,'m-st':mSt,'m-fo':mFo,'m-po':mPo,'m-ml':mMl,'m-dc':mDc,'m-pr':mPr,
          'a-db':aDb,'a-st':aSt,'a-fo':aFo,'c-db':cDb,'c-cm':cCm,'c-np':cNp,'c-hi':cHi};
   if(m[pg])h=m[pg]();
   el.innerHTML=h;el.scrollTop=0;
@@ -1316,6 +1350,348 @@ function sndAI(){
   m.innerHTML+='<div class="msg msg-bot msg-typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>';
   m.scrollTop=m.scrollHeight;i.value='';
   setTimeout(function(){var t=m.querySelector('.msg-typing');if(t)t.remove();m.innerHTML+='<div class="msg msg-bot">'+getAIR(q)+'</div>';m.scrollTop=m.scrollHeight;},800);
+}
+
+// ── PRESENCE TRACKING ────────────────────────────────────────────────────
+var PRESENCE_KEY='scm_presence';
+function trackPresence(username,event){
+  var data=presenceData();
+  if(!data[username])data[username]={role:USERS[username]?USERS[username].role:'?',sessions:[]};
+  var now=Date.now();
+  if(event==='login'){data[username].lastLogin=now;data[username].online=true;data[username].lastActivity=now;}
+  else if(event==='logout'){data[username].online=false;data[username].lastLogout=now;}
+  else if(event==='activity'){if(data[username])data[username].lastActivity=now;}
+  localStorage.setItem(PRESENCE_KEY,JSON.stringify(data));
+}
+function presenceData(){
+  try{return JSON.parse(localStorage.getItem(PRESENCE_KEY)||'{}');}catch(e){return {};}
+}
+function timeSince(ts){
+  if(!ts)return 'Jamais';
+  var diff=Date.now()-ts,m=Math.floor(diff/60000),h=Math.floor(m/60),d=Math.floor(h/24);
+  if(diff<60000)return 'A l\'instant';
+  if(m<60)return 'Il y a '+m+' min';
+  if(h<24)return 'Il y a '+h+'h';
+  return 'Il y a '+d+'j';
+}
+// Ping activity every 2 min
+setInterval(function(){if(role&&g('uNm'))trackPresence(g('uNm').textContent,'activity');},120000);
+
+// All users list for presence page
+var ALL_USERS_LIST=[
+  {id:'manager',label:'Administrateur',role:'manager',cl:'#1e3a5f'},
+  {id:'agent1',label:'Insa Diallo',role:'agent',cl:'#2563eb'},
+  {id:'agent2',label:'Ravane Seck',role:'agent',cl:'#7c3aed'},
+  {id:'agent3',label:'Seydouna Ndiaye',role:'agent',cl:'#0891b2'},
+  {id:'agent4',label:'Aminata Ba',role:'agent',cl:'#16a34a'},
+  {id:'acheteur1',label:'Fallou Diallo',role:'acheteur',cl:'#0d9488'},
+  {id:'acheteur2',label:'Aram Sarr',role:'acheteur',cl:'#7c3aed'},
+  {id:'acheteur3',label:'Coumba Ndiaye',role:'acheteur',cl:'#16a34a'},
+];
+
+function mPr(){
+  var pd=presenceData();
+  var onlineCount=ALL_USERS_LIST.filter(function(u){var r=pd[u.label];return r&&r.online;}).length;
+  var roleLabel={'manager':'Manager','agent':'Agent commercial','acheteur':'Agent acheteur'};
+  return phd('Presences & Activite','Suivi en temps reel des connexions utilisateurs')+
+  '<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:1.3rem;">'+
+    kc('Utilisateurs',ALL_USERS_LIST.length,'Comptes actifs','neutral','cb')+
+    kc('En ligne',onlineCount,'Actuellement connectes',onlineCount?'up':'neutral',onlineCount?'cg':'ct')+
+    kc('Hors ligne',ALL_USERS_LIST.length-onlineCount,'Derniere activite recente','neutral','bz')+
+    kc('Sessions aujourd\'hui',Object.keys(pd).length,'Utilisateurs vus aujourd\'hui','neutral','ct')+
+  '</div>'+
+  '<div class="presence-grid">'+
+  ALL_USERS_LIST.map(function(u){
+    var r=pd[u.label]||{};
+    var isOnline=!!r.online;
+    var lastAct=r.lastActivity||r.lastLogin||0;
+    var isRecent=!isOnline&&lastAct&&(Date.now()-lastAct<30*60000);
+    var dotClass=isOnline?'online':isRecent?'recent':'offline';
+    var statusLabel=isOnline?'En ligne':isRecent?'Recemment actif':'Hors ligne';
+    var statusColor=isOnline?'var(--green)':isRecent?'var(--amber)':'var(--text-muted)';
+    return '<div class="presence-card">'+
+      '<div class="presence-dot '+dotClass+'"></div>'+
+      '<div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem">'+
+        '<div style="width:36px;height:36px;border-radius:8px;background:'+u.cl+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:.75rem;font-weight:800">'+ini(u.label)+'</div>'+
+        '<div><div class="presence-name">'+u.label+'</div><div class="presence-role">'+roleLabel[u.role]+'</div></div>'+
+      '</div>'+
+      '<div style="font-size:.72rem;font-weight:700;color:'+statusColor+'">'+statusLabel+'</div>'+
+      '<div class="presence-time">'+
+        (r.lastLogin?'Connexion: '+timeSince(r.lastLogin):'Jamais connecte')+
+        (r.lastActivity&&!isOnline?'<br>Derniere activite: '+timeSince(r.lastActivity):'')+
+        (isOnline?'<br><span style="color:var(--green);font-size:.7rem">Session active</span>':'')+
+      '</div>'+
+      '<div class="presence-bar" style="background:'+(isOnline?'var(--green)':isRecent?'var(--amber)':'var(--border)')+'"></div>'+
+    '</div>';
+  }).join('')+
+  '</div>'+
+  '<div class="card"><div class="card-body">'+
+    '<div class="card-title" style="margin-bottom:.8rem">Journal de connexions</div>'+
+    '<div class="tbl-wrap"><table class="data-table"><thead><tr><th>Utilisateur</th><th>Role</th><th>Statut</th><th>Derniere connexion</th><th>Derniere activite</th><th>Deconnexion</th></tr></thead><tbody>'+
+    ALL_USERS_LIST.map(function(u){
+      var r=pd[u.label]||{};
+      var isOnline=!!r.online;
+      var dotClass=isOnline?'online':r.lastActivity&&(Date.now()-r.lastActivity<30*60000)?'recent':'offline';
+      return '<tr>'+
+        '<td><div style="display:flex;align-items:center;gap:.5rem"><div style="width:7px;height:7px;border-radius:50%;background:'+(isOnline?'var(--green)':dotClass==='recent'?'var(--amber)':'var(--border)')+'"></div><strong>'+u.label+'</strong></div></td>'+
+        '<td>'+bdg(roleLabel[u.role],u.role==='manager'?'bb':u.role==='agent'?'bp':'bt')+'</td>'+
+        '<td>'+bdg(isOnline?'En ligne':dotClass==='recent'?'Recent':'Hors ligne',isOnline?'bg':dotClass==='recent'?'ba':'bz')+'</td>'+
+        '<td>'+(r.lastLogin?new Date(r.lastLogin).toLocaleString('fr-FR'):'—')+'</td>'+
+        '<td>'+(r.lastActivity?timeSince(r.lastActivity):'—')+'</td>'+
+        '<td>'+(r.lastLogout?timeSince(r.lastLogout):'—')+'</td>'+
+      '</tr>';
+    }).join('')+
+    '</tbody></table></div></div></div>';
+}
+
+// ── DATA CENTER ───────────────────────────────────────────────────────────
+var DC={files:[],parsedData:null,previewData:null};
+
+function mDc(){
+  return phd('Data Center','Importer, exporter et analyser vos donnees supply chain',
+    '<button class="btn btn-ghost btn-sm" onclick="dcExport()">Exporter CSV</button>'+
+    '<button class="btn btn-ghost btn-sm" onclick="dcExportXLS()">Exporter Excel</button>'+
+    '<button class="btn btn-primary btn-sm" onclick="dcEmail()">Envoyer par mail</button>')+
+  '<div class="two-col" style="margin-bottom:1.3rem;">'+
+    '<div class="card"><div class="card-body">'+
+      '<div class="card-title" style="margin-bottom:.85rem">Importer un fichier</div>'+
+      '<div class="drop-zone" id="dropZone" onclick="g(\'fileIn\').click()" ondragover="dzOver(event)" ondragleave="dzLeave(event)" ondrop="dzDrop(event)">'+
+        '<div class="drop-zone-icon">&#8635;</div>'+
+        '<h3>Glisser-deposer ou cliquer pour importer</h3>'+
+        '<p>Formats acceptes: CSV, Excel (.xlsx, .xls), JSON</p>'+
+      '</div>'+
+      '<input type="file" id="fileIn" accept=".csv,.xlsx,.xls,.json" style="display:none" onchange="dcLoad(this.files)"/>'+
+      '<div id="dcFiles" style="margin-top:.75rem"></div>'+
+      '<div id="dcStatus"></div>'+
+    '</div></div>'+
+    '<div class="card"><div class="card-body">'+
+      '<div class="card-title" style="margin-bottom:.85rem">Base de donnees active</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.85rem">'+
+        '<div style="background:var(--bg);border-radius:8px;padding:.75rem">'+
+          '<div style="font-size:.65rem;color:var(--text-sec);font-weight:700;text-transform:uppercase;margin-bottom:.25rem">References</div>'+
+          '<div id="dc-refs" style="font-size:1.5rem;font-weight:900">'+D.stats.total+'</div>'+
+        '</div>'+
+        '<div style="background:var(--bg);border-radius:8px;padding:.75rem">'+
+          '<div style="font-size:.65rem;color:var(--text-sec);font-weight:700;text-transform:uppercase;margin-bottom:.25rem">Fournisseurs</div>'+
+          '<div id="dc-sups" style="font-size:1.5rem;font-weight:900">'+D.stats.suppliers+'</div>'+
+        '</div>'+
+        '<div style="background:var(--bg);border-radius:8px;padding:.75rem">'+
+          '<div style="font-size:.65rem;color:var(--text-sec);font-weight:700;text-transform:uppercase;margin-bottom:.25rem">Ruptures</div>'+
+          '<div id="dc-oos" style="font-size:1.5rem;font-weight:900;color:var(--red)">'+D.stats.oos+'</div>'+
+        '</div>'+
+        '<div style="background:var(--bg);border-radius:8px;padding:.75rem">'+
+          '<div style="font-size:.65rem;color:var(--text-sec);font-weight:700;text-transform:uppercase;margin-bottom:.25rem">Derniere MAJ</div>'+
+          '<div id="dc-date" style="font-size:.82rem;font-weight:700">'+new Date().toLocaleDateString('fr-FR')+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<div id="dc-src" style="font-size:.72rem;color:var(--text-sec)">Source: Donnees integrees (final_stock_sales_analysis.csv)</div>'+
+      '<div style="margin-top:.85rem;display:flex;gap:.5rem;flex-wrap:wrap">'+
+        '<button class="btn btn-ghost btn-sm" onclick="dcExport()">CSV complet</button>'+
+        '<button class="btn btn-ghost btn-sm" onclick="dcExportXLS()">Excel</button>'+
+        '<button class="btn btn-ghost btn-sm" onclick="dcExportPO()">Export PO</button>'+
+        '<button class="btn btn-primary btn-sm" onclick="dcEmail()">Rapport par mail</button>'+
+      '</div>'+
+    '</div></div>'+
+  '</div>'+
+  '<div class="card" id="dcPreviewCard" style="display:none"><div class="card-body">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem">'+
+      '<div class="card-title">Apercu des donnees importees</div>'+
+      '<div style="display:flex;gap:.5rem">'+
+        '<button class="btn btn-ghost btn-sm" onclick="dcDiscard()">Annuler</button>'+
+        '<button class="btn btn-success btn-sm" onclick="dcApply()">Appliquer au tableau de bord</button>'+
+      '</div>'+
+    '</div>'+
+    '<div id="dcPreview"></div>'+
+  '</div></div>'+
+  '<div class="card"><div class="card-body">'+
+    '<div class="card-title" style="margin-bottom:.85rem">Formats de donnees supportes</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem;font-size:.78rem">'+
+      [['CSV','Colonnes: Reference, Fournisseur, Stock, Statut, Ventes_Jour, Delai, Categorie','bg'],
+       ['Excel (.xlsx)','Meme structure que CSV — premiere feuille utilisee','bb'],
+       ['JSON','Format: [{ref, supplier, stock, status, sales_per_day, ...}]','bt']].map(function(f){
+        return '<div style="background:var(--bg);border-radius:8px;padding:.8rem">'+
+          '<div style="font-weight:800;margin-bottom:.35rem">'+bdg(f[0],f[2])+'</div>'+
+          '<div style="color:var(--text-sec)">'+f[1]+'</div></div>';
+      }).join('')+
+    '</div>'+
+  '</div></div>';
+}
+
+function dzOver(e){e.preventDefault();g('dropZone').classList.add('drag-over');}
+function dzLeave(e){g('dropZone').classList.remove('drag-over');}
+function dzDrop(e){e.preventDefault();dzLeave(e);dcLoad(e.dataTransfer.files);}
+
+function dcLoad(files){
+  if(!files||!files.length)return;
+  var file=files[0];
+  var ext=file.name.split('.').pop().toLowerCase();
+  var chip='<div class="file-chip">'+file.name+' ('+Math.round(file.size/1024)+' Ko)<button class="file-chip-remove" onclick="dcDiscard()">x</button></div>';
+  g('dcFiles').innerHTML=chip;
+  g('dcStatus').innerHTML='<div style="font-size:.78rem;color:var(--text-sec);margin-top:.5rem">Chargement en cours...</div>';
+  var reader=new FileReader();
+  if(ext==='csv'){
+    reader.onload=function(e){dcParseCSV(e.target.result,file.name);};
+    reader.readAsText(file,'utf-8');
+  } else if(ext==='xlsx'||ext==='xls'){
+    reader.onload=function(e){dcParseXLSX(e.target.result,file.name);};
+    reader.readAsArrayBuffer(file);
+  } else if(ext==='json'){
+    reader.onload=function(e){dcParseJSON(e.target.result,file.name);};
+    reader.readAsText(file,'utf-8');
+  } else {
+    g('dcStatus').innerHTML='<div style="color:var(--red);font-size:.78rem;margin-top:.5rem">Format non supporte. Utilisez CSV, Excel ou JSON.</div>';
+  }
+}
+
+function dcParseCSV(text,fname){
+  var lines=text.replace(/\r/g,'').split('\n').filter(function(l){return l.trim();});
+  var delim=text.indexOf(';')>text.indexOf(',')?';':',';
+  var headers=lines[0].split(delim).map(function(h){return h.trim().replace(/"/g,'');});
+  var rows=lines.slice(1).map(function(l){
+    var cells=l.split(delim).map(function(c){return c.trim().replace(/"/g,'');});
+    var obj={};headers.forEach(function(h,i){obj[h]=cells[i]||'';});return obj;
+  });
+  DC.parsedData={fname:fname,headers:headers,rows:rows,type:'csv'};
+  dcShowPreview(headers,rows);
+}
+
+function dcParseXLSX(buf,fname){
+  try{
+    var wb=XLSX.read(buf,{type:'array'});
+    var ws=wb.Sheets[wb.SheetNames[0]];
+    var rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+    var headers=rows.length?Object.keys(rows[0]):[];
+    DC.parsedData={fname:fname,headers:headers,rows:rows,type:'xlsx'};
+    dcShowPreview(headers,rows);
+  }catch(e){g('dcStatus').innerHTML='<div style="color:var(--red);font-size:.78rem">Erreur lecture Excel: '+e.message+'</div>';}
+}
+
+function dcParseJSON(text,fname){
+  try{
+    var rows=JSON.parse(text);
+    if(!Array.isArray(rows))rows=[rows];
+    var headers=rows.length?Object.keys(rows[0]):[];
+    DC.parsedData={fname:fname,headers:headers,rows:rows,type:'json'};
+    dcShowPreview(headers,rows);
+  }catch(e){g('dcStatus').innerHTML='<div style="color:var(--red);font-size:.78rem">Erreur JSON: '+e.message+'</div>';}
+}
+
+function dcShowPreview(headers,rows){
+  var card=g('dcPreviewCard');if(!card)return;
+  card.style.display='block';
+  var preview=rows.slice(0,10);
+  g('dcStatus').innerHTML='<div style="color:var(--green);font-size:.78rem;margin-top:.5rem;font-weight:700">'+rows.length+' lignes detectees — '+headers.length+' colonnes</div>';
+  g('dcPreview').innerHTML=
+    '<div style="font-size:.73rem;color:var(--text-sec);margin-bottom:.6rem">Apercu des 10 premieres lignes</div>'+
+    '<div class="tbl-wrap" style="max-height:280px"><table class="data-table preview-tbl"><thead><tr>'+
+    headers.map(function(h){return '<th>'+h+'</th>';}).join('')+
+    '</tr></thead><tbody>'+
+    preview.map(function(r){
+      return '<tr>'+headers.map(function(h){
+        var v=r[h]!==undefined?r[h]:'';
+        return '<td>'+String(v).substring(0,30)+'</td>';
+      }).join('')+'</tr>';
+    }).join('')+
+    '</tbody></table></div>'+
+    '<div style="margin-top:.85rem;padding:.75rem;background:var(--blue-light);border-radius:8px;font-size:.77rem;color:var(--blue)">'+
+      '<strong>Colonnes reconnues:</strong> '+headers.join(', ')+
+    '</div>';
+}
+
+function dcApply(){
+  if(!DC.parsedData||!DC.parsedData.rows.length)return;
+  var rows=DC.parsedData.rows;
+  // Map common column names to internal fields
+  var COL={
+    ref:['Reference','reference','Ref','ref','Product','product','Produit','produit','PRODUIT'],
+    sup:['Fournisseur','fournisseur','Supplier','supplier','FOURNISSEUR'],
+    stock:['Stock','stock','Stock_actuel','Qty_Stock','quantity','STOCK'],
+    status:['Statut','statut','Status','status','STATUT'],
+    vj:['Ventes_Jour','ventes_jour','Sales_Per_Day','vj','sales_per_day','Ventes/Jour'],
+    cat:['Categorie','categorie','Category','category','ABC','abc_xyz','Classe'],
+    lt:['Delai','delai','Lead_Time','leadtime','lt','DELAI']
+  };
+  function getCol(row,keys){for(var i=0;i<keys.length;i++){if(row[keys[i]]!==undefined)return row[keys[i]];}return '';}
+  var oos=0,soon=0,ok=0,supSet={};
+  rows.forEach(function(r){
+    var st=getCol(r,COL.status);var sup=getCol(r,COL.sup);
+    if(sup)supSet[sup]=true;
+    if(st.toLowerCase().indexOf('out')>=0||st==='0'||st==='Rupture')oos++;
+    else if(st.toLowerCase().indexOf('soon')>=0||st.toLowerCase().indexOf('immin')>=0)soon++;
+    else ok++;
+  });
+  // Update stats
+  D.stats.total=rows.length||D.stats.total;
+  D.stats.oos=oos||D.stats.oos;
+  D.stats.soon=soon||D.stats.soon;
+  D.stats.ok=ok||D.stats.ok;
+  D.stats.suppliers=Object.keys(supSet).length||D.stats.suppliers;
+  DC.lastImport={file:DC.parsedData.fname,rows:rows.length,date:new Date().toLocaleString('fr-FR')};
+  // Update UI indicators
+  if(g('dc-refs'))g('dc-refs').textContent=D.stats.total;
+  if(g('dc-oos'))g('dc-oos').textContent=D.stats.oos;
+  if(g('dc-sups'))g('dc-sups').textContent=D.stats.suppliers;
+  if(g('dc-date'))g('dc-date').textContent=new Date().toLocaleDateString('fr-FR');
+  if(g('dc-src'))g('dc-src').innerHTML='Source: <strong>'+DC.parsedData.fname+'</strong> — '+rows.length+' references importees le '+new Date().toLocaleString('fr-FR');
+  if(g('dcPreviewCard'))g('dcPreviewCard').style.display='none';
+  var bar=g('dcStatus');
+  if(bar)bar.innerHTML='<div style="background:var(--green-light);border:1px solid #bbf7d0;border-radius:8px;padding:.65rem .9rem;font-size:.78rem;color:#14532d;margin-top:.6rem"><strong>Donnees appliquees avec succes.</strong> '+rows.length+' references — '+Object.keys(supSet).length+' fournisseurs. Le tableau de bord a ete mis a jour.</div>';
+}
+
+function dcDiscard(){DC.parsedData=null;if(g('dcPreviewCard'))g('dcPreviewCard').style.display='none';if(g('dcFiles'))g('dcFiles').innerHTML='';if(g('dcStatus'))g('dcStatus').innerHTML='';}
+
+function dcExport(){
+  var s=D.stats;var lines=['Reference,Fournisseur,Classe,Statut,Stock,Ventes_Jour,Delai,Qty_ML'];
+  D.ach.forEach(function(a){a.prods.forEach(function(p){lines.push([p.n,p.s,p.c,p.sts,p.st,p.vj,p.lt,p.q].join(','));});});
+  var blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);var a=document.createElement('a');
+  a.href=url;a.download='supply_chain_export_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
+  URL.revokeObjectURL(url);
+}
+
+function dcExportXLSX(){
+  if(typeof XLSX==='undefined'){alert('SheetJS non charge.');return;}
+  var wb=XLSX.utils.book_new();
+  // Stats sheet
+  var statsData=[['Indicateur','Valeur'],['References totales',D.stats.total],['En rupture',D.stats.oos],['Rupture imminente',D.stats.soon],['Stock OK',D.stats.ok],['Fournisseurs',D.stats.suppliers],['A commander',D.stats.toOrder]];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(statsData),'KPIs');
+  // Products sheet
+  var prodRows=[['Produit','Fournisseur','Classe','Statut','Stock','Ventes/j','Delai','Qty_ML','MOQ']];
+  D.ach.forEach(function(a){a.prods.forEach(function(p){prodRows.push([p.n,p.s,p.c,p.sts,p.st,p.vj,p.lt,p.q,p.moq]);});});
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(prodRows),'Produits');
+  // PO sheet
+  var poRows=[['N BC','Acheteur','Fournisseur','Date','Refs','Qty','Montant FCFA','Statut']];
+  D.pos.forEach(function(p){var ac=D.ach.filter(function(a){return a.id===p.ach;})[0];poRows.push([p.num,ac?ac.nm:'',p.s,p.d,p.r,p.q,p.m,p.st]);});
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(poRows),'Bons de Commande');
+  XLSX.writeFile(wb,'supply_chain_'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+function dcExportXLS(){dcExportXLSX();}
+
+function dcExportPO(){
+  var lines=['N_BC,Acheteur,Fournisseur,Date,Refs,Qty,Montant_FCFA,Statut'];
+  D.pos.forEach(function(p){var ac=D.ach.filter(function(a){return a.id===p.ach;})[0];lines.push([p.num,ac?ac.nm:'',p.s,p.d,p.r,p.q,p.m,p.st].join(','));});
+  var blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);var a=document.createElement('a');
+  a.href=url;a.download='bons_commande_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
+  URL.revokeObjectURL(url);
+}
+
+function dcEmail(){
+  var s=D.stats;
+  var body='RAPPORT SUPPLY CHAIN ANALYTICS\n'+new Date().toLocaleDateString('fr-FR')+'\n\n'+
+    'INDICATEURS CLES\n'+
+    '- References totales: '+s.total+'\n'+
+    '- En rupture de stock: '+s.oos+' ('+((s.oos/s.total)*100).toFixed(1)+'%)\n'+
+    '- Ruptures imminentes: '+s.soon+'\n'+
+    '- Stock satisfaisant: '+s.ok+'\n'+
+    '- A reapprovisionner: '+s.toOrder+' refs ('+s.totalQty+' unites)\n\n'+
+    'FOURNISSEURS CRITIQUES\n'+
+    D.sup.filter(function(f){return f.p<10;}).map(function(f){return '- '+f.n+': '+f.p+'% disponibilite';}).join('\n')+'\n\n'+
+    'BONS DE COMMANDE CE MOIS: '+D.pos.length+'\n'+
+    D.pos.map(function(p){var ac=D.ach.filter(function(a){return a.id===p.ach;})[0];return '- '+p.num+' | '+(ac?ac.nm:'?')+' | '+p.s+' | '+p.st;}).join('\n')+'\n\n'+
+    'Genere par Supply Chain Analytics Platform';
+  var sub='Rapport Supply Chain — '+new Date().toLocaleDateString('fr-FR');
+  window.location.href='mailto:?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(body);
 }
 </script>
 </body>

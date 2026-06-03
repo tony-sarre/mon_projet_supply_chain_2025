@@ -6,200 +6,252 @@
 <title>Supply Chain Analytics Platform</title>
 <style>
 :root{
-  --bg:#f1f5f9;--surface:#ffffff;--surface2:#f8fafc;
-  --sidebar:#1e3a5f;--sidebar-hover:rgba(255,255,255,.08);--sidebar-active:rgba(255,255,255,.15);
-  --border:#e2e8f0;--text:#1e293b;--text-sec:#64748b;--text-muted:#94a3b8;
-  --blue:#2563eb;--blue-light:#eff6ff;
+  --bg:#f0f4f8;--surface:#fff;--surface2:#f8fafc;
+  --sidebar:#0f2744;--sidebar2:#162d50;--sidebar-hover:rgba(255,255,255,.07);--sidebar-active:rgba(96,165,250,.18);
+  --border:#e2e8f0;--text:#0f172a;--text-sec:#475569;--text-muted:#94a3b8;
+  --blue:#2563eb;--blue2:#1d4ed8;--blue-light:#eff6ff;
   --green:#16a34a;--green-light:#f0fdf4;
   --amber:#d97706;--amber-light:#fffbeb;
   --red:#dc2626;--red-light:#fef2f2;
-  --purple:#7c3aed;--teal:#0d9488;
-  --shadow:0 1px 3px rgba(0,0,0,.08);
-  --shadow-md:0 4px 6px rgba(0,0,0,.07);
-  --shadow-lg:0 10px 15px rgba(0,0,0,.08);
-  --radius:10px;
+  --purple:#7c3aed;--teal:#0d9488;--teal-light:#f0fdfa;
+  --shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05);
+  --shadow-md:0 4px 6px rgba(0,0,0,.06),0 2px 4px rgba(0,0,0,.04);
+  --shadow-lg:0 10px 25px rgba(0,0,0,.1),0 4px 10px rgba(0,0,0,.06);
+  --radius:12px;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
 button{cursor:pointer;font-family:inherit;}
+input,select,textarea{font-family:inherit;}
+
 /* LOGIN */
-#loginPage{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#1e3a5f,#1e40af 55%,#0891b2);padding:1rem;}
-.login-card{background:#fff;border-radius:16px;padding:2.5rem 2rem;width:100%;max-width:420px;box-shadow:var(--shadow-lg);}
+#loginPage{display:flex;align-items:center;justify-content:center;min-height:100vh;
+  background:linear-gradient(135deg,#0f2744 0%,#1e3a8a 50%,#0369a1 100%);padding:1rem;position:relative;overflow:hidden;}
+#loginPage::before{content:'';position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");}
+.login-card{background:#fff;border-radius:20px;padding:2.5rem 2.2rem;width:100%;max-width:430px;box-shadow:var(--shadow-lg);position:relative;z-index:1;}
 .login-logo{text-align:center;margin-bottom:2rem;}
-.login-logo-icon{width:54px;height:54px;background:var(--blue);border-radius:14px;display:inline-flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:800;color:#fff;margin-bottom:.7rem;}
-.login-logo h1{font-size:1.25rem;font-weight:700;}
-.login-logo p{font-size:.78rem;color:var(--text-sec);margin-top:.2rem;}
-.role-tabs{display:flex;gap:.4rem;margin-bottom:1.5rem;background:var(--bg);border-radius:8px;padding:.25rem;}
-.role-tab{flex:1;padding:.45rem;border:none;background:none;border-radius:6px;font-size:.75rem;font-weight:600;color:var(--text-sec);transition:.15s;}
+.login-logo-icon{width:58px;height:58px;background:linear-gradient(135deg,#2563eb,#1d4ed8);border-radius:16px;display:inline-flex;align-items:center;justify-content:center;font-size:1.2rem;font-weight:900;color:#fff;margin-bottom:.75rem;box-shadow:0 4px 14px rgba(37,99,235,.4);}
+.login-logo h1{font-size:1.3rem;font-weight:800;color:var(--text);}
+.login-logo p{font-size:.78rem;color:var(--text-sec);margin-top:.25rem;}
+.role-tabs{display:flex;gap:.35rem;margin-bottom:1.5rem;background:var(--bg);border-radius:10px;padding:.3rem;}
+.role-tab{flex:1;padding:.45rem .3rem;border:none;background:none;border-radius:7px;font-size:.72rem;font-weight:600;color:var(--text-sec);transition:.15s;}
 .role-tab.active{background:#fff;color:var(--blue);box-shadow:var(--shadow);}
 .form-group{margin-bottom:1rem;}
-.form-label{display:block;font-size:.75rem;font-weight:600;color:var(--text-sec);margin-bottom:.35rem;}
-.form-input{width:100%;padding:.6rem .85rem;border:1.5px solid var(--border);border-radius:8px;font-size:.88rem;color:var(--text);outline:none;transition:.15s;}
-.form-input:focus{border-color:var(--blue);}
-.btn-login{width:100%;padding:.72rem;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:.92rem;font-weight:700;transition:.15s;margin-top:.5rem;}
-.btn-login:hover{background:#1d4ed8;}
-.login-error{color:var(--red);font-size:.75rem;margin-top:.4rem;display:none;}
-.login-hint{margin-top:1.5rem;padding:.85rem;background:var(--bg);border-radius:8px;font-size:.72rem;color:var(--text-sec);line-height:1.8;}
-.login-hint strong{display:block;margin-bottom:.3rem;color:var(--text);}
+.form-label{display:block;font-size:.73rem;font-weight:700;color:var(--text-sec);margin-bottom:.38rem;letter-spacing:.02em;}
+.form-input{width:100%;padding:.65rem .9rem;border:1.5px solid var(--border);border-radius:9px;font-size:.88rem;color:var(--text);outline:none;transition:.15s;background:#fff;}
+.form-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.btn-login{width:100%;padding:.78rem;background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff;border:none;border-radius:10px;font-size:.95rem;font-weight:700;transition:.15s;margin-top:.5rem;box-shadow:0 4px 12px rgba(37,99,235,.3);}
+.btn-login:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(37,99,235,.4);}
+.login-error{color:var(--red);font-size:.75rem;margin-top:.4rem;display:none;background:var(--red-light);padding:.4rem .7rem;border-radius:7px;}
+.login-hint{margin-top:1.5rem;padding:.9rem;background:var(--bg);border-radius:10px;font-size:.72rem;color:var(--text-sec);line-height:1.9;}
+.login-hint strong{display:block;margin-bottom:.3rem;color:var(--text);font-size:.75rem;}
+
 /* SHELL */
 #appShell{display:none;flex-direction:column;height:100vh;}
-.topbar{height:54px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1rem;gap:1rem;box-shadow:var(--shadow);z-index:40;flex-shrink:0;}
-.topbar-brand{display:flex;align-items:center;gap:.6rem;width:220px;}
-.tbicon{width:30px;height:30px;background:var(--blue);border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:.75rem;font-weight:800;}
-.tbname{font-size:.88rem;font-weight:700;}
-.tbsub{font-size:.62rem;color:var(--text-sec);}
+.topbar{height:56px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.1rem;gap:1rem;box-shadow:var(--shadow);z-index:40;flex-shrink:0;}
+.topbar-brand{display:flex;align-items:center;gap:.65rem;width:230px;}
+.tbicon{width:32px;height:32px;background:linear-gradient(135deg,#2563eb,#1d4ed8);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:.72rem;font-weight:900;box-shadow:0 2px 6px rgba(37,99,235,.35);}
+.tbname{font-size:.9rem;font-weight:800;color:var(--text);}
+.tbsub{font-size:.6rem;color:var(--text-muted);letter-spacing:.03em;}
 .topbar-spacer{flex:1;}
-.topbar-status{display:flex;align-items:center;gap:.4rem;font-size:.72rem;color:var(--green);background:var(--green-light);border:1px solid #bbf7d0;padding:.28rem .7rem;border-radius:20px;}
-.sdot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:blink 2s infinite;}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
-.topbar-user{display:flex;align-items:center;gap:.55rem;padding:.3rem .65rem;border-radius:8px;transition:.15s;border:1px solid transparent;}
+.topbar-status{display:flex;align-items:center;gap:.4rem;font-size:.72rem;color:var(--green);background:var(--green-light);border:1px solid #bbf7d0;padding:.3rem .75rem;border-radius:20px;font-weight:600;}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.topbar-user{display:flex;align-items:center;gap:.55rem;padding:.3rem .65rem;border-radius:9px;border:1px solid transparent;transition:.15s;}
 .topbar-user:hover{background:var(--bg);border-color:var(--border);}
-.uav{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;color:#fff;}
-.uname{font-size:.8rem;font-weight:600;}
+.uav{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;color:#fff;}
+.uname{font-size:.82rem;font-weight:700;}
 .urole{font-size:.62rem;color:var(--text-sec);}
-.btn-logout{background:none;border:1px solid var(--border);color:var(--text-sec);padding:.3rem .65rem;border-radius:6px;font-size:.72rem;}
-.btn-logout:hover{background:var(--red-light);color:var(--red);}
+.btn-logout{background:none;border:1.5px solid var(--border);color:var(--text-sec);padding:.3rem .7rem;border-radius:7px;font-size:.72rem;font-weight:600;transition:.15s;}
+.btn-logout:hover{background:var(--red-light);color:var(--red);border-color:#fecaca;}
 .app-body{display:flex;flex:1;overflow:hidden;}
+
 /* SIDEBAR */
-.sidebar{width:220px;background:var(--sidebar);flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;padding:.75rem .5rem;}
-.nav-section{font-size:.58rem;color:rgba(255,255,255,.3);letter-spacing:.1em;text-transform:uppercase;padding:.65rem .75rem .25rem;}
-.nav-item{display:flex;align-items:center;gap:.6rem;padding:.5rem .75rem;border-radius:7px;font-size:.8rem;color:rgba(255,255,255,.6);background:none;border:none;width:100%;text-align:left;transition:.12s;position:relative;}
-.nav-item:hover{background:var(--sidebar-hover);color:rgba(255,255,255,.9);}
-.nav-item.active{background:var(--sidebar-active);color:#fff;font-weight:600;}
-.nav-item.active::before{content:'';position:absolute;left:0;top:25%;bottom:25%;width:3px;background:#60a5fa;border-radius:0 2px 2px 0;}
-.nav-icon{width:17px;text-align:center;}
-.nav-badge{margin-left:auto;background:rgba(239,68,68,.75);color:#fff;font-size:.58rem;padding:.1rem .38rem;border-radius:10px;font-weight:700;}
-.nav-badge-blue{background:rgba(37,99,235,.7);}
-.main-content{flex:1;overflow-y:auto;padding:1.4rem;}
+.sidebar{width:230px;background:var(--sidebar);flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;padding:.65rem .55rem .65rem .5rem;}
+.nav-section{font-size:.58rem;color:rgba(255,255,255,.25);letter-spacing:.12em;text-transform:uppercase;padding:.7rem .8rem .3rem;font-weight:700;}
+.nav-item{display:flex;align-items:center;gap:.6rem;padding:.52rem .8rem;border-radius:8px;font-size:.8rem;color:rgba(255,255,255,.55);background:none;border:none;width:100%;text-align:left;transition:.12s;position:relative;}
+.nav-item:hover{background:var(--sidebar-hover);color:rgba(255,255,255,.88);}
+.nav-item.active{background:var(--sidebar-active);color:#fff;font-weight:700;}
+.nav-item.active::before{content:'';position:absolute;left:0;top:20%;bottom:20%;width:3px;background:#60a5fa;border-radius:0 3px 3px 0;}
+.nav-icon{width:18px;text-align:center;font-size:.88rem;flex-shrink:0;}
+.nav-badge{margin-left:auto;background:rgba(220,38,38,.8);color:#fff;font-size:.58rem;padding:.12rem .42rem;border-radius:10px;font-weight:800;}
+.nav-badge-blue{background:rgba(37,99,235,.75);}
+.nav-badge-teal{background:rgba(13,148,136,.75);}
+.main-content{flex:1;overflow-y:auto;padding:1.5rem;}
+
 /* COMPONENTS */
-.page-hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.2rem;}
-.page-hd-left h2{font-size:1.15rem;font-weight:700;}
-.page-hd-left p{font-size:.75rem;color:var(--text-sec);margin-top:.15rem;}
-.page-hd-right{display:flex;gap:.5rem;}
-.btn{display:inline-flex;align-items:center;gap:.35rem;padding:.42rem .85rem;border-radius:7px;font-size:.78rem;font-weight:600;border:none;transition:.15s;}
-.btn-primary{background:var(--blue);color:#fff;}
-.btn-primary:hover{background:#1d4ed8;}
-.btn-success{background:var(--green);color:#fff;}
-.btn-ghost{background:none;color:var(--text-sec);border:1px solid var(--border);}
+.page-hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.3rem;}
+.page-hd-left h2{font-size:1.2rem;font-weight:800;color:var(--text);}
+.page-hd-left p{font-size:.76rem;color:var(--text-sec);margin-top:.2rem;}
+.page-hd-right{display:flex;gap:.5rem;align-items:center;}
+.btn{display:inline-flex;align-items:center;gap:.4rem;padding:.44rem .9rem;border-radius:8px;font-size:.78rem;font-weight:700;border:none;transition:.15s;cursor:pointer;}
+.btn-primary{background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.25);}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(37,99,235,.35);}
+.btn-success{background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;box-shadow:0 2px 8px rgba(22,163,74,.25);}
+.btn-ghost{background:#fff;color:var(--text-sec);border:1.5px solid var(--border);}
 .btn-ghost:hover{background:var(--bg);}
-.btn-sm{padding:.28rem .6rem;font-size:.7rem;}
+.btn-sm{padding:.3rem .65rem;font-size:.72rem;}
 .card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);}
-.card-body{padding:1.15rem;}
-.card-title{font-size:.83rem;font-weight:700;margin-bottom:.18rem;}
-.card-sub{font-size:.7rem;color:var(--text-sec);}
-.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem;margin-bottom:1.2rem;}
-.kpi-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem;box-shadow:var(--shadow);cursor:pointer;transition:.15s;position:relative;overflow:hidden;}
+.card-body{padding:1.2rem;}
+.card-title{font-size:.86rem;font-weight:800;margin-bottom:.2rem;color:var(--text);}
+.card-sub{font-size:.71rem;color:var(--text-sec);}
+
+/* KPI GRID */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.85rem;margin-bottom:1.3rem;}
+.kpi-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.1rem 1.2rem;box-shadow:var(--shadow);cursor:pointer;transition:.2s;position:relative;overflow:hidden;}
 .kpi-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);}
-.kpi-card.selected{border-color:var(--blue);box-shadow:0 0 0 2px rgba(37,99,235,.15);}
+.kpi-card.selected{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12);}
 .kpi-card::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:var(--radius) var(--radius) 0 0;}
-.kpi-card.cb::after{background:var(--blue);}
-.kpi-card.cr::after{background:var(--red);}
-.kpi-card.ca::after{background:var(--amber);}
-.kpi-card.cg::after{background:var(--green);}
-.kpi-card.ct::after{background:var(--teal);}
-.kpi-label{font-size:.67rem;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;}
-.kpi-value{font-size:1.85rem;font-weight:800;color:var(--text);margin:.3rem 0 .15rem;line-height:1;}
-.kpi-meta{font-size:.7rem;}
-.up{color:var(--green);}.down{color:var(--red);}.neutral{color:var(--text-sec);}
-.detail-drawer{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.15rem;margin-bottom:1.2rem;box-shadow:var(--shadow-md);display:none;}
+.kpi-card.cb::after{background:linear-gradient(90deg,#2563eb,#60a5fa);}
+.kpi-card.cr::after{background:linear-gradient(90deg,#dc2626,#f87171);}
+.kpi-card.ca::after{background:linear-gradient(90deg,#d97706,#fbbf24);}
+.kpi-card.cg::after{background:linear-gradient(90deg,#16a34a,#4ade80);}
+.kpi-card.ct::after{background:linear-gradient(90deg,#0d9488,#2dd4bf);}
+.kpi-card.cp::after{background:linear-gradient(90deg,#7c3aed,#a78bfa);}
+.kpi-label{font-size:.65rem;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:.07em;}
+.kpi-value{font-size:2rem;font-weight:900;color:var(--text);margin:.3rem 0 .18rem;line-height:1;}
+.kpi-meta{font-size:.71rem;}
+.up{color:var(--green);font-weight:600;}
+.down{color:var(--red);font-weight:600;}
+.neutral{color:var(--text-sec);}
+
+/* DETAIL DRAWER */
+.detail-drawer{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem;margin-bottom:1.3rem;box-shadow:var(--shadow-md);display:none;}
 .detail-drawer.open{display:block;}
 .drawer-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.9rem;padding-bottom:.65rem;border-bottom:1px solid var(--border);}
-.drawer-title{font-size:.88rem;font-weight:700;color:var(--blue);}
-.drawer-close{background:none;border:1px solid var(--border);color:var(--text-sec);padding:.22rem .55rem;border-radius:6px;font-size:.72rem;}
+.drawer-title{font-size:.9rem;font-weight:800;color:var(--blue);}
+.drawer-close{background:none;border:1.5px solid var(--border);color:var(--text-sec);padding:.22rem .6rem;border-radius:7px;font-size:.72rem;font-weight:600;}
 .dkpis{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem;}
-.dkpi{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.8rem;}
-.dkpi-l{font-size:.65rem;color:var(--text-sec);margin-bottom:.25rem;}
-.dkpi-v{font-size:1.1rem;font-weight:700;}
-.two-col{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1.2rem;}
-.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem;margin-bottom:1.2rem;}
+.dkpi{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:.85rem;}
+.dkpi-l{font-size:.65rem;color:var(--text-sec);margin-bottom:.28rem;font-weight:600;}
+.dkpi-v{font-size:1.15rem;font-weight:800;}
+
+/* LAYOUT */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:.85rem;margin-bottom:1.3rem;}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.85rem;margin-bottom:1.3rem;}
+.col-6040{display:grid;grid-template-columns:3fr 2fr;gap:.85rem;margin-bottom:1.3rem;}
+
+/* TABLE */
 .data-table{width:100%;border-collapse:collapse;font-size:.78rem;}
-.data-table th{font-size:.65rem;font-weight:700;color:var(--text-sec);text-align:left;padding:.45rem .7rem;background:var(--surface2);border-bottom:1px solid var(--border);text-transform:uppercase;position:sticky;top:0;z-index:1;}
-.data-table td{padding:.5rem .7rem;border-bottom:1px solid var(--border);vertical-align:middle;}
+.data-table th{font-size:.64rem;font-weight:800;color:var(--text-sec);text-align:left;padding:.5rem .75rem;background:var(--surface2);border-bottom:2px solid var(--border);text-transform:uppercase;letter-spacing:.05em;position:sticky;top:0;z-index:1;}
+.data-table td{padding:.52rem .75rem;border-bottom:1px solid var(--border);vertical-align:middle;}
 .data-table tr:last-child td{border-bottom:none;}
 .data-table tr:hover td{background:#f8faff;}
-.tbl-wrap{overflow-x:auto;max-height:340px;overflow-y:auto;}
-.badge{display:inline-flex;font-size:.65rem;font-weight:600;padding:.18rem .5rem;border-radius:20px;}
+.tbl-wrap{overflow-x:auto;max-height:360px;overflow-y:auto;border-radius:8px;}
+
+/* BADGES */
+.badge{display:inline-flex;font-size:.64rem;font-weight:700;padding:.2rem .55rem;border-radius:20px;letter-spacing:.02em;}
 .br{background:var(--red-light);color:var(--red);}
 .ba{background:var(--amber-light);color:var(--amber);}
 .bg{background:var(--green-light);color:var(--green);}
 .bb{background:var(--blue-light);color:var(--blue);}
-.bt{background:#f0fdfa;color:var(--teal);}
+.bt{background:var(--teal-light);color:var(--teal);}
 .bz{background:var(--bg);color:var(--text-sec);border:1px solid var(--border);}
-.prog-track{height:6px;background:var(--bg);border-radius:3px;overflow:hidden;}
-.prog-fill{height:100%;border-radius:3px;transition:width .4s;}
-.astrip{display:flex;align-items:flex-start;gap:.55rem;padding:.65rem .9rem;border-radius:8px;font-size:.76rem;margin-bottom:.45rem;}
+.bp{background:#faf5ff;color:var(--purple);}
+
+/* PROGRESS */
+.prog-track{height:7px;background:var(--bg);border-radius:4px;overflow:hidden;}
+.prog-fill{height:100%;border-radius:4px;transition:width .5s;}
+
+/* ALERTS */
+.astrip{display:flex;align-items:flex-start;gap:.6rem;padding:.7rem 1rem;border-radius:10px;font-size:.77rem;margin-bottom:.5rem;line-height:1.5;}
 .adanger{background:var(--red-light);border:1px solid #fecaca;color:#991b1b;}
 .awarning{background:var(--amber-light);border:1px solid #fde68a;color:#92400e;}
 .ainfo{background:var(--blue-light);border:1px solid #bfdbfe;color:#1e40af;}
 .asuccess{background:var(--green-light);border:1px solid #bbf7d0;color:#14532d;}
-.aicon{flex-shrink:0;}
-.agrid{display:grid;grid-template-columns:repeat(2,1fr);gap:.8rem;margin-bottom:1.2rem;}
-.acard{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem;box-shadow:var(--shadow);transition:.15s;}
-.acard:hover{box-shadow:var(--shadow-md);border-color:#bfdbfe;}
-.ahdr{display:flex;align-items:center;gap:.7rem;margin-bottom:.9rem;}
-.aav{width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:800;color:#fff;flex-shrink:0;}
-.aname{font-size:.88rem;font-weight:700;}
-.azone{font-size:.7rem;color:var(--text-sec);}
-.astats{display:grid;grid-template-columns:repeat(4,1fr);gap:.45rem;}
-.astat{text-align:center;padding:.45rem .3rem;background:var(--bg);border-radius:7px;}
-.astat-v{font-size:.95rem;font-weight:700;}
-.astat-l{font-size:.58rem;color:var(--text-sec);margin-top:.1rem;}
-.donut-wrap{display:flex;align-items:center;gap:1.1rem;}
+.aicon{flex-shrink:0;font-weight:800;}
+
+/* AGENT CARDS */
+.agrid{display:grid;grid-template-columns:repeat(2,1fr);gap:.85rem;margin-bottom:1.3rem;}
+.acard{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;box-shadow:var(--shadow);transition:.2s;}
+.acard:hover{box-shadow:var(--shadow-md);border-color:#bfdbfe;transform:translateY(-1px);}
+.ahdr{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;}
+.aav{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:900;color:#fff;flex-shrink:0;}
+.aname{font-size:.9rem;font-weight:800;}
+.azone{font-size:.7rem;color:var(--text-sec);margin-top:.1rem;}
+.astats{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;}
+.astat{text-align:center;padding:.5rem .3rem;background:var(--bg);border-radius:8px;}
+.astat-v{font-size:1rem;font-weight:800;}
+.astat-l{font-size:.58rem;color:var(--text-sec);margin-top:.12rem;}
+
+/* CHARTS */
+.donut-wrap{display:flex;align-items:center;gap:1.2rem;}
 .leg-list{flex:1;}
-.leg-row{display:flex;align-items:center;gap:.45rem;font-size:.73rem;color:var(--text-sec);margin-bottom:.45rem;}
-.leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-.leg-num{margin-left:auto;font-weight:700;color:var(--text);}
-.hbar-list{display:flex;flex-direction:column;gap:.6rem;}
-.hbar-top{display:flex;justify-content:space-between;font-size:.73rem;color:var(--text-sec);margin-bottom:.25rem;}
+.leg-row{display:flex;align-items:center;gap:.5rem;font-size:.73rem;color:var(--text-sec);margin-bottom:.5rem;}
+.leg-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.leg-num{margin-left:auto;font-weight:800;color:var(--text);}
+.hbar-list{display:flex;flex-direction:column;gap:.65rem;}
+.hbar-top{display:flex;justify-content:space-between;font-size:.73rem;color:var(--text-sec);margin-bottom:.28rem;}
 .hbar-top strong{color:var(--text);}
-.po-form{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem;margin-bottom:1.2rem;box-shadow:var(--shadow);}
-.po-form-title{font-size:.9rem;font-weight:700;margin-bottom:1rem;padding-bottom:.65rem;border-bottom:1px solid var(--border);}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem;}
-.form-full{margin-bottom:.75rem;}
-.po-confirm{background:var(--green-light);border:1px solid #bbf7d0;border-radius:8px;padding:.85rem;font-size:.78rem;color:#14532d;display:none;margin-top:.75rem;}
-.po-confirm strong{display:block;margin-bottom:.3rem;}
-.pcard{background:#fff;border:1px solid var(--border);border-radius:8px;padding:.85rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.75rem;transition:.15s;}
-.pcard:hover{border-color:#bfdbfe;}
+.mini-bars{display:flex;align-items:flex-end;gap:5px;height:62px;}
+
+/* PO FORM */
+.po-form{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.3rem;margin-bottom:1.3rem;box-shadow:var(--shadow);}
+.po-form-title{font-size:.92rem;font-weight:800;margin-bottom:1rem;padding-bottom:.7rem;border-bottom:1px solid var(--border);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.8rem;}
+.form-full{margin-bottom:.8rem;}
+.po-confirm{background:var(--green-light);border:1px solid #bbf7d0;border-radius:10px;padding:.9rem;font-size:.78rem;color:#14532d;display:none;margin-top:.8rem;}
+.po-confirm strong{display:block;margin-bottom:.35rem;}
+.pcard{background:#fff;border:1px solid var(--border);border-radius:10px;padding:.9rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.8rem;transition:.15s;}
+.pcard:hover{border-color:#bfdbfe;box-shadow:var(--shadow);}
 .pcard-info{flex:1;}
-.pcard-name{font-size:.82rem;font-weight:600;margin-bottom:.2rem;}
+.pcard-name{font-size:.83rem;font-weight:700;margin-bottom:.2rem;}
 .pcard-meta{font-size:.7rem;color:var(--text-sec);}
 .pcard-right{text-align:right;}
-.pqty{font-size:1.1rem;font-weight:800;color:var(--blue);}
+.pqty{font-size:1.15rem;font-weight:900;color:var(--blue);}
 .pqty-l{font-size:.62rem;color:var(--text-sec);}
-.mini-bars{display:flex;align-items:flex-end;gap:4px;height:60px;}
-.mini-bar{flex:1;border-radius:2px 2px 0 0;min-height:3px;opacity:.85;}
-.ai-fab{position:fixed;right:1.5rem;bottom:1.5rem;z-index:200;width:50px;height:50px;border-radius:50%;background:var(--blue);color:#fff;border:none;font-size:.85rem;font-weight:700;box-shadow:0 4px 16px rgba(37,99,235,.4);display:none;transition:.15s;}
-.ai-fab:hover{background:#1d4ed8;transform:scale(1.06);}
-.ai-panel{position:fixed;right:1.5rem;bottom:5rem;z-index:200;width:360px;height:490px;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;overflow:hidden;}
+
+/* ALERT TABLE */
+.alert-row-critical td{background:#fff5f5;}
+.alert-row-warning td{background:#fffdf0;}
+
+/* AI */
+.ai-fab{position:fixed;right:1.5rem;bottom:1.5rem;z-index:200;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff;border:none;font-size:.78rem;font-weight:800;box-shadow:0 4px 18px rgba(37,99,235,.45);display:none;transition:.15s;}
+.ai-fab:hover{transform:scale(1.07);box-shadow:0 6px 22px rgba(37,99,235,.55);}
+.ai-panel{position:fixed;right:1.5rem;bottom:5.5rem;z-index:200;width:365px;height:500px;background:#fff;border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;overflow:hidden;}
 .ai-panel.open{display:flex;}
-.ai-hd{padding:.8rem 1rem;background:var(--blue);color:#fff;display:flex;align-items:center;gap:.55rem;}
-.ai-hd h3{font-size:.85rem;font-weight:700;flex:1;}
-.ai-close{background:rgba(255,255,255,.2);border:none;color:#fff;width:24px;height:24px;border-radius:6px;font-size:.8rem;}
-.ai-msgs{flex:1;overflow-y:auto;padding:.7rem;display:flex;flex-direction:column;gap:.55rem;}
-.msg{max-width:90%;padding:.5rem .75rem;border-radius:10px;font-size:.78rem;line-height:1.5;}
+.ai-hd{padding:.85rem 1.1rem;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;display:flex;align-items:center;gap:.6rem;}
+.ai-hd-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;animation:blink 2s infinite;}
+.ai-hd h3{font-size:.88rem;font-weight:800;flex:1;}
+.ai-close{background:rgba(255,255,255,.18);border:none;color:#fff;width:26px;height:26px;border-radius:7px;font-size:.85rem;font-weight:700;}
+.ai-msgs{flex:1;overflow-y:auto;padding:.75rem;display:flex;flex-direction:column;gap:.6rem;}
+.msg{max-width:90%;padding:.55rem .8rem;border-radius:12px;font-size:.78rem;line-height:1.55;}
 .msg-bot{background:var(--bg);color:var(--text);align-self:flex-start;border-bottom-left-radius:3px;}
-.msg-user{background:var(--blue);color:#fff;align-self:flex-end;border-bottom-right-radius:3px;}
-.msg-typing{display:flex;gap:.3rem;align-items:center;padding:.5rem .75rem;}
-.tdot{width:6px;height:6px;border-radius:50%;background:var(--text-sec);animation:typing .9s infinite;}
+.msg-user{background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff;align-self:flex-end;border-bottom-right-radius:3px;}
+.msg-typing{display:flex;gap:.35rem;align-items:center;padding:.55rem .8rem;}
+.tdot{width:7px;height:7px;border-radius:50%;background:var(--text-muted);animation:typing .9s infinite;}
 .tdot:nth-child(2){animation-delay:.2s;}
 .tdot:nth-child(3){animation-delay:.4s;}
-@keyframes typing{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
-.ai-inp-row{padding:.65rem;border-top:1px solid var(--border);display:flex;gap:.45rem;}
-.ai-inp{flex:1;padding:.45rem .7rem;border:1.5px solid var(--border);border-radius:8px;font-size:.78rem;color:var(--text);outline:none;}
-.ai-inp:focus{border-color:var(--blue);}
-.ai-send{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:.45rem .7rem;font-size:.78rem;font-weight:600;}
-@media(max-width:1024px){.kpi-grid{grid-template-columns:repeat(2,1fr);}.two-col,.three-col,.agrid{grid-template-columns:1fr;}.form-row{grid-template-columns:1fr;}}
-@media(max-width:768px){.sidebar{display:none;}.ai-panel{width:calc(100vw - 2rem);right:1rem;}}
+@keyframes typing{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+.ai-inp-row{padding:.7rem;border-top:1px solid var(--border);display:flex;gap:.5rem;}
+.ai-inp{flex:1;padding:.48rem .75rem;border:1.5px solid var(--border);border-radius:9px;font-size:.78rem;color:var(--text);outline:none;}
+.ai-inp:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.08);}
+.ai-send{background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff;border:none;border-radius:9px;padding:.48rem .75rem;font-size:.78rem;font-weight:700;}
+
+/* HERO STATS */
+.hero-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.85rem;margin-bottom:1.3rem;}
+.hero-stat{background:linear-gradient(135deg,var(--c1),var(--c2));border-radius:var(--radius);padding:1.15rem 1.3rem;color:#fff;position:relative;overflow:hidden;}
+.hero-stat::after{content:var(--ico);position:absolute;right:1rem;top:50%;transform:translateY(-50%);font-size:2.2rem;opacity:.18;font-weight:900;}
+.hs-label{font-size:.66rem;font-weight:700;opacity:.82;text-transform:uppercase;letter-spacing:.08em;}
+.hs-value{font-size:2.1rem;font-weight:900;margin:.25rem 0 .1rem;line-height:1;}
+.hs-sub{font-size:.7rem;opacity:.75;}
+
+/* SVG CHART */
+.chart-container{width:100%;overflow:hidden;}
+svg.chart{width:100%;overflow:visible;}
+
+@media(max-width:1200px){.kpi-grid{grid-template-columns:repeat(2,1fr);}.three-col{grid-template-columns:1fr 1fr;}.col-6040{grid-template-columns:1fr;}}
+@media(max-width:900px){.two-col,.agrid{grid-template-columns:1fr;}.form-row{grid-template-columns:1fr;}.hero-stats{grid-template-columns:1fr 1fr;}}
+@media(max-width:768px){.sidebar{display:none;}.ai-panel{width:calc(100vw - 2rem);right:1rem;}.kpi-grid{grid-template-columns:repeat(2,1fr);}}
 </style>
 </head>
 <body>
-
 <div id="loginPage">
   <div class="login-card">
     <div class="login-logo">
       <div class="login-logo-icon">SC</div>
       <h1>Supply Chain Analytics</h1>
-      <p>Gestion des stocks &amp; approvisionnements</p>
+      <p>Plateforme de gestion des stocks &amp; approvisionnements</p>
     </div>
     <div class="role-tabs">
       <button class="role-tab active" onclick="selRole(this)">Manager</button>
@@ -208,7 +260,7 @@ button{cursor:pointer;font-family:inherit;}
     </div>
     <div class="form-group">
       <label class="form-label">Identifiant</label>
-      <input class="form-input" id="liU" type="text" placeholder="Identifiant" autocomplete="username"/>
+      <input class="form-input" id="liU" type="text" placeholder="Votre identifiant" autocomplete="username"/>
     </div>
     <div class="form-group">
       <label class="form-label">Mot de passe</label>
@@ -217,7 +269,7 @@ button{cursor:pointer;font-family:inherit;}
     <div class="login-error" id="liErr">Identifiant ou mot de passe incorrect.</div>
     <button class="btn-login" onclick="doLogin()">Se connecter</button>
     <div class="login-hint">
-      <strong>Acces de demonstration</strong>
+      <strong>Acces demonstration</strong>
       Manager : <b>manager</b> / <b>scm2025</b><br/>
       Agent commercial : <b>agent1</b> a <b>agent4</b> / <b>scm2025</b><br/>
       Agent acheteur : <b>acheteur1</b> a <b>acheteur3</b> / <b>scm2025</b>
@@ -232,7 +284,7 @@ button{cursor:pointer;font-family:inherit;}
       <div><div class="tbname">Supply Chain</div><div class="tbsub">Analytics Platform</div></div>
     </div>
     <div class="topbar-spacer"></div>
-    <div class="topbar-status"><div class="sdot"></div>Donnees synchronisees</div>
+    <div class="topbar-status"><div class="sdot"></div>Systeme synchronise</div>
     <div class="topbar-user">
       <div class="uav" id="uAv">M</div>
       <div><div class="uname" id="uNm">-</div><div class="urole" id="uRl">-</div></div>
@@ -247,17 +299,16 @@ button{cursor:pointer;font-family:inherit;}
 
 <button class="ai-fab" id="aiFab" onclick="togAI()">IA</button>
 <div class="ai-panel" id="aiP">
-  <div class="ai-hd"><span>*</span><h3>Assistant IA Supply Chain</h3><button class="ai-close" onclick="togAI()">X</button></div>
-  <div class="ai-msgs" id="aiM"><div class="msg msg-bot">Bonjour ! Posez vos questions sur les stocks, ruptures, commandes ou fournisseurs.</div></div>
+  <div class="ai-hd"><div class="ai-hd-dot"></div><h3>Assistant IA Supply Chain</h3><button class="ai-close" onclick="togAI()">X</button></div>
+  <div class="ai-msgs" id="aiM"><div class="msg msg-bot">Bonjour ! Je peux repondre sur les stocks, ruptures, fournisseurs, commandes ou la performance des agents.</div></div>
   <div class="ai-inp-row">
-    <input class="ai-inp" id="aiI" placeholder="Votre question..." onkeydown="if(event.key==='Enter')sndAI()"/>
+    <input class="ai-inp" id="aiI" placeholder="Posez votre question..." onkeydown="if(event.key==='Enter')sndAI()"/>
     <button class="ai-send" onclick="sndAI()">Envoyer</button>
   </div>
 </div>
-
 <script>
 var D={
-  stats:{total:1880,oos:1132,soon:295,orderSoon:156,ok:297,suppliers:143,toOrder:451},
+  stats:{total:1880,oos:1132,soon:295,orderSoon:156,ok:297,suppliers:143,toOrder:451,totalQty:16532},
   sup:[
     {n:'Borodji Distribution',r:107,ok:36,s:16,o:14,x:41,p:33.6},
     {n:'ARIMEX',r:94,ok:12,s:6,o:13,x:63,p:12.8},
@@ -279,15 +330,15 @@ var D={
     {n:'CX',r:1460,v:5,c:999},{n:'CY',r:66,v:11,c:76},{n:'CZ',r:92,v:12,c:27},
   ],
   agents:[
-    {id:'agent1',nm:'Mamadou Diallo',z:'Dakar Centre',cl:'#2563eb',
+    {id:'agent1',nm:'Insa Diallo',z:'Dakar Centre',cl:'#2563eb',
      sups:['Borodji Distribution','ARIMEX','SENICO'],
      r:290,ok:55,s:32,o:50,x:153,p:19,pm:12,pp:4,
      obj:{st:75,q:88,d:72},pf:[62,68,71,74,70,73]},
-    {id:'agent2',nm:'Fatou Seck',z:'Pikine / Guediawaye',cl:'#7c3aed',
+    {id:'agent2',nm:'Ravane Seck',z:'Pikine / Guediawaye',cl:'#7c3aed',
      sups:['Maad','SIAGRO','LSB'],
      r:197,ok:42,s:22,o:6,x:127,p:21.3,pm:8,pp:2,
      obj:{st:80,q:90,d:68},pf:[55,60,65,68,72,75]},
-    {id:'agent3',nm:'Ibrahima Ndiaye',z:'Thies / Mbour',cl:'#0891b2',
+    {id:'agent3',nm:'Seydouna Ndiaye',z:'Thies / Mbour',cl:'#0891b2',
      sups:['Patisen','SIAD','H&D Industries'],
      r:162,ok:22,s:33,o:11,x:96,p:13.6,pm:6,pp:3,
      obj:{st:70,q:82,d:65},pf:[48,52,58,61,63,65]},
@@ -297,12 +348,12 @@ var D={
      obj:{st:65,q:78,d:60},pf:[38,42,47,49,52,55]},
   ],
   ach:[
-    {id:'acheteur1',nm:'Ousmane Faye',rl:'Acheteur Alimentation',cl:'#0d9488',
+    {id:'acheteur1',nm:'Fallou Diallo',rl:'Acheteur — Alimentation',cl:'#0d9488',
      sups:['SENICO','Borodji Distribution','COSEDI'],
      r:237,to:73,x:116,ok:48,qty:4258,pm:9,pp:3,pv:6,bm:12500000,bc:7800000,
      obj:{ts:85,dp:3},pf:[71,75,78,80,77,82],
      prods:[
-      {n:'The flecha vert pm 25g x100',s:'SENICO',st:481,q:1205,vj:105.4,lt:16,sts:'Predicted Stockout Soon',c:'AY'},
+      {n:'The flecha vert pm 25g x100',s:'SENICO',st:481,q:1205,vj:105.4,lt:16,sts:'Order Soon',c:'AY'},
       {n:'Chapelet lait halib pm 20g x10',s:'SENICO',st:1350,q:828,vj:136.1,lt:16,sts:'Order Soon',c:'CX'},
       {n:'Chocolat delia stick 12g x60',s:'SENICO',st:125,q:325,vj:28.1,lt:16,sts:'Predicted Stockout Soon',c:'CX'},
       {n:'Pates amira spaghetti gm 500g x10',s:'SENICO',st:90,q:273,vj:22.7,lt:16,sts:'Predicted Stockout Soon',c:'CX'},
@@ -318,7 +369,7 @@ var D={
       {n:'Chocolat delia 250g x6',s:'SENICO',st:43,q:27,vj:4.4,lt:16,sts:'Order Soon',c:'CX'},
       {n:'Lait lalia pm 20g x50',s:'COSEDI',st:27,q:18,vj:2.1,lt:5,sts:'Order Soon',c:'CX'},
      ]},
-    {id:'acheteur2',nm:'Mariama Diop',rl:'Acheteur Grande Consommation',cl:'#7c3aed',
+    {id:'acheteur2',nm:'Aram Sarr',rl:'Acheteur — Grande Consommation',cl:'#7c3aed',
      sups:['ARIMEX','FKS','H&D Industries'],
      r:224,to:74,x:129,ok:21,qty:5827,pm:7,pp:4,pv:3,bm:15000000,bc:9200000,
      obj:{ts:82,dp:4},pf:[65,68,70,73,75,78],
@@ -329,7 +380,7 @@ var D={
       {n:'Biscuits carnaval cacao 22g x24',s:'FKS',st:42,q:320,vj:45.2,lt:8,sts:'Predicted Stockout Soon',c:'CY'},
       {n:'Eau de javel madar seau 65ml x100',s:'H&D Industries',st:60,q:219,vj:27.9,lt:10,sts:'Predicted Stockout Soon',c:'BX'},
       {n:'Liquide madar gm renzo 900ml x12',s:'H&D Industries',st:3,q:212,vj:21.5,lt:10,sts:'Predicted Stockout Soon',c:'BX'},
-      {n:'Biscuits empire plain 40g x24',s:'FKS',st:1,q:205,vj:25.8,lt:8,sts:'Predicted Stockout Soon',c:'CX'},
+      {n:'Biscuits empire plain 40g x24',s:'FKS',st:1,q:205,vj:25.8,lt:10,sts:'Predicted Stockout Soon',c:'CX'},
       {n:'Biscuits empire cacao 40g x24',s:'FKS',st:1,q:165,vj:20.7,lt:8,sts:'Predicted Stockout Soon',c:'CY'},
       {n:'Liquide madar moyen 400ml x12',s:'H&D Industries',st:15,q:162,vj:17.7,lt:10,sts:'Predicted Stockout Soon',c:'BX'},
       {n:'Liquide madar gm platinum 900ml',s:'H&D Industries',st:69,q:142,vj:21.1,lt:10,sts:'Predicted Stockout Soon',c:'BX'},
@@ -339,7 +390,7 @@ var D={
       {n:'Liquide madar seau renzo 40ml',s:'H&D Industries',st:90,q:131,vj:22.1,lt:10,sts:'Predicted Stockout Soon',c:'CX'},
       {n:'Poudre noura 10kg',s:'H&D Industries',st:9,q:116,vj:12.5,lt:10,sts:'Predicted Stockout Soon',c:'BY'},
      ]},
-    {id:'acheteur3',nm:'Babacar Sow',rl:'Acheteur Boissons et Divers',cl:'#16a34a',
+    {id:'acheteur3',nm:'Coumba Ndiaye',rl:'Acheteur — Boissons et Divers',cl:'#16a34a',
      sups:['CMGA','IBS','Patisen'],
      r:263,to:79,x:150,ok:34,qty:6447,pm:11,pp:2,pv:9,bm:18000000,bc:13500000,
      obj:{ts:80,dp:3},pf:[68,72,75,77,79,83],
@@ -370,6 +421,23 @@ var D={
     {num:'PO-20251205-006',ach:'acheteur3',s:'CMGA',d:'05/12/2025',st:'Recu',r:3,q:1500,m:'3 100 000'},
     {num:'PO-20251203-007',ach:'acheteur2',s:'FKS',d:'03/12/2025',st:'En attente',r:7,q:900,m:'1 400 000'},
     {num:'PO-20251201-008',ach:'acheteur3',s:'Patisen',d:'01/12/2025',st:'Valide',r:4,q:380,m:'1 900 000'},
+  ],
+  alerts:[
+    {ref:'Can Fanta Orange 33cl x24',sup:'IBS',cat:'AX',st:1,vj:74.5,pri:'CRITIQUE',ag:'Coumba Ndiaye'},
+    {ref:'Can Coca Cola 33cl x24',sup:'IBS',cat:'AX',st:35,vj:72.1,pri:'CRITIQUE',ag:'Coumba Ndiaye'},
+    {ref:'Can Schweppes agrumes 25cl x24',sup:'IBS',cat:'AX',st:3,vj:50.8,pri:'CRITIQUE',ag:'Coumba Ndiaye'},
+    {ref:'Can Sprite 33cl x24',sup:'IBS',cat:'AX',st:123,vj:65.1,pri:'CRITIQUE',ag:'Coumba Ndiaye'},
+    {ref:'GM Sprite 1.25l x6',sup:'IBS',cat:'AX',st:460,vj:103.8,pri:'CRITIQUE',ag:'Coumba Ndiaye'},
+    {ref:'Biscuits empire plain 40g x24',sup:'FKS',cat:'CX',st:1,vj:25.8,pri:'URGENT',ag:'Aram Sarr'},
+    {ref:'Liquide madar gm renzo 900ml x12',sup:'H&D Industries',cat:'BX',st:3,vj:21.5,pri:'URGENT',ag:'Aram Sarr'},
+    {ref:'Savon bienco gm x24',sup:'Borodji Distribution',cat:'CX',st:1,vj:14.1,pri:'URGENT',ag:'Fallou Diallo'},
+    {ref:'Pates amira spaghetti gm 500g x10',sup:'SENICO',cat:'CX',st:90,vj:22.7,pri:'URGENT',ag:'Fallou Diallo'},
+    {ref:'PM Coca Cola 30cl x12',sup:'IBS',cat:'BX',st:2,vj:107.1,pri:'URGENT',ag:'Coumba Ndiaye'},
+    {ref:'Biscuits hay hay chocolat x24',sup:'ARIMEX',cat:'BZ',st:190,vj:172,pri:'ELEVE',ag:'Aram Sarr'},
+    {ref:'Beignets crevettes prima 170g',sup:'ARIMEX',cat:'CX',st:489,vj:200.4,pri:'ELEVE',ag:'Aram Sarr'},
+    {ref:'Chocolat delia stick 12g x60',sup:'SENICO',cat:'CX',st:125,vj:28.1,pri:'ELEVE',ag:'Fallou Diallo'},
+    {ref:'Eau SEO 1.5l x6',sup:'CMGA',cat:'CY',st:643,vj:164.5,pri:'ELEVE',ag:'Coumba Ndiaye'},
+    {ref:'Kadi epices 60g x60',sup:'SENICO',cat:'AZ',st:192,vj:24.2,pri:'ELEVE',ag:'Fallou Diallo'},
   ]
 };
 var USERS={
@@ -389,129 +457,330 @@ function d(s,p){return (p||document).querySelectorAll(s);}
 function g(id){return document.getElementById(id);}
 function ini(n){return n.split(' ').map(function(w){return w[0];}).join('');}
 function bdg(t,c){return '<span class="badge '+c+'">'+t+'</span>';}
-function as(tp,html){return '<div class="astrip a'+tp+'"><span class="aicon">!</span><div>'+html+'</div></div>';}
+function as(tp,html){return '<div class="astrip a'+tp+'"><span class="aicon">'+(tp==='danger'?'!':tp==='warning'?'~':tp==='info'?'i':'v')+'</span><div>'+html+'</div></div>';}
 function pg(pct,col){return '<div class="prog-track"><div class="prog-fill" style="width:'+pct+'%;background:var(--'+col+')"></div></div>';}
 function hb(lbl,pct,col,rt){return '<div><div class="hbar-top"><strong>'+lbl+'</strong><span>'+rt+'</span></div>'+pg(pct,col)+'</div>';}
-function mb(vals){var mx=Math.max.apply(null,vals);return '<div class="mini-bars">'+vals.map(function(v,i){return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;"><div class="mini-bar" style="width:100%;height:'+Math.round(v/mx*54)+'px;background:var(--blue)"></div><div style="font-size:.55rem;color:var(--text-sec)">'+MOIS[i]+'</div></div>';}).join('')+'</div>';}
-function sb(s){if(s==='Predicted Stockout Soon')return bdg('Rupture imminente','ba');if(s==='Order Soon')return bdg('A commander','bb');if(s==='Out of Stock')return bdg('Rupture','br');return bdg('Stock OK','bg');}
-function kc(l,v,m,mc,cc,dk){var cl=dk?'onclick="oD(\''+dk+'\')"':'';return '<div class="kpi-card '+cc+'" '+cl+'><div class="kpi-label">'+l+'</div><div class="kpi-value">'+v+'</div><div class="kpi-meta '+mc+'">'+m+'</div></div>';}
+function mb(vals){
+  var mx=Math.max.apply(null,vals);
+  return '<div class="mini-bars">'+vals.map(function(v,i){
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">'+
+      '<div style="width:100%;height:'+Math.round(v/mx*52)+'px;background:linear-gradient(180deg,#60a5fa,#2563eb);border-radius:3px 3px 0 0;opacity:.85;"></div>'+
+      '<div style="font-size:.55rem;color:var(--text-sec)">'+MOIS[i]+'</div></div>';
+  }).join('')+'</div>';
+}
+function sb(s){
+  if(s==='Predicted Stockout Soon')return bdg('Rupture imminente','ba');
+  if(s==='Order Soon')return bdg('A commander','bb');
+  if(s==='Out of Stock')return bdg('Rupture','br');
+  return bdg('Stock OK','bg');
+}
+function kc(l,v,m,mc,cc,dk){
+  var cl=dk?'onclick="oD(\''+dk+'\')"':'';
+  return '<div class="kpi-card '+cc+'" '+cl+'><div class="kpi-label">'+l+'</div><div class="kpi-value">'+v+'</div><div class="kpi-meta '+mc+'">'+m+'</div></div>';
+}
+function phd(t,s,btn){
+  return '<div class="page-hd"><div class="page-hd-left"><h2>'+t+'</h2><p>'+s+'</p></div>'+(btn?'<div class="page-hd-right">'+btn+'</div>':'')+'</div>';
+}
+function today(){return new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});}
 
 function doLogin(){
   var u=g('liU').value.trim(),p=g('liP').value,e=g('liErr'),rec=USERS[u];
   if(!rec||rec.pw!==p){e.style.display='block';return;}
   e.style.display='none';role=rec.role;
-  if(role==='manager'){ctx=null;setUI('MG','Admin Manager','Direction','#1e3a5f');bNav('manager');rnd('m-db');}
-  else if(role==='agent'){ctx=D.agents.filter(function(a){return a.id===rec.id;})[0];setUI(ini(ctx.nm),ctx.nm,'Agent - '+ctx.z,ctx.cl);bNav('agent');rnd('a-db');}
+  if(role==='manager'){ctx=null;setUI('MG','Administrateur','Direction Generale','#1e3a5f');bNav('manager');rnd('m-db');}
+  else if(role==='agent'){ctx=D.agents.filter(function(a){return a.id===rec.id;})[0];setUI(ini(ctx.nm),ctx.nm,'Agent Commercial',ctx.cl);bNav('agent');rnd('a-db');}
   else{ctx=D.ach.filter(function(a){return a.id===rec.id;})[0];setUI(ini(ctx.nm),ctx.nm,ctx.rl,ctx.cl);bNav('ach');rnd('c-db');}
   g('loginPage').style.display='none';g('appShell').style.display='flex';g('aiFab').style.display='flex';
 }
 g('liP').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
-
 function doLogout(){role=null;ctx=null;g('loginPage').style.display='flex';g('appShell').style.display='none';g('aiFab').style.display='none';g('aiP').classList.remove('open');}
-
 function setUI(av,nm,rl,cl){g('uAv').textContent=av;g('uAv').style.background=cl;g('uNm').textContent=nm;g('uRl').textContent=rl;}
 
 function bNav(r){
   var n=g('sNav');
-  if(r==='manager'){n.innerHTML='<div class="nav-section">Dashboard</div>'+
-    '<button class="nav-item active" onclick="nv(this,\'m-db\')"><span class="nav-icon">*</span>Vue globale</button>'+
-    '<button class="nav-item" onclick="nv(this,\'m-ag\')"><span class="nav-icon">o</span>Agents commerciaux<span class="nav-badge">4</span></button>'+
-    '<button class="nav-item" onclick="nv(this,\'m-ac\')"><span class="nav-icon">+</span>Agents acheteurs<span class="nav-badge nav-badge-blue">3</span></button>'+
-    '<div class="nav-section">Stocks</div>'+
-    '<button class="nav-item" onclick="nv(this,\'m-st\')"><span class="nav-icon">=</span>Niveaux de stock<span class="nav-badge">'+D.stats.oos+'</span></button>'+
-    '<button class="nav-item" onclick="nv(this,\'m-fo\')"><span class="nav-icon">^</span>Fournisseurs</button>'+
-    '<div class="nav-section">Achats</div>'+
-    '<button class="nav-item" onclick="nv(this,\'m-po\')"><span class="nav-icon">P</span>Suivi PO</button>'+
-    '<button class="nav-item" onclick="nv(this,\'m-ml\')"><span class="nav-icon">~</span>Previsions ML</button>'+
+  if(r==='manager'){n.innerHTML=
+    '<div class="nav-section">Tableau de bord</div>'+
+    '<button class="nav-item active" onclick="nv(this,\'m-db\')"><span class="nav-icon">&#9632;</span>Vue 360 globale</button>'+
+    '<button class="nav-item" onclick="nv(this,\'m-al\')"><span class="nav-icon">&#9650;</span>Alertes ruptures<span class="nav-badge">'+D.stats.oos+'</span></button>'+
+    '<div class="nav-section">Equipes</div>'+
+    '<button class="nav-item" onclick="nv(this,\'m-ag\')"><span class="nav-icon">&#9733;</span>Agents commerciaux<span class="nav-badge nav-badge-blue">4</span></button>'+
+    '<button class="nav-item" onclick="nv(this,\'m-ac\')"><span class="nav-icon">&#9744;</span>Agents acheteurs<span class="nav-badge nav-badge-teal">3</span></button>'+
+    '<div class="nav-section">Stocks & Achats</div>'+
+    '<button class="nav-item" onclick="nv(this,\'m-st\')"><span class="nav-icon">&#9776;</span>Niveaux de stock</button>'+
+    '<button class="nav-item" onclick="nv(this,\'m-fo\')"><span class="nav-icon">&#9679;</span>Fournisseurs</button>'+
+    '<button class="nav-item" onclick="nv(this,\'m-po\')"><span class="nav-icon">&#9658;</span>Suivi PO</button>'+
+    '<button class="nav-item" onclick="nv(this,\'m-ml\')"><span class="nav-icon">&#9670;</span>Previsions ML</button>'+
     '<div class="nav-section">Outils</div>'+
-    '<button class="nav-item" onclick="togAI()"><span class="nav-icon">A</span>Assistant IA</button>';}
-  else if(r==='agent'){n.innerHTML='<div class="nav-section">Mon espace</div>'+
-    '<button class="nav-item active" onclick="nv(this,\'a-db\')"><span class="nav-icon">*</span>Tableau de bord</button>'+
-    '<button class="nav-item" onclick="nv(this,\'a-st\')"><span class="nav-icon">=</span>Mes stocks</button>'+
-    '<button class="nav-item" onclick="nv(this,\'a-fo\')"><span class="nav-icon">o</span>Mes fournisseurs</button>'+
+    '<button class="nav-item" onclick="togAI()"><span class="nav-icon">&#9998;</span>Assistant IA</button>';}
+  else if(r==='agent'){n.innerHTML=
+    '<div class="nav-section">Mon espace</div>'+
+    '<button class="nav-item active" onclick="nv(this,\'a-db\')"><span class="nav-icon">&#9632;</span>Tableau de bord</button>'+
+    '<button class="nav-item" onclick="nv(this,\'a-st\')"><span class="nav-icon">&#9776;</span>Mes stocks</button>'+
+    '<button class="nav-item" onclick="nv(this,\'a-fo\')"><span class="nav-icon">&#9679;</span>Mes fournisseurs</button>'+
     '<div class="nav-section">Outils</div>'+
-    '<button class="nav-item" onclick="togAI()"><span class="nav-icon">A</span>Assistant IA</button>';}
-  else{var nb=ctx?ctx.to:0;n.innerHTML='<div class="nav-section">Mon espace</div>'+
-    '<button class="nav-item active" onclick="nv(this,\'c-db\')"><span class="nav-icon">*</span>Tableau de bord</button>'+
-    '<button class="nav-item" onclick="nv(this,\'c-cm\')"><span class="nav-icon">=</span>Produits a commander<span class="nav-badge">'+nb+'</span></button>'+
+    '<button class="nav-item" onclick="togAI()"><span class="nav-icon">&#9998;</span>Assistant IA</button>';}
+  else{var nb=ctx?ctx.to:0;n.innerHTML=
+    '<div class="nav-section">Mon espace</div>'+
+    '<button class="nav-item active" onclick="nv(this,\'c-db\')"><span class="nav-icon">&#9632;</span>Tableau de bord</button>'+
+    '<button class="nav-item" onclick="nv(this,\'c-cm\')"><span class="nav-icon">&#9776;</span>Produits a commander<span class="nav-badge">'+nb+'</span></button>'+
     '<button class="nav-item" onclick="nv(this,\'c-np\')"><span class="nav-icon">+</span>Nouveau bon de commande</button>'+
-    '<button class="nav-item" onclick="nv(this,\'c-hi\')"><span class="nav-icon">H</span>Historique PO</button>'+
+    '<button class="nav-item" onclick="nv(this,\'c-hi\')"><span class="nav-icon">&#9658;</span>Historique PO</button>'+
     '<div class="nav-section">Outils</div>'+
-    '<button class="nav-item" onclick="togAI()"><span class="nav-icon">A</span>Assistant IA</button>';}
+    '<button class="nav-item" onclick="togAI()"><span class="nav-icon">&#9998;</span>Assistant IA</button>';}
 }
 
 function nv(el,pg){d('.nav-item').forEach(function(n){n.classList.remove('active');});el.classList.add('active');rnd(pg);}
-
 function rnd(pg){
   var el=g('mC'),h='';
-  var m={'m-db':mDb,'m-ag':mAg,'m-ac':mAc,'m-st':mSt,'m-fo':mFo,'m-po':mPo,'m-ml':mMl,
-         'a-db':aDb,'a-st':aSt,'a-fo':aFo,
-         'c-db':cDb,'c-cm':cCm,'c-np':cNp,'c-hi':cHi};
+  var m={'m-db':mDb,'m-al':mAl,'m-ag':mAg,'m-ac':mAc,'m-st':mSt,'m-fo':mFo,'m-po':mPo,'m-ml':mMl,
+         'a-db':aDb,'a-st':aSt,'a-fo':aFo,'c-db':cDb,'c-cm':cCm,'c-np':cNp,'c-hi':cHi};
   if(m[pg])h=m[pg]();
   el.innerHTML=h;el.scrollTop=0;
 }
-
-function phd(t,s,btn){return '<div class="page-hd"><div class="page-hd-left"><h2>'+t+'</h2><p>'+s+'</p></div>'+(btn?'<div class="page-hd-right">'+btn+'</div>':'')+'</div>';}
-function today(){return new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});}
-
-function mDb(){
-  var s=D.stats;
-  return phd('Tableau de bord - Vue globale',today(),'<button class="btn btn-ghost btn-sm" onclick="rnd(\'m-db\')">Actualiser</button>')+
-  '<div style="margin-bottom:1.2rem;">'+
-    as('danger','<strong>'+s.oos.toLocaleString('fr')+' references en rupture</strong> — Reapprovisionnement urgent requis')+
-    as('warning','<strong>'+s.soon+' ruptures imminentes</strong> — Horizon 7-30 jours')+
-    as('info','<strong>Acheteurs :</strong> '+s.toOrder+' references a commander — 9 bons de commande actifs ce mois')+
-  '</div>'+
-  '<div class="kpi-grid">'+
-    kc('References totales',s.total.toLocaleString('fr'),s.suppliers+' fournisseurs actifs','neutral','cb','refs')+
-    kc('En rupture de stock',s.oos.toLocaleString('fr'),((s.oos/s.total)*100).toFixed(1)+'% du catalogue','down','cr','oos')+
-    kc('Rupture imminente',s.soon,'Horizon 7-30 jours','down','ca','soon')+
-    kc('Stock satisfaisant',s.ok,((s.ok/s.total)*100).toFixed(1)+'% du catalogue','up','cg','ok')+
-  '</div>'+
-  '<div class="detail-drawer" id="mDraw"><div class="drawer-header"><div class="drawer-title" id="dT">-</div><button class="drawer-close" onclick="cD()">Fermer</button></div><div id="dC"></div></div>'+
-  '<div class="two-col">'+
-    '<div class="card"><div class="card-body">'+
-      '<div class="card-title">Repartition des statuts</div>'+
-      '<div class="card-sub" style="margin-bottom:.9rem">Sur '+s.total.toLocaleString('fr')+' references</div>'+
-      '<div class="donut-wrap">'+
-        '<svg viewBox="0 0 100 100" width="105" height="105">'+
-          '<circle cx="50" cy="50" r="35" fill="none" stroke="#f1f5f9" stroke-width="20"/>'+
-          '<circle cx="50" cy="50" r="35" fill="none" stroke="#dc2626" stroke-width="20" stroke-dasharray="132.2 87.8" stroke-dashoffset="0" transform="rotate(-90 50 50)"/>'+
-          '<circle cx="50" cy="50" r="35" fill="none" stroke="#d97706" stroke-width="20" stroke-dasharray="34.5 185.5" stroke-dashoffset="-132.2" transform="rotate(-90 50 50)"/>'+
-          '<circle cx="50" cy="50" r="35" fill="none" stroke="#2563eb" stroke-width="20" stroke-dasharray="18.2 201.8" stroke-dashoffset="-166.7" transform="rotate(-90 50 50)"/>'+
-          '<circle cx="50" cy="50" r="35" fill="none" stroke="#16a34a" stroke-width="20" stroke-dasharray="34.7 185.3" stroke-dashoffset="-184.9" transform="rotate(-90 50 50)"/>'+
-          '<text x="50" y="53" text-anchor="middle" fill="#1e293b" font-size="8" font-weight="800">'+s.total+'</text>'+
-        '</svg>'+
-        '<div class="leg-list">'+
-          '<div class="leg-row"><div class="leg-dot" style="background:#dc2626"></div>En rupture<span class="leg-num">'+s.oos.toLocaleString('fr')+'</span></div>'+
-          '<div class="leg-row"><div class="leg-dot" style="background:#d97706"></div>Rupture imminente<span class="leg-num">'+s.soon+'</span></div>'+
-          '<div class="leg-row"><div class="leg-dot" style="background:#2563eb"></div>A commander<span class="leg-num">'+s.orderSoon+'</span></div>'+
-          '<div class="leg-row"><div class="leg-dot" style="background:#16a34a"></div>Stock OK<span class="leg-num">'+s.ok+'</span></div>'+
-        '</div>'+
-      '</div>'+
-    '</div></div>'+
-    '<div class="card"><div class="card-body">'+
-      '<div class="card-title">Performance agents commerciaux</div>'+
-      '<div class="card-sub" style="margin-bottom:.9rem">Taux de disponibilite stock</div>'+
-      '<div class="hbar-list">'+D.agents.map(function(a){return hb(a.nm,a.p,a.p>=25?'green':a.p>=15?'amber':'red',a.p+'%');}).join('')+'</div>'+
-    '</div></div>'+
-  '</div>'+
-  '<div class="two-col">'+
-    '<div class="card"><div class="card-body">'+
-      '<div class="card-title">Agents acheteurs — Budget & PO</div>'+
-      '<div class="card-sub" style="margin-bottom:.9rem">Budget consomme et bons de commande</div>'+
-      '<div class="hbar-list">'+D.ach.map(function(a){var p=Math.round(a.bc/a.bm*100);return hb(a.nm,p,'teal',a.pm+' PO — '+a.pp+' en attente');}).join('')+'</div>'+
-    '</div></div>'+
-    '<div class="card"><div class="card-body">'+
-      '<div class="card-title">Produits a commander (ML)</div>'+
-      '<div class="card-sub" style="margin-bottom:.9rem">Repartition par acheteur</div>'+
-      '<div class="hbar-list">'+D.ach.map(function(a){return hb(a.nm,Math.round(a.to/D.stats.toOrder*100),'purple',a.to+' refs — qty: '+a.qty.toLocaleString('fr'));}).join('')+'</div>'+
-    '</div></div>'+
-  '</div>';
+// ── SVG CHART HELPERS ─────────────────────────────────────────────────────
+function svgDonut(segs,cx,cy,r,total){
+  var circ=2*Math.PI*r,offset=0,paths='';
+  segs.forEach(function(s){
+    var l=circ*(s.v/total);
+    paths+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+s.c+'" stroke-width="18"'+
+      ' stroke-dasharray="'+l.toFixed(1)+' '+(circ-l).toFixed(1)+'"'+
+      ' stroke-dashoffset="'+(-offset).toFixed(1)+'" transform="rotate(-90 '+cx+' '+cy+')" opacity=".92"/>';
+    offset+=l;
+  });
+  return paths;
+}
+function svgBarChart(vals,labels,colors,w,h){
+  var mx=Math.max.apply(null,vals.map(function(v){return v||0;}));
+  var bw=Math.floor((w-40)/vals.length)-6,bars='',axisX='',axisY='';
+  for(var i=0;i<vals.length;i++){
+    var bh=mx>0?Math.round((vals[i]/mx)*(h-30)):0;
+    var x=40+i*(bw+6),y=h-25-bh;
+    bars+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh+'" fill="'+(colors[i]||'#2563eb')+'" rx="3" opacity=".88"/>';
+    bars+='<text x="'+(x+bw/2)+'" y="'+(y-4)+'" text-anchor="middle" font-size="9" fill="#475569" font-weight="700">'+vals[i]+'</text>';
+    if(labels&&labels[i]){
+      var lbl=labels[i].length>6?labels[i].substring(0,5)+'..':labels[i];
+      axisX+='<text x="'+(x+bw/2)+'" y="'+(h-8)+'" text-anchor="middle" font-size="8" fill="#94a3b8">'+lbl+'</text>';
+    }
+  }
+  axisY+='<line x1="38" y1="8" x2="38" y2="'+(h-20)+'" stroke="#e2e8f0" stroke-width="1"/>';
+  axisY+='<line x1="38" y1="'+(h-20)+'" x2="'+w+'" y2="'+(h-20)+'" stroke="#e2e8f0" stroke-width="1"/>';
+  return '<svg viewBox="0 0 '+w+' '+h+'" class="chart">'+axisY+bars+axisX+'</svg>';
+}
+function svgStackedBar(items,w,h){
+  // items: [{label, vals:[ok,soon,order,oos], total}]
+  var bh=Math.min(18,Math.floor((h-20)/items.length)-5);
+  var out='',cols=['#16a34a','#d97706','#2563eb','#dc2626'];
+  items.forEach(function(it,i){
+    var y=20+i*(bh+6),x=120,maxW=w-130;
+    var pcts=[it.ok/it.r,it.s/it.r,it.o/it.r,it.x/it.r];
+    var cx=x;
+    out+='<text x="0" y="'+(y+bh/2+3)+'" font-size="9" fill="#475569" font-weight="600">'+it.n.substring(0,14)+'</text>';
+    pcts.forEach(function(p,j){
+      var segW=Math.round(p*maxW);if(segW<1)return;
+      out+='<rect x="'+cx+'" y="'+y+'" width="'+segW+'" height="'+bh+'" fill="'+cols[j]+'" opacity=".85" rx="'+(j===0?3:0)+'" />';
+      cx+=segW;
+    });
+    out+='<rect x="'+x+'" y="'+y+'" width="'+(w-130)+'" height="'+bh+'" fill="none" stroke="#e2e8f0" stroke-width="1" rx="3"/>';
+    out+='<text x="'+(w-5)+'" y="'+(y+bh/2+3)+'" font-size="9" fill="#475569" text-anchor="end">'+it.p+'%</text>';
+  });
+  out='<svg viewBox="0 0 '+w+' '+(items.length*(bh+6)+20)+'" class="chart">'+out+'</svg>';
+  return out;
 }
 
+// ── MANAGER DASHBOARD (360°) ────────────────────────────────────────────────
+function mDb(){
+  var s=D.stats;
+  var totalBM=D.ach.reduce(function(a,c){return a+c.bm;},0);
+  var totalBC=D.ach.reduce(function(a,c){return a+c.bc;},0);
+  var totalPO=D.pos.length;
+  var pending=D.pos.filter(function(p){return p.st==='En attente';}).length;
+
+  var heroHtml=
+    '<div class="hero-stats" style="margin-bottom:1.3rem;">'+
+    '<div class="hero-stat" style="--c1:#1e3a8a;--c2:#2563eb;--ico:\'1880\'">'+
+      '<div class="hs-label">References totales</div>'+
+      '<div class="hs-value">'+s.total.toLocaleString('fr')+'</div>'+
+      '<div class="hs-sub">'+s.suppliers+' fournisseurs actifs</div>'+
+    '</div>'+
+    '<div class="hero-stat" style="--c1:#991b1b;--c2:#dc2626;--ico:\'OOS\'">'+
+      '<div class="hs-label">En rupture de stock</div>'+
+      '<div class="hs-value">'+s.oos.toLocaleString('fr')+'</div>'+
+      '<div class="hs-sub">'+((s.oos/s.total)*100).toFixed(1)+'% du catalogue — Action urgente</div>'+
+    '</div>'+
+    '<div class="hero-stat" style="--c1:#92400e;--c2:#d97706;--ico:\'451\'">'+
+      '<div class="hs-label">A reapprovisionner</div>'+
+      '<div class="hs-value">'+s.toOrder+'</div>'+
+      '<div class="hs-sub">Qty: '+s.totalQty.toLocaleString('fr')+' u — ML optimise</div>'+
+    '</div></div>';
+
+  var kpiHtml=
+    '<div class="kpi-grid">'+
+    kc('Ruptures actives',s.oos.toLocaleString('fr'),((s.oos/s.total)*100).toFixed(1)+'% du catalogue','down','cr','oos')+
+    kc('Ruptures imminentes',s.soon,'Horizon 7-30 jours','down','ca','soon')+
+    kc('Stock satisfaisant',s.ok,((s.ok/s.total)*100).toFixed(1)+'% — Objectif 80%','up','cg','ok')+
+    kc('Refs a commander',s.toOrder,'Qty totale: '+s.totalQty.toLocaleString('fr'),'neutral','cb','refs')+
+    '</div>';
+
+  var drawerHtml='<div class="detail-drawer" id="mDraw"><div class="drawer-header"><div class="drawer-title" id="dT">-</div><button class="drawer-close" onclick="cD()">Fermer</button></div><div id="dC"></div></div>';
+
+  var alertsTop=D.alerts.slice(0,3).map(function(a){
+    return as(a.pri==='CRITIQUE'?'danger':a.pri==='URGENT'?'warning':'info',
+      '<strong>['+a.pri+'] '+a.ref+'</strong> — '+a.sup+' ('+a.cat+') — Stock: '+a.st+' u — '+a.vj+' ventes/j — Resp: '+a.ag);
+  }).join('');
+
+  // Donut chart
+  var segs=[
+    {v:s.oos,c:'#dc2626'},{v:s.soon,c:'#d97706'},
+    {v:s.orderSoon,c:'#2563eb'},{v:s.ok,c:'#16a34a'}
+  ];
+  var donutSvg='<svg viewBox="0 0 120 120" width="115" height="115">'+
+    svgDonut(segs,60,60,38,s.total)+
+    '<text x="60" y="57" text-anchor="middle" fill="#0f172a" font-size="11" font-weight="900">'+s.total+'</text>'+
+    '<text x="60" y="69" text-anchor="middle" fill="#475569" font-size="7">refs</text>'+
+    '</svg>';
+
+  var donutCard='<div class="card"><div class="card-body">'+
+    '<div class="card-title">Repartition statuts</div><div class="card-sub" style="margin-bottom:.9rem">'+s.total.toLocaleString('fr')+' references</div>'+
+    '<div class="donut-wrap">'+donutSvg+
+    '<div class="leg-list">'+
+      '<div class="leg-row"><div class="leg-dot" style="background:#dc2626"></div>En rupture<span class="leg-num">'+s.oos.toLocaleString('fr')+'</span></div>'+
+      '<div class="leg-row"><div class="leg-dot" style="background:#d97706"></div>Rupture imminente<span class="leg-num">'+s.soon+'</span></div>'+
+      '<div class="leg-row"><div class="leg-dot" style="background:#2563eb"></div>A commander<span class="leg-num">'+s.orderSoon+'</span></div>'+
+      '<div class="leg-row"><div class="leg-dot" style="background:#16a34a"></div>Stock OK<span class="leg-num">'+s.ok+'</span></div>'+
+    '</div></div></div></div>';
+
+  // Supplier stacked bar
+  var supChart=svgStackedBar(D.sup.slice(0,8),480,180);
+  var legend='<div style="display:flex;gap:1rem;margin-top:.5rem;flex-wrap:wrap;">'+
+    [['#16a34a','Stock OK'],['#d97706','Imminente'],['#2563eb','Commander'],['#dc2626','Rupture']].map(function(c){
+      return '<div style="display:flex;align-items:center;gap:.35rem;font-size:.7rem;color:var(--text-sec)"><div style="width:9px;height:9px;border-radius:2px;background:'+c[0]+'"></div>'+c[1]+'</div>';
+    }).join('')+'</div>';
+
+  var supCard='<div class="card"><div class="card-body">'+
+    '<div class="card-title">Repartition stock par fournisseur</div>'+
+    '<div class="card-sub" style="margin-bottom:.85rem">Top 8 fournisseurs — Statuts stock</div>'+
+    '<div class="chart-container">'+supChart+'</div>'+legend+'</div></div>';
+
+  // Agent perf bar
+  var agBars=svgBarChart(
+    D.agents.map(function(a){return a.p;}),
+    D.agents.map(function(a){return a.nm.split(' ')[0];}),
+    D.agents.map(function(a){return a.p>=20?'#16a34a':a.p>=14?'#d97706':'#dc2626';}),
+    320,120
+  );
+  var agCard='<div class="card"><div class="card-body">'+
+    '<div class="card-title">Disponibilite agents commerciaux</div>'+
+    '<div class="card-sub" style="margin-bottom:.75rem">Taux de dispo (%) — Objectif: 80%</div>'+
+    '<div class="chart-container">'+agBars+'</div>'+
+    '<div style="margin-top:.5rem">'+D.agents.map(function(a){return hb(a.nm,a.p,a.p>=20?'green':a.p>=14?'amber':'red',a.p+'%');}).join('')+'</div>'+
+  '</div></div>';
+
+  // Acheteurs budget
+  var achCard='<div class="card"><div class="card-body">'+
+    '<div class="card-title">Budget acheteurs — Consommation</div>'+
+    '<div class="card-sub" style="margin-bottom:.85rem">Budget mensuel vs consomme</div>'+
+    D.ach.map(function(a){
+      var bp=Math.round(a.bc/a.bm*100);
+      return '<div style="margin-bottom:.75rem">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">'+
+          '<div style="font-size:.82rem;font-weight:700">'+a.nm+'</div>'+
+          '<div style="font-size:.72rem;color:var(--text-sec)">'+Math.round(a.bc/1000000*10)/10+'M / '+a.bm/1000000+'M FCFA</div>'+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:.5rem">'+
+          '<div style="flex:1"><div class="prog-track"><div class="prog-fill" style="width:'+bp+'%;background:var(--teal)"></div></div></div>'+
+          '<span style="font-size:.75rem;font-weight:800;color:var(--teal);width:35px;text-align:right">'+bp+'%</span>'+
+        '</div></div>';
+    }).join('')+
+    '<div style="border-top:1px solid var(--border);margin-top:.5rem;padding-top:.6rem;display:flex;justify-content:space-between;font-size:.75rem;">'+
+      '<span style="color:var(--text-sec)">Total: '+Math.round(totalBC/1000000*10)/10+'M / '+totalBM/1000000+'M FCFA</span>'+
+      '<strong style="color:var(--teal)">'+Math.round(totalBC/totalBM*100)+'%</strong>'+
+    '</div></div></div>';
+
+  // PO summary
+  var poCard='<div class="card"><div class="card-body">'+
+    '<div class="card-title">Pipeline PO</div>'+
+    '<div class="card-sub" style="margin-bottom:.85rem">'+totalPO+' bons de commande — '+pending+' en attente</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;margin-bottom:.75rem">'+
+      ['En attente','Valide','En transit','Recu'].map(function(st){
+        var cnt=D.pos.filter(function(p){return p.st===st;}).length;
+        var col=st==='En attente'?'ca':st==='Valide'?'cg':st==='En transit'?'cb':'ct';
+        return '<div class="kpi-card '+col+'" style="padding:.65rem .85rem;cursor:default">'+
+          '<div class="kpi-label">'+st+'</div>'+
+          '<div class="kpi-value" style="font-size:1.5rem">'+cnt+'</div></div>';
+      }).join('')+
+    '</div>'+
+    D.pos.slice(0,4).map(function(p){
+      var ac=D.ach.filter(function(a){return a.id===p.ach;})[0];
+      var sc=p.st==='Valide'?'bg':p.st==='En attente'?'ba':p.st==='En transit'?'bb':'bz';
+      return '<div style="display:flex;align-items:center;gap:.5rem;padding:.4rem 0;border-bottom:1px solid var(--border);font-size:.75rem;">'+
+        '<div style="flex:1"><strong>'+p.num.slice(-7)+'</strong> — '+ac.nm+' — '+p.s+'</div>'+bdg(p.st,sc)+'</div>';
+    }).join('')+
+  '</div></div>';
+
+  return phd('Vue 360 — Tableau de bord',today(),'<button class="btn btn-ghost btn-sm" onclick="rnd(\'m-al\')">Voir les alertes</button><button class="btn btn-ghost btn-sm" onclick="rnd(\'m-db\')">Actualiser</button>')+
+    heroHtml+kpiHtml+drawerHtml+
+    '<div style="margin-bottom:1.3rem;">'+alertsTop+'</div>'+
+    '<div class="two-col">'+donutCard+agCard+'</div>'+
+    '<div style="margin-bottom:1.3rem;">'+supCard+'</div>'+
+    '<div class="two-col">'+achCard+poCard+'</div>';
+}
+// ── ALERTES RUPTURES ─────────────────────────────────────────────────────
+function mAl(){
+  var s=D.stats;
+  var critiques=D.alerts.filter(function(a){return a.pri==='CRITIQUE';});
+  var urgents=D.alerts.filter(function(a){return a.pri==='URGENT';});
+  var eleves=D.alerts.filter(function(a){return a.pri==='ELEVE';});
+
+  var summary=
+    '<div class="three-col">'+
+    '<div class="card" style="border-top:3px solid var(--red)"><div class="card-body">'+
+      '<div class="kpi-label" style="color:var(--red)">CRITIQUE — Classe AX</div>'+
+      '<div class="kpi-value" style="color:var(--red)">'+critiques.length+'</div>'+
+      '<div class="kpi-meta">Action immediate requise</div>'+
+    '</div></div>'+
+    '<div class="card" style="border-top:3px solid var(--amber)"><div class="card-body">'+
+      '<div class="kpi-label" style="color:var(--amber)">URGENT — Classes BX/CX</div>'+
+      '<div class="kpi-value" style="color:var(--amber)">'+urgents.length+'</div>'+
+      '<div class="kpi-meta">Horizon 0-7 jours</div>'+
+    '</div></div>'+
+    '<div class="card" style="border-top:3px solid var(--blue)"><div class="card-body">'+
+      '<div class="kpi-label" style="color:var(--blue)">ELEVE — Autres classes</div>'+
+      '<div class="kpi-value" style="color:var(--blue)">'+eleves.length+'</div>'+
+      '<div class="kpi-meta">Horizon 7-30 jours</div>'+
+    '</div></div></div>';
+
+  function alertTable(items,title,colorClass,strip){
+    return '<div class="card" style="margin-bottom:1rem;border-left:4px solid var(--'+colorClass+')"><div class="card-body">'+
+      '<div class="card-title" style="color:var(--'+colorClass+');margin-bottom:.8rem">'+title+' ('+items.length+')</div>'+
+      '<div class="tbl-wrap"><table class="data-table">'+
+      '<thead><tr><th>Reference</th><th>Fournisseur</th><th>Classe</th><th>Stock actuel</th><th>Ventes/jour</th><th>Couverture</th><th>Acheteur</th><th>Action</th></tr></thead><tbody>'+
+      items.map(function(a){
+        var cov=a.vj>0?(a.st/a.vj).toFixed(1):'-';
+        var rclass=strip==='danger'?'alert-row-critical':strip==='warning'?'alert-row-warning':'';
+        return '<tr class="'+rclass+'"><td><strong>'+a.ref+'</strong></td>'+
+          '<td>'+a.sup+'</td><td>'+bdg(a.cat,a.cat[0]==='A'?'br':'ba')+'</td>'+
+          '<td style="color:var(--red);font-weight:800">'+a.st+'</td>'+
+          '<td>'+a.vj+'</td>'+
+          '<td style="color:'+(parseFloat(cov)<3?'var(--red)':'var(--amber)')+';font-weight:700">'+cov+' j</td>'+
+          '<td>'+a.ag+'</td>'+
+          '<td>'+bdg(a.pri==='CRITIQUE'?'PO urgent':a.pri==='URGENT'?'Commander':'Planifier',a.pri==='CRITIQUE'?'br':a.pri==='URGENT'?'ba':'bb')+'</td></tr>';
+      }).join('')+'</tbody></table></div></div></div>';
+  }
+
+  return phd('Alertes ruptures',s.oos.toLocaleString('fr')+' refs en rupture — '+s.soon+' imminentes',
+    '<button class="btn btn-primary btn-sm" onclick="rnd(\'m-po\')">Suivi PO</button>')+
+  as('danger','<strong>'+s.oos.toLocaleString('fr')+' references en rupture</strong> — Impact direct sur le chiffre d\'affaires. Les classes A+ et AX sont prioritaires.')+
+  as('warning','<strong>'+s.soon+' ruptures imminentes</strong> dans les 7-30 jours selon le modele ML (Random Forest, precision 94%).')+
+  summary+
+  alertTable(critiques,'Ruptures CRITIQUES — Classe AX (fort volume, forte valeur)','red','danger')+
+  alertTable(urgents,'Ruptures URGENTES — Horizon 0-7 jours','amber','warning')+
+  alertTable(eleves,'Ruptures ELEVEES — Horizon 7-30 jours','blue','info');
+}
+
+// ── AGENTS COMMERCIAUX ──────────────────────────────────────────────────
 function mAg(){
-  return phd('Agents commerciaux','Performance et portefeuilles')+
+  var avgP=Math.round(D.agents.reduce(function(a,c){return a+c.p;},0)/D.agents.length*10)/10;
+  return phd('Agents commerciaux','Performance et portefeuilles — Moyenne equipe: '+avgP+'%')+
   '<div class="agrid">'+D.agents.map(function(a){
     return '<div class="acard">'+
       '<div class="ahdr"><div class="aav" style="background:'+a.cl+'">'+ini(a.nm)+'</div>'+
@@ -523,15 +792,28 @@ function mAg(){
         '<div class="astat"><div class="astat-v" style="color:var(--amber)">'+a.s+'</div><div class="astat-l">Imminente</div></div>'+
         '<div class="astat"><div class="astat-v" style="color:var(--green)">'+a.ok+'</div><div class="astat-l">Stock OK</div></div>'+
       '</div>'+
-      '<div style="margin-top:.85rem">'+mb(a.pf)+'</div>'+
+      '<div style="margin-top:.9rem"><div class="card-sub" style="margin-bottom:.4rem">Performance 6 mois</div>'+mb(a.pf)+'</div>'+
+      '<div style="margin-top:.7rem">'+
+        '<div class="hbar-top" style="margin-bottom:.3rem"><span style="font-size:.7rem">Objectif dispo</span><span style="font-size:.7rem">'+a.obj.st+'%</span></div>'+
+        '<div class="prog-track"><div class="prog-fill" style="width:'+Math.min(a.p/a.obj.st*100,100)+'%;background:'+(a.p>=a.obj.st?'var(--green)':a.p>=a.obj.st*0.8?'var(--amber)':'var(--red)')+'"></div></div>'+
+      '</div>'+
       '<div style="margin-top:.65rem;font-size:.7rem;color:var(--text-sec)">'+a.sups.join(' · ')+'</div>'+
-      '<div style="margin-top:.65rem;display:flex;gap:.4rem">'+bdg('PO: '+a.pm,'bb')+bdg(a.pp+' en attente',a.pp>3?'ba':'bz')+'</div>'+
+      '<div style="margin-top:.65rem;display:flex;gap:.4rem;flex-wrap:wrap">'+bdg('PO: '+a.pm,'bb')+bdg(a.pp+' en attente',a.pp>3?'ba':'bz')+'</div>'+
     '</div>';
   }).join('')+'</div>';
 }
 
+// ── AGENTS ACHETEURS ────────────────────────────────────────────────────
 function mAc(){
-  return phd('Agents acheteurs','Activite commandes et performance')+
+  var totalPO=D.ach.reduce(function(a,c){return a+c.pm;},0);
+  var totalBM=D.ach.reduce(function(a,c){return a+c.bm;},0);
+  var totalBC=D.ach.reduce(function(a,c){return a+c.bc;},0);
+  return phd('Agents acheteurs','Activite commandes — '+totalPO+' PO ce mois — Budget: '+Math.round(totalBC/totalBM*100)+'% consomme')+
+  '<div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:1.3rem;">'+
+    kc('Budget total',Math.round(totalBM/1000000)+'M FCFA','Budget mensuel cumule','neutral','ct')+
+    kc('Consomme',Math.round(totalBC/1000000*10)/10+'M FCFA',Math.round(totalBC/totalBM*100)+'% du budget total','neutral','ca')+
+    kc('PO ce mois',totalPO,'Tous acheteurs confondus','neutral','cb')+
+  '</div>'+
   '<div class="agrid">'+D.ach.map(function(a){
     var bp=Math.round(a.bc/a.bm*100);
     return '<div class="acard">'+
@@ -544,33 +826,42 @@ function mAc(){
         '<div class="astat"><div class="astat-v" style="color:var(--amber)">'+a.to+'</div><div class="astat-l">A commander</div></div>'+
         '<div class="astat"><div class="astat-v" style="color:var(--teal)">'+a.pm+'</div><div class="astat-l">PO mois</div></div>'+
       '</div>'+
-      '<div style="margin-top:.75rem"><div class="hbar-top" style="margin-bottom:.25rem"><span>Budget</span><span>'+bp+'%</span></div>'+pg(bp,'teal')+'</div>'+
-      '<div style="margin-top:.65rem">'+mb(a.pf)+'</div>'+
+      '<div style="margin-top:.8rem">'+
+        '<div class="hbar-top" style="margin-bottom:.3rem"><span style="font-size:.7rem">Budget: '+Math.round(a.bc/1000000*10)/10+'M / '+a.bm/1000000+'M FCFA</span><span style="font-size:.7rem;font-weight:800;color:var(--teal)">'+bp+'%</span></div>'+
+        '<div class="prog-track"><div class="prog-fill" style="width:'+bp+'%;background:var(--teal)"></div></div>'+
+      '</div>'+
+      '<div style="margin-top:.8rem"><div class="card-sub" style="margin-bottom:.4rem">Performance 6 mois</div>'+mb(a.pf)+'</div>'+
       '<div style="margin-top:.65rem;font-size:.7rem;color:var(--text-sec)">'+a.sups.join(' · ')+'</div>'+
-      '<div style="margin-top:.6rem;display:flex;gap:.35rem;flex-wrap:wrap">'+bdg('Valides: '+a.pv,'bg')+bdg('Attente: '+a.pp,a.pp>3?'ba':'bb')+bdg('Ce mois: '+a.pm,'bz')+'</div>'+
+      '<div style="margin-top:.6rem;display:flex;gap:.35rem;flex-wrap:wrap">'+bdg('Valides: '+a.pv,'bg')+bdg('Attente: '+a.pp,a.pp>3?'ba':'bb')+bdg('Mois: '+a.pm,'bz')+'</div>'+
     '</div>';
   }).join('')+'</div>';
 }
 
 function mSt(){
   return phd('Niveaux de stock',D.stats.oos+' ruptures sur '+D.stats.total+' references')+
-  as('danger','<strong>'+D.stats.oos.toLocaleString('fr')+' ruptures actives</strong> — Classe CX concentre l\'essentiel')+
-  '<div class="card" style="margin-top:1rem"><div class="card-body"><div class="card-title" style="margin-bottom:.8rem">Situation par classe ABC/XYZ</div>'+
-  '<div class="tbl-wrap"><table class="data-table"><thead><tr><th>Classe</th><th>Refs</th><th>Ventes/j</th><th>Couverture</th><th>Priorite</th></tr></thead><tbody>'+
+  as('danger','<strong>'+D.stats.oos.toLocaleString('fr')+' ruptures actives</strong> — La classe CX (1 460 refs, 5 u/j) concentre lessentiel.')+
+  '<div class="card" style="margin-top:1rem"><div class="card-body"><div class="card-title" style="margin-bottom:.8rem">Analyse par classe ABC/XYZ</div>'+
+  '<div class="tbl-wrap"><table class="data-table"><thead><tr><th>Classe</th><th>Refs</th><th>Ventes/j</th><th>Couverture</th><th>Valeur</th><th>Priorite</th></tr></thead><tbody>'+
   D.cat.map(function(c){
-    var p=c.n.indexOf('A+')===0||c.n==='AX'?'Critique':c.n[0]==='A'||c.n==='BX'?'Haute':'Standard';
-    return '<tr><td><strong>'+c.n+'</strong></td><td>'+c.r+'</td><td>'+c.v+' u/j</td><td>'+(c.c>500?'>500 j':c.c+' j')+'</td><td>'+bdg(p,p==='Critique'?'br':p==='Haute'?'ba':'bz')+'</td></tr>';
+    var p=c.n.indexOf('A+')===0?'Critique':c.n==='AX'||c.n[0]==='A'?'Haute':c.n[0]==='B'?'Moyenne':'Standard';
+    var val=c.n.indexOf('A+')===0?'Tres haute':c.n[0]==='A'?'Haute':c.n[0]==='B'?'Moyenne':'Faible';
+    return '<tr><td><strong style="color:'+(c.n.indexOf('A+')===0?'var(--red)':c.n[0]==='A'?'var(--amber)':c.n[0]==='B'?'var(--blue)':'var(--text-sec)')+'">'+c.n+'</strong></td>'+
+      '<td>'+c.r+'</td><td>'+c.v+' u/j</td><td>'+(c.c>500?'> 500 j':c.c+' j')+'</td>'+
+      '<td>'+val+'</td><td>'+bdg(p,p==='Critique'?'br':p==='Haute'?'ba':p==='Moyenne'?'bb':'bz')+'</td></tr>';
   }).join('')+'</tbody></table></div></div></div>';
 }
 
 function mFo(){
-  return phd('Fournisseurs','143 fournisseurs actifs — Top 12')+
+  return phd('Fournisseurs','143 fournisseurs actifs — Detail top 12')+
   '<div class="card"><div class="card-body"><div class="tbl-wrap"><table class="data-table">'+
   '<thead><tr><th>Fournisseur</th><th>Refs</th><th>OK</th><th>Imminente</th><th>Commander</th><th>Rupture</th><th>Dispo</th><th>Statut</th></tr></thead><tbody>'+
   D.sup.map(function(s){
+    var col=s.p>=30?'var(--green)':s.p>=10?'var(--amber)':'var(--red)';
     return '<tr><td><strong>'+s.n+'</strong></td><td>'+s.r+'</td>'+
       '<td>'+bdg(s.ok,'bg')+'</td><td>'+bdg(s.s,'ba')+'</td><td>'+bdg(s.o,'bb')+'</td><td>'+bdg(s.x,'br')+'</td>'+
-      '<td><div style="display:flex;align-items:center;gap:.4rem"><div class="prog-track" style="width:50px"><div class="prog-fill" style="width:'+s.p+'%;background:'+(s.p>=30?'var(--green)':s.p>=10?'var(--amber)':'var(--red)')+'"></div></div><span style="font-size:.7rem;font-weight:700">'+s.p+'%</span></div></td>'+
+      '<td><div style="display:flex;align-items:center;gap:.45rem">'+
+        '<div class="prog-track" style="width:55px"><div class="prog-fill" style="width:'+s.p+'%;background:'+col+'"></div></div>'+
+        '<span style="font-size:.72rem;font-weight:800;color:'+col+'">'+s.p+'%</span></div></td>'+
       '<td>'+bdg(s.p>=30?'Bon':s.p>=10?'A surveiller':'Critique',s.p>=30?'bg':s.p>=10?'ba':'br')+'</td></tr>';
   }).join('')+'</tbody></table></div></div></div>';
 }
@@ -579,43 +870,63 @@ function mPo(){
   var at=D.pos.filter(function(p){return p.st==='En attente';}).length;
   var tr=D.pos.filter(function(p){return p.st==='En transit';}).length;
   var rc=D.pos.filter(function(p){return p.st==='Recu';}).length;
+  var vl=D.pos.filter(function(p){return p.st==='Valide';}).length;
   return phd('Suivi des bons de commande','Tous les PO des agents acheteurs')+
   '<div class="kpi-grid">'+
     kc('PO ce mois',D.pos.length,'Tous acheteurs','neutral','cb')+
     kc('En attente',at,'Validation requise','down','ca')+
     kc('En transit',tr,'En cours de livraison','neutral','ct')+
-    kc('Recus',rc,'Ce mois','up','cg')+
+    kc('Valides / Recus',vl+rc,'Traites','up','cg')+
   '</div>'+
   '<div class="card"><div class="card-body"><div class="tbl-wrap"><table class="data-table">'+
   '<thead><tr><th>N PO</th><th>Acheteur</th><th>Fournisseur</th><th>Date</th><th>Refs</th><th>Qty</th><th>Montant FCFA</th><th>Statut</th></tr></thead><tbody>'+
   D.pos.map(function(p){
     var ac=D.ach.filter(function(a){return a.id===p.ach;})[0];
-    var sc=p.st==='Valide'?'bg':p.st==='En attente'?'ba':p.st==='En transit'?'bb':'bz';
-    return '<tr><td><code style="font-size:.68rem;background:var(--bg);padding:.1rem .35rem;border-radius:4px">'+p.num+'</code></td>'+
-      '<td><span style="color:'+ac.cl+';font-weight:600">'+ac.nm+'</span></td>'+
-      '<td>'+p.s+'</td><td>'+p.d+'</td><td>'+p.r+'</td><td>'+p.q.toLocaleString('fr')+'</td>'+
-      '<td style="font-weight:600">'+p.m+'</td><td>'+bdg(p.st,sc)+'</td></tr>';
+    var sc=p.st==='Valide'?'bg':p.st==='En attente'?'ba':p.st==='En transit'?'bb':'bt';
+    return '<tr><td><code style="font-size:.68rem;background:var(--bg);padding:.15rem .4rem;border-radius:5px;font-family:monospace">'+p.num+'</code></td>'+
+      '<td><span style="color:'+ac.cl+';font-weight:700">'+ac.nm+'</span></td>'+
+      '<td>'+p.s+'</td><td>'+p.d+'</td><td>'+p.r+'</td>'+
+      '<td>'+p.q.toLocaleString('fr')+'</td>'+
+      '<td style="font-weight:700">'+p.m+'</td><td>'+bdg(p.st,sc)+'</td></tr>';
   }).join('')+'</tbody></table></div></div></div>';
 }
 
 function mMl(){
-  return phd('Previsions ML','Modele Random Forest — sklearn')+
+  return phd('Previsions ML','Modele Random Forest — Optimisation des commandes')+
+  '<div class="kpi-grid">'+
+    kc('Ruptures predites','1 427','Sur 1 880 references (75,9%)','down','cr')+
+    kc('Precision modele','94%','Random Forest — sklearn','up','cg')+
+    kc('Refs a commander','451','Qty totale: 16 532 u','neutral','cb')+
+    kc('Gain estime','23%','Reduction ruptures vs baseline','up','ct')+
+  '</div>'+
   '<div class="two-col">'+
-    '<div class="card"><div class="card-body"><div class="card-title">Ruptures predites</div>'+
-      '<div class="kpi-value" style="font-size:2.2rem;color:var(--red);margin:.5rem 0">1 427</div>'+
-      '<div style="font-size:.73rem;color:var(--text-sec)">Sur 1 880 references — precision ~94%</div></div></div>'+
-    '<div class="card"><div class="card-body"><div class="card-title">Recommandations de commande</div>'+
-      '<div class="kpi-value" style="font-size:2.2rem;color:var(--blue);margin:.5rem 0">451</div>'+
-      '<div style="font-size:.73rem;color:var(--text-sec)">Refs a approvisionner — qty: 16 532 unites</div></div></div>'+
+    '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.85rem">Variables du modele</div>'+
+      ['Ventes quotidiennes (u/j)','Stock actuel','Delai fournisseur (jours)','Classification ABC/XYZ','Historique 6 mois','Saisonnalite'].map(function(v,i){
+        return '<div style="display:flex;align-items:center;gap:.6rem;padding:.45rem 0;border-bottom:1px solid var(--border);font-size:.8rem">'+
+          '<div style="width:20px;height:20px;border-radius:5px;background:var(--blue-light);display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800;color:var(--blue)">'+(i+1)+'</div>'+
+          v+'</div>';
+      }).join('')+
+    '</div></div>'+
+    '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.85rem">Priorites de reapprovisionnement</div>'+
+      D.ach.map(function(a){
+        return '<div style="padding:.55rem 0;border-bottom:1px solid var(--border)">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">'+
+            '<strong style="font-size:.82rem">'+a.nm+'</strong>'+
+            '<span style="font-size:.72rem;color:var(--text-sec)">'+a.qty.toLocaleString('fr')+' u</span>'+
+          '</div>'+
+          hb(a.to+' refs',Math.round(a.to/D.stats.toOrder*100),'purple',a.to+'/'+D.stats.toOrder)+
+        '</div>';
+      }).join('')+
+    '</div></div>'+
   '</div>';
 }
-
+// ── AGENT COMMERCIAL ─────────────────────────────────────────────────────
 function aDb(){
   var a=ctx;
   return phd('Tableau de bord',a.nm+' — '+a.z)+
   '<div style="margin-bottom:1.1rem;">'+
-    (a.x>100?as('danger','<strong>'+a.x+' references en rupture</strong> dans votre portefeuille'):'')+
-    (a.s>15?as('warning','<strong>'+a.s+' ruptures imminentes</strong> — preparer les commandes'):'')+
+    (a.x>100?as('danger','<strong>'+a.x+' references en rupture</strong> dans votre portefeuille — Coordination avec acheteurs requise'):'')+ 
+    (a.s>15?as('warning','<strong>'+a.s+' ruptures imminentes</strong> — Preparer les commandes urgentes'):'')+
   '</div>'+
   '<div class="kpi-grid">'+
     kc('Mes references',a.r,a.sups.length+' fournisseurs','neutral','cb')+
@@ -624,15 +935,30 @@ function aDb(){
     kc('Stock OK',a.ok,a.p+'% de disponibilite','up','cg')+
   '</div>'+
   '<div class="two-col">'+
-    '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.8rem">Mes objectifs du mois</div>'+
-      '<div class="hbar-list">'+hb('Disponibilite cible',a.obj.st,'blue',a.obj.st+'%')+hb('Score qualite QAC',a.obj.q,'green',a.obj.q+'%')+hb('Delai traitement PO',a.obj.d,'amber',a.obj.d+'%')+'</div>'+
+    '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.85rem">Mes objectifs du mois</div>'+
+      hb('Disponibilite cible',Math.min(a.p/a.obj.st*100,100),'blue',a.p+'% / '+a.obj.st+'%')+
+      '<div style="margin:.5rem 0">'+hb('Score qualite QAC',a.obj.q,'green',a.obj.q+'%')+'</div>'+
+      hb('Delai traitement PO',a.obj.d,'amber',a.obj.d+'%')+
       '<div style="margin-top:.75rem">'+bdg('Dispo actuelle: '+a.p+'%',a.p>=a.obj.st?'bg':'ba')+'</div>'+
     '</div></div>'+
-    '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.8rem">Activite 6 mois</div>'+
+    '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.85rem">Activite 6 mois</div>'+
       mb(a.pf)+
       '<div style="margin-top:.75rem;display:flex;gap:.4rem">'+bdg('PO: '+a.pm,'bb')+bdg(a.pp+' en attente',a.pp>3?'ba':'bz')+'</div>'+
     '</div></div>'+
-  '</div>';
+  '</div>'+
+  '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.8rem">Situation fournisseurs</div>'+
+    a.sups.map(function(sn){
+      var s=D.sup.filter(function(f){return f.n===sn;})[0]||{r:0,ok:0,s:0,o:0,x:0,p:0};
+      return '<div style="padding:.55rem 0;border-bottom:1px solid var(--border)">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">'+
+          '<strong style="font-size:.83rem">'+sn+'</strong>'+
+          bdg(s.p+'%',s.p>=25?'bg':s.p>=10?'ba':'br')+
+        '</div>'+
+        '<div style="display:flex;gap:.35rem;flex-wrap:wrap">'+
+          bdg('OK: '+s.ok,'bg')+bdg('Imminente: '+s.s,'ba')+bdg('Commander: '+s.o,'bb')+bdg('Rupture: '+s.x,'br')+
+        '</div></div>';
+    }).join('')+
+  '</div></div>';
 }
 
 function aSt(){
@@ -654,22 +980,24 @@ function aFo(){
   a.sups.map(function(sn){
     var s=D.sup.filter(function(f){return f.n===sn;})[0]||{r:0,ok:0,s:0,o:0,x:0,p:0};
     return '<div class="card" style="margin-bottom:.75rem"><div class="card-body">'+
-      '<div style="display:flex;justify-content:space-between;margin-bottom:.75rem">'+
-        '<div><div class="card-title">'+sn+'</div><div class="card-sub">'+s.r+' references</div></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem">'+
+        '<div><div class="card-title">'+sn+'</div><div class="card-sub">'+s.r+' references au catalogue</div></div>'+
         bdg(s.p+'%',s.p>=25?'bg':s.p>=10?'ba':'br')+
       '</div>'+
+      '<div class="prog-track" style="margin-bottom:.65rem"><div class="prog-fill" style="width:'+s.p+'%;background:'+(s.p>=25?'var(--green)':s.p>=10?'var(--amber)':'var(--red)')+'"></div></div>'+
       '<div style="display:flex;gap:.4rem;flex-wrap:wrap">'+bdg('OK: '+s.ok,'bg')+bdg('Imminente: '+s.s,'ba')+bdg('Commander: '+s.o,'bb')+bdg('Rupture: '+s.x,'br')+'</div>'+
     '</div></div>';
   }).join('');
 }
 
+// ── AGENT ACHETEUR ───────────────────────────────────────────────────────
 function cDb(){
   var a=ctx,bp=Math.round(a.bc/a.bm*100);
   return phd('Tableau de bord',a.nm+' — '+a.rl,'<button class="btn btn-primary btn-sm" onclick="rnd(\'c-np\')">+ Nouveau PO</button>')+
   '<div style="margin-bottom:1.1rem;">'+
-    as('danger','<strong>'+a.to+' references a commander</strong> — qty totale: '+a.qty.toLocaleString('fr')+' u')+
+    as('danger','<strong>'+a.to+' references a commander</strong> — Quantite totale: '+a.qty.toLocaleString('fr')+' unites')+
     (a.pp>2?as('warning','<strong>'+a.pp+' bons de commande en attente</strong> de validation manager'):'')+
-    as('info','Budget: <strong>'+Math.round(a.bc/1000000*10)/10+' M</strong> / '+a.bm/1000000+' M FCFA ('+bp+'%)')+
+    as('info','Budget consomme: <strong>'+Math.round(a.bc/1000000*10)/10+' M</strong> / '+a.bm/1000000+' M FCFA ('+bp+'%)')+
   '</div>'+
   '<div class="kpi-grid">'+
     kc('References',a.r,a.sups.length+' fournisseurs','neutral','ct')+
@@ -686,10 +1014,11 @@ function cDb(){
           '<div style="display:flex;gap:.35rem">'+bdg('Cmd: '+(s.s+s.o),'bb')+bdg('Rupture: '+s.x,'br')+'</div></div>';
       }).join('')+
     '</div></div>'+
-    '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.8rem">Performance 6 mois</div>'+
+    '<div class="card"><div class="card-body"><div class="card-title" style="margin-bottom:.8rem">Performance & budget</div>'+
       mb(a.pf)+
       '<div style="margin-top:.85rem">'+
-        '<div class="hbar-top" style="margin-bottom:.25rem"><span>Budget</span><span>'+bp+'%</span></div>'+pg(bp,'teal')+
+        '<div class="hbar-top" style="margin-bottom:.28rem"><span>Budget mensuel</span><span style="font-weight:800;color:var(--teal)">'+bp+'%</span></div>'+
+        pg(bp,'teal')+
       '</div>'+
     '</div></div>'+
   '</div>'+
@@ -697,9 +1026,9 @@ function cDb(){
     a.prods.slice(0,5).map(function(p){
       return '<div class="pcard">'+
         '<div class="pcard-info"><div class="pcard-name">'+p.n+'</div>'+
-        '<div class="pcard-meta">'+p.s+' — Cat '+p.c+' — '+p.vj+' u/j — Delai: '+p.lt+'j — Stock: '+p.st+'</div>'+
+        '<div class="pcard-meta">'+p.s+' — Cat. '+p.c+' — '+p.vj+' u/j — Delai: '+p.lt+'j — Stock: '+p.st+'</div>'+
         '<div style="margin-top:.3rem">'+sb(p.sts)+'</div></div>'+
-        '<div class="pcard-right"><div class="pqty">'+p.q+'</div><div class="pqty-l">u a commander</div></div>'+
+        '<div class="pcard-right"><div class="pqty">'+p.q.toLocaleString('fr')+'</div><div class="pqty-l">u a commander</div></div>'+
       '</div>';
     }).join('')+
     '<button class="btn btn-ghost btn-sm" style="margin-top:.5rem" onclick="rnd(\'c-cm\')">Voir toutes les references</button>'+
@@ -709,16 +1038,16 @@ function cDb(){
 function cCm(){
   var a=ctx;
   return phd('Produits a commander',a.to+' references — Qty: '+a.qty.toLocaleString('fr')+' u','<button class="btn btn-primary btn-sm" onclick="rnd(\'c-np\')">+ Creer un PO</button>')+
-  as('warning',a.prods.length+' references avec quantite calculee par le modele ML.')+
+  as('info',a.prods.length+' references avec quantites calculees par le modele ML Random Forest.')+
   '<div class="card" style="margin-top:1rem"><div class="card-body"><div class="tbl-wrap"><table class="data-table">'+
-  '<thead><tr><th>Produit</th><th>Fournisseur</th><th>Cat</th><th>Stock</th><th>Ventes/j</th><th>Delai</th><th>Qty commander</th><th>Statut</th></tr></thead><tbody>'+
+  '<thead><tr><th>Produit</th><th>Fournisseur</th><th>Cat.</th><th>Stock</th><th>Ventes/j</th><th>Delai</th><th>Qty ML</th><th>Statut</th></tr></thead><tbody>'+
   a.prods.map(function(p){
     return '<tr>'+
       '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong>'+p.n+'</strong></td>'+
       '<td>'+p.s+'</td><td>'+bdg(p.c,'bz')+'</td>'+
-      '<td style="color:'+(p.st<10?'var(--red)':'inherit')+';font-weight:'+(p.st<10?700:400)+'">'+p.st+'</td>'+
-      '<td>'+p.vj+'</td><td>'+p.lt+'</td>'+
-      '<td><strong style="color:var(--blue)">'+p.q+'</strong></td>'+
+      '<td style="color:'+(p.st<10?'var(--red)':p.st<50?'var(--amber)':'inherit')+';font-weight:'+(p.st<10?800:400)+'">'+p.st+'</td>'+
+      '<td>'+p.vj+'</td><td>'+p.lt+'j</td>'+
+      '<td><strong style="color:var(--blue)">'+p.q.toLocaleString('fr')+'</strong></td>'+
       '<td>'+sb(p.sts)+'</td></tr>';
   }).join('')+'</tbody></table></div></div></div>';
 }
@@ -728,20 +1057,20 @@ function cNp(){
   return phd('Nouveau bon de commande','Creer un PO a partir de votre portefeuille')+
   '<div class="po-form"><div class="po-form-title">Informations generales</div>'+
     '<div class="form-row">'+
-      '<div><label class="form-label">Fournisseur</label>'+
+      '<div><label class="form-label">Fournisseur *</label>'+
         '<select class="form-input" id="poS" onchange="updPO()">'+
-          '<option value="">-- Selectionner --</option>'+
+          '<option value="">-- Selectionner un fournisseur --</option>'+
           a.sups.map(function(s){return '<option value="'+s+'">'+s+'</option>';}).join('')+
         '</select></div>'+
       '<div><label class="form-label">Date livraison souhaitee</label>'+
         '<input class="form-input" type="date" id="poD" value="'+dv+'"/></div>'+
     '</div>'+
-    '<div class="form-full"><label class="form-label">Observations</label>'+
-      '<input class="form-input" type="text" id="poN" placeholder="Urgence, conditions..."/></div>'+
+    '<div class="form-full"><label class="form-label">Observations / Urgence</label>'+
+      '<input class="form-input" type="text" id="poN" placeholder="Ex: Livraison urgente, conditionnement special..."/></div>'+
   '</div>'+
-  '<div class="card" style="margin-bottom:1.2rem"><div class="card-body">'+
+  '<div class="card" style="margin-bottom:1.3rem"><div class="card-body">'+
     '<div class="card-title" style="margin-bottom:.8rem">Lignes de commande</div>'+
-    '<div id="poL"><div style="color:var(--text-muted);font-size:.8rem;text-align:center;padding:2rem 0">Selectionnez un fournisseur</div></div>'+
+    '<div id="poL"><div style="color:var(--text-muted);font-size:.82rem;text-align:center;padding:2.5rem 0;background:var(--bg);border-radius:8px">Selectionnez un fournisseur pour afficher les produits</div></div>'+
   '</div></div>'+
   '<div class="po-confirm" id="poOK"><strong>Bon de commande soumis avec succes</strong><div id="poOKd"></div></div>'+
   '<div style="display:flex;gap:.75rem;justify-content:flex-end">'+
@@ -752,24 +1081,24 @@ function cNp(){
 
 function updPO(){
   var sup=g('poS').value,a=ctx;
-  if(!sup){g('poL').innerHTML='<div style="color:var(--text-muted);font-size:.8rem;text-align:center;padding:2rem 0">Selectionnez un fournisseur</div>';return;}
+  if(!sup){g('poL').innerHTML='<div style="color:var(--text-muted);font-size:.82rem;text-align:center;padding:2.5rem 0;background:var(--bg);border-radius:8px">Selectionnez un fournisseur pour afficher les produits</div>';return;}
   var pr=a.prods.filter(function(p){return p.s===sup;});
-  if(!pr.length){g('poL').innerHTML='<div style="font-size:.8rem;color:var(--text-sec);padding:1rem">Aucun produit urgent pour ce fournisseur.</div>';return;}
+  if(!pr.length){g('poL').innerHTML='<div style="font-size:.82rem;color:var(--text-sec);padding:1rem">Aucun produit urgent pour ce fournisseur.</div>';return;}
   g('poL').innerHTML='<table class="data-table"><thead><tr>'+
     '<th><input type="checkbox" id="chkA" onchange="tAll(this)" checked/></th>'+
-    '<th>Produit</th><th>Stock</th><th>Qty recommandee</th><th>Qty commandee</th></tr></thead><tbody>'+
+    '<th>Produit</th><th>Stock</th><th>Ventes/j</th><th>Qty recommandee (ML)</th><th>Qty commandee</th></tr></thead><tbody>'+
     pr.map(function(p,i){
       return '<tr><td><input type="checkbox" class="po-chk" data-i="'+i+'" checked/></td>'+
-        '<td><div style="font-size:.78rem;font-weight:600">'+p.n+'</div>'+
-        '<div style="font-size:.67rem;color:var(--text-sec)">'+p.c+' — '+p.vj+' u/j — Delai '+p.lt+'j</div></td>'+
-        '<td style="color:'+(p.st<10?'var(--red)':'inherit')+';font-weight:'+(p.st<10?700:400)+'">'+p.st+'</td>'+
-        '<td><strong style="color:var(--blue)">'+p.q+'</strong></td>'+
-        '<td><input type="number" class="form-input po-qty" data-i="'+i+'" value="'+p.q+'" min="1" style="width:80px;padding:.3rem .5rem;font-size:.8rem"/></td></tr>';
+        '<td><div style="font-size:.79rem;font-weight:700">'+p.n+'</div>'+
+        '<div style="font-size:.67rem;color:var(--text-sec)">'+p.c+' — Delai '+p.lt+'j</div></td>'+
+        '<td style="color:'+(p.st<10?'var(--red)':'inherit')+';font-weight:'+(p.st<10?800:400)+'">'+p.st+'</td>'+
+        '<td>'+p.vj+'</td>'+
+        '<td><strong style="color:var(--blue)">'+p.q.toLocaleString('fr')+'</strong></td>'+
+        '<td><input type="number" class="form-input po-qty" data-i="'+i+'" value="'+p.q+'" min="1" style="width:90px;padding:.3rem .5rem;font-size:.8rem"/></td></tr>';
     }).join('')+'</tbody></table>';
 }
 
 function tAll(cb){d('.po-chk').forEach(function(c){c.checked=cb.checked;});}
-
 function subPO(){
   var s=g('poS');if(!s||!s.value){alert('Selectionnez un fournisseur.');return;}
   var cks=d('.po-chk:checked');if(!cks.length){alert('Selectionnez au moins un produit.');return;}
@@ -778,7 +1107,10 @@ function subPO(){
   var tq=0;cks.forEach(function(c){var q=d('.po-qty[data-i="'+c.dataset.i+'"]')[0];if(q)tq+=parseInt(q.value)||0;});
   var dv=g('poD').value,nt=g('poN').value;
   var conf=g('poOK');
-  g('poOKd').innerHTML='N: <strong>'+num+'</strong> — Fournisseur: <strong>'+s.value+'</strong> — '+cks.length+' references — Qty: <strong>'+tq.toLocaleString('fr')+'</strong>'+(dv?' — Livraison: <strong>'+new Date(dv).toLocaleDateString('fr-FR')+'</strong>':'')+(nt?' — Note: '+nt:'');
+  g('poOKd').innerHTML='N: <strong>'+num+'</strong> — Fournisseur: <strong>'+s.value+'</strong> — '+
+    cks.length+' references — Qty totale: <strong>'+tq.toLocaleString('fr')+'</strong>'+
+    (dv?' — Livraison: <strong>'+new Date(dv).toLocaleDateString('fr-FR')+'</strong>':'')+
+    (nt?' — Note: '+nt:'');
   conf.style.display='block';conf.scrollIntoView({behavior:'smooth'});
 }
 
@@ -787,26 +1119,27 @@ function cHi(){
   return phd('Historique des bons de commande',a.pm+' PO ce mois — '+a.pv+' valides · '+a.pp+' en attente',
     '<button class="btn btn-primary btn-sm" onclick="rnd(\'c-np\')">+ Nouveau PO</button>')+
   '<div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">'+
-    kc('PO ce mois',a.pm,'Tous statuts','neutral','cb')+
-    kc('En attente',a.pp,'Validation manager','down','ca')+
-    kc('Valides',a.pv,'Traites','up','cg')+
+    kc('PO ce mois',a.pm,'Tous statuts confondus','neutral','cb')+
+    kc('En attente',a.pp,'En attente de validation','down','ca')+
+    kc('Valides / Recus',a.pv,'Traites avec succes','up','cg')+
   '</div>'+
   '<div class="card"><div class="card-body"><div class="tbl-wrap"><table class="data-table">'+
   '<thead><tr><th>N PO</th><th>Fournisseur</th><th>Date</th><th>Refs</th><th>Qty</th><th>Montant FCFA</th><th>Statut</th></tr></thead><tbody>'+
   (myPOs.length?myPOs.map(function(p){
-    var sc=p.st==='Valide'?'bg':p.st==='En attente'?'ba':p.st==='En transit'?'bb':'bz';
-    return '<tr><td><code style="font-size:.68rem;background:var(--bg);padding:.1rem .35rem;border-radius:4px">'+p.num+'</code></td>'+
+    var sc=p.st==='Valide'?'bg':p.st==='En attente'?'ba':p.st==='En transit'?'bb':'bt';
+    return '<tr><td><code style="font-size:.68rem;background:var(--bg);padding:.15rem .4rem;border-radius:5px;font-family:monospace">'+p.num+'</code></td>'+
       '<td>'+p.s+'</td><td>'+p.d+'</td><td>'+p.r+'</td><td>'+p.q.toLocaleString('fr')+'</td>'+
-      '<td style="font-weight:600">'+p.m+'</td><td>'+bdg(p.st,sc)+'</td></tr>';
+      '<td style="font-weight:700">'+p.m+'</td><td>'+bdg(p.st,sc)+'</td></tr>';
   }).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:2rem">Aucun PO enregistre</td></tr>')+
   '</tbody></table></div></div></div>';
 }
 
+// ── KPI DRAWERS ──────────────────────────────────────────────────────────
 var DRW={
-  refs:{t:'Detail — References du catalogue',it:[{l:'Total',v:'1 880',c:'blue'},{l:'Fournisseurs actifs',v:'143',c:'blue'},{l:'Classe A+',v:'20',c:'red'},{l:'Classe A',v:'61',c:'amber'},{l:'Classe B',v:'181',c:'blue'},{l:'Classe C',v:'1 618',c:'text-sec'}]},
-  oos:{t:'Detail — Ruptures de stock',it:[{l:'En rupture (OOS)',v:'1 132',c:'red'},{l:'% du catalogue',v:'60,2%',c:'red'},{l:'Predites ML',v:'1 427',c:'red'},{l:'Fournisseurs',v:'43+',c:'amber'},{l:'A reapprovisionner',v:'451',c:'blue'},{l:'Action',v:'PO urgent',c:'red'}]},
-  soon:{t:'Detail — Ruptures imminentes',it:[{l:'References a risque',v:'295',c:'amber'},{l:'% du catalogue',v:'15,7%',c:'amber'},{l:'A commander',v:'156',c:'blue'},{l:'Horizon',v:'7-30 jours',c:'text-sec'},{l:'Modele',v:'Random Forest',c:'text-sec'},{l:'Action',v:'Bons de commande',c:'amber'}]},
-  ok:{t:'Detail — Stock satisfaisant',it:[{l:'Stock OK',v:'297',c:'green'},{l:'% du catalogue',v:'15,8%',c:'green'},{l:'A commander bientot',v:'156',c:'blue'},{l:'Objectif cible',v:'> 80%',c:'text-sec'},{l:'Ecart',v:'-64 pts',c:'red'},{l:'Action',v:'Maintenir',c:'green'}]},
+  refs:{t:'References du catalogue — Detail',it:[{l:'Total references',v:'1 880',c:'blue'},{l:'Fournisseurs actifs',v:'143',c:'blue'},{l:'Classe A+ (critique)',v:'20',c:'red'},{l:'Classe A',v:'61',c:'amber'},{l:'Classe B',v:'181',c:'blue'},{l:'Classe C',v:'1 618',c:'text-sec'}]},
+  oos:{t:'Ruptures de stock — Detail',it:[{l:'En rupture (OOS)',v:'1 132',c:'red'},{l:'% du catalogue',v:'60,2%',c:'red'},{l:'Predites ML',v:'1 427',c:'red'},{l:'Fournisseurs concernes',v:'43+',c:'amber'},{l:'A reapprovisionner',v:'451',c:'blue'},{l:'Action requise',v:'PO urgent',c:'red'}]},
+  soon:{t:'Ruptures imminentes — Detail',it:[{l:'References a risque',v:'295',c:'amber'},{l:'% du catalogue',v:'15,7%',c:'amber'},{l:'A commander',v:'156',c:'blue'},{l:'Horizon',v:'7-30 jours',c:'text-sec'},{l:'Modele',v:'Random Forest ML',c:'text-sec'},{l:'Action',v:'Bons de commande',c:'amber'}]},
+  ok:{t:'Stock satisfaisant — Detail',it:[{l:'Stock OK',v:'297',c:'green'},{l:'% du catalogue',v:'15,8%',c:'green'},{l:'A commander bientot',v:'156',c:'blue'},{l:'Objectif plateforme',v:'> 80%',c:'text-sec'},{l:'Ecart actuel',v:'-64 pts',c:'red'},{l:'Action',v:'Maintenir',c:'green'}]},
 };
 function oD(k){
   var dw=DRW[k];if(!dw)return;
@@ -819,23 +1152,28 @@ function oD(k){
 }
 function cD(){var dr=g('mDraw');if(dr)dr.classList.remove('open');d('.kpi-card').forEach(function(k){k.classList.remove('selected');});}
 
+// ── ASSISTANT IA ─────────────────────────────────────────────────────────
 function togAI(){var p=g('aiP');p.classList.toggle('open');if(p.classList.contains('open'))g('aiI').focus();}
 var AIK={
-  'rupture':'1 132 references en rupture (60,2%). Fournisseurs critiques: ARIMEX (63), LSB (52), SENICO (49). Recommandation: PO urgents sur classes A+ et AX.',
-  'stock':'Taux de disponibilite: 15,8% (297/1 880). Objectif >80%. Classe CX (1 460 refs) concentre l\'essentiel des ruptures.',
-  'fournisseur':'Meilleurs: Maad 37,9%, Borodji Distribution 33,6%, SIAD 32,1%. Critiques: H&D Industries 0%, CMGA 0%, IBS 2,5%.',
-  'agent':'Mamadou Diallo: 19% (Dakar) | Fatou Seck: 21,3% (Pikine) | Ibrahima Ndiaye: 13,6% (Thies) | Aminata Ba: 7,1% (Saint-Louis).',
-  'acheteur':'Ousmane Faye: 73 refs a commander, 9 PO | Mariama Diop: 74 refs, 7 PO | Babacar Sow: 79 refs, 11 PO.',
-  'commande':'451 references a commander. Qty totale: 16 532 u. 9 PO actifs ce mois. 3 en attente de validation.',
-  'budget':'Budget mensuel total: 45,5 M FCFA. Consomme: 30,5 M FCFA (67%).',
-  'po':'8 PO ce mois: 3 recus, 3 valides, 1 en transit, 3 en attente.',
-  'prevision':'Random Forest predit 1 427 ruptures. Variables: ventes/j, stock, delai, ABC/XYZ. Precision ~94%.',
+  'rupture':'1 132 references en rupture (60,2%). Fournisseurs critiques: ARIMEX (63 ruptures), LSB (52), SENICO (49). Priorite aux classes AX et A+X — action immediate.',
+  'stock':'Taux de disponibilite global: 15,8% (297/1 880). Objectif: >80%. La classe CX (1 460 refs) concentre lessentiel des ruptures.',
+  'fournisseur':'Meilleurs taux: Maad 37,9%, Borodji Distribution 33,6%, SIAD 32,1%. Critiques: H&D Industries 0%, CMGA 0%, IBS 2,5%.',
+  'agent':'Insa Diallo (Dakar): 19% | Ravane Seck (Pikine): 21,3% | Seydouna Ndiaye (Thies): 13,6% | Aminata Ba (Saint-Louis): 7,1%.',
+  'acheteur':'Fallou Diallo: 73 refs, 9 PO, budget 62% | Aram Sarr: 74 refs, 7 PO, budget 61% | Coumba Ndiaye: 79 refs, 11 PO, budget 75%.',
+  'commande':'451 references a commander. Quantite totale: 16 532 unites. 8 PO actifs ce mois. 3 en attente de validation.',
+  'budget':'Budget mensuel total: 45,5M FCFA. Consomme: 30,5M FCFA (67%). Acheteur le plus actif: Coumba Ndiaye.',
+  'po':'8 PO ce mois: 2 recus, 3 valides, 1 en transit, 2 en attente.',
+  'prevision':'Random Forest predit 1 427 ruptures sur 1 880 refs. Variables: ventes/j, stock, delai, ABC/XYZ. Precision ~94%.',
+  'fallou':'Fallou Diallo gere Alimentation (SENICO, Borodji). 73 refs a commander, qty 4 258 u, budget 7,8M/12,5M FCFA.',
+  'aram':'Aram Sarr gere Grande Consommation (ARIMEX, FKS, H&D). 74 refs, qty 5 827 u, budget 9,2M/15M FCFA.',
+  'coumba':'Coumba Ndiaye gere Boissons et Divers (CMGA, IBS, Patisen). 79 refs, qty 6 447 u, budget 13,5M/18M FCFA.',
 };
 function getAIR(q){
   var ql=q.toLowerCase(),ks=Object.keys(AIK);
   for(var i=0;i<ks.length;i++){if(ql.indexOf(ks[i])>=0)return AIK[ks[i]];}
-  if(ql.match(/bonjour|salut/))return 'Bonjour ! Posez vos questions sur les stocks, ruptures, fournisseurs, commandes ou les agents.';
-  return 'Je peux analyser: ruptures, fournisseurs, bons de commande, previsions ML ou performance des agents. Precisez votre question.';
+  if(ql.match(/bonjour|salut|hello/))return 'Bonjour ! Je peux vous informer sur les stocks, ruptures, fournisseurs, bons de commande ou les performances des agents (Fallou, Aram, Coumba, Insa, Ravane, Seydouna).';
+  if(ql.match(/merci/))return 'Je vous en prie ! Nhesitez pas si vous avez dautres questions.';
+  return 'Je peux analyser: ruptures, fournisseurs, commandes (PO), previsions ML ou la performance des agents. Precisez votre question.';
 }
 function sndAI(){
   var i=g('aiI'),q=i.value.trim();if(!q)return;

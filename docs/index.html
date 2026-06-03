@@ -1814,6 +1814,129 @@ function dcEmail(){
   var sub='Rapport Supply Chain — '+new Date().toLocaleDateString('fr-FR');
   window.location.href='mailto:?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(body);
 }
+// ── CHARGEMENT DONNÉES RÉELLES ──────────────────────────────────────────────
+function loadCSV(){
+  fetch('data.csv').then(function(r){return r.text();}).then(function(txt){
+    var lines=txt.split('\n');
+    var prods=[];
+    for(var i=1;i<lines.length;i++){
+      var row=lines[i];if(!row.trim())continue;
+      // parse CSV avec gestion des guillemets
+      var cols=[],cur='',inq=false;
+      for(var j=0;j<row.length;j++){
+        if(row[j]==='"'){inq=!inq;}
+        else if(row[j]===','&&!inq){cols.push(cur.trim());cur='';}
+        else cur+=row[j];
+      }
+      cols.push(cur.trim());
+      if(cols.length<12||!cols[0]||!cols[1])continue;
+      var sts=cols[11]||'';
+      // Normaliser les statuts
+      if(sts==='Out of Stock'||sts==='False')sts='Out of Stock';
+      else if(sts==='Predicted Stockout Soon'||sts==='True')sts='Predicted Stockout Soon';
+      else if(sts==='Order Soon')sts='Order Soon';
+      else if(sts==='Stock OK')sts='Stock OK';
+      else continue;
+      prods.push({
+        n:cols[0],s:cols[1],
+        st:parseFloat(cols[2])||0,
+        vd:parseFloat(cols[3])||0,
+        cat:cols[4]||'CX',
+        buf:parseFloat(cols[5])||0,
+        rop:parseFloat(cols[6])||0,
+        lt:parseFloat(cols[7])||0,
+        oos_r:parseFloat(cols[8])||0,
+        cov:parseFloat(cols[9])||0,
+        sts:sts,
+        q:parseFloat(cols[12])||0,
+        vj:parseFloat(cols[13])||0
+      });
+    }
+    if(prods.length<100){console.warn('[SCM] CSV trop court, données demo conservées');return;}
+
+    // ── STATS GLOBALES ──
+    var stats={total:prods.length,oos:0,soon:0,orderSoon:0,ok:0,suppliers:0,toOrder:0,totalQty:0};
+    var supMap={},catMap={};
+    prods.forEach(function(p){
+      if(p.sts==='Out of Stock')stats.oos++;
+      else if(p.sts==='Predicted Stockout Soon')stats.soon++;
+      else if(p.sts==='Order Soon')stats.orderSoon++;
+      else stats.ok++;
+      if(p.q>0)stats.toOrder++;
+      stats.totalQty+=p.st;
+      if(!supMap[p.s])supMap[p.s]={n:p.s,r:0,ok:0,s:0,o:0,x:0,p:0};
+      var sm=supMap[p.s];sm.r++;
+      if(p.sts==='Stock OK')sm.ok++;
+      else if(p.sts==='Predicted Stockout Soon')sm.s++;
+      else if(p.sts==='Order Soon')sm.o++;
+      else sm.x++;
+      if(!catMap[p.cat])catMap[p.cat]={n:p.cat,r:0,v:0,c:0};
+      catMap[p.cat].r++;catMap[p.cat].v=Math.round((catMap[p.cat].v||0)+p.st);
+      catMap[p.cat].c=Math.round((catMap[p.cat].c||0)+p.q);
+    });
+    var sups=Object.values(supMap).sort(function(a,b){return b.r-a.r;});
+    sups.forEach(function(s){s.p=s.r>0?Math.round(s.ok/s.r*1000)/10:0;});
+    stats.suppliers=sups.length;
+    stats.totalQty=Math.round(stats.totalQty);
+    D.stats=stats;
+    D.sup=sups.slice(0,20);
+    D.cat=Object.values(catMap).sort(function(a,b){
+      var order=['A+X','A+Y','AX','AY','A+Z','AZ','BX','BY','BZ','CX','CY','CZ'];
+      return order.indexOf(a.n)-order.indexOf(b.n);
+    });
+
+    // ── ALERTES RÉELLES ──
+    var catPri={'A+X':1,'A+Y':2,'AX':3,'AY':4,'A+Z':5,'AZ':6,'BX':7,'BY':8,'BZ':9,'CX':10,'CY':11,'CZ':12};
+    var alertProds=prods.filter(function(p){return p.sts==='Out of Stock'||p.sts==='Predicted Stockout Soon';});
+    alertProds.sort(function(a,b){
+      var pa=catPri[a.cat]||99,pb=catPri[b.cat]||99;
+      if(pa!==pb)return pa-pb;
+      return b.vj-a.vj;
+    });
+    D.alerts=alertProds.slice(0,50).map(function(p){
+      var cp=catPri[p.cat]||99;
+      var pri=cp<=3?'CRITIQUE':cp<=6?'URGENT':cp<=9?'ELEVE':'NORMAL';
+      var ag='';
+      D.ach.forEach(function(a){if(a.sups.indexOf(p.s)>=0)ag=a.nm;});
+      D.agents.forEach(function(a){if(a.sups.indexOf(p.s)>=0&&!ag)ag=a.nm;});
+      return {ref:p.n,sup:p.s,cat:p.cat,st:Math.round(p.st),vj:p.vj,pri:pri,ag:ag,sts:p.sts};
+    });
+
+    // ── MISE À JOUR PRODUITS ACHETEURS ──
+    var idx={};
+    prods.forEach(function(p){idx[p.n.toLowerCase().trim()]=p;});
+    D.ach.forEach(function(a){
+      var oos=0,soon=0,order=0,ok=0;
+      a.prods.forEach(function(pr){
+        var live=idx[pr.n.toLowerCase().trim()];
+        if(live){
+          pr.st=Math.round(live.st);pr.sts=live.sts;
+          pr.q=Math.round(live.q);pr.vj=live.vj;
+          pr.lt=live.lt;pr.cov=Math.round(live.cov*10)/10;
+        }
+        if(pr.sts==='Out of Stock')oos++;
+        else if(pr.sts==='Predicted Stockout Soon')soon++;
+        else if(pr.sts==='Order Soon')order++;
+        else ok++;
+      });
+      a.x=oos;a.to=soon;a.ok=ok;a.orderSoon=order;
+    });
+
+    window._dataLoaded=true;
+    // Re-render si déjà sur le dashboard
+    if(role==='manager'&&ctx==='m-db')rnd('m-db');
+    else if(role==='manager'&&ctx==='m-al')rnd('m-al');
+    else if(role==='manager'&&ctx==='m-st')rnd('m-st');
+    else if(role==='manager'&&ctx==='m-fo')rnd('m-fo');
+    else if(role==='manager'&&ctx==='m-ac')rnd('m-ac');
+    else if(role==='acheteur'&&ctx==='c-db')rnd('c-db');
+    else if(role==='acheteur'&&ctx==='c-cm')rnd('c-cm');
+    console.log('[SCM] ✓ Données réelles chargées: '+prods.length+' produits | '+stats.oos+' ruptures | '+stats.suppliers+' fournisseurs');
+  }).catch(function(e){console.warn('[SCM] data.csv indisponible — données démo conservées.',e);});
+}
+// Lancer au démarrage
+loadCSV();
+
 </script>
 </body>
 </html>

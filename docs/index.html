@@ -533,7 +533,7 @@ function bNav(r){
   if(r==='manager'){n.innerHTML=
     '<div class="nav-section">Tableau de bord</div>'+
     '<button class="nav-item active" onclick="nv(this,\'m-db\')"><span class="nav-icon">&#9632;</span>Vue 360 globale</button>'+
-    '<button class="nav-item" onclick="nv(this,\'m-al\')"><span class="nav-icon">&#9650;</span>Alertes ruptures<span class="nav-badge">'+D.stats.oos+'</span></button>'+
+    '<button class="nav-item" onclick="nv(this,\'m-al\')"><span class="nav-icon">&#9650;</span>Alertes ruptures<span class="nav-badge">'+(D.stats.orderNow||D.stats.oos)+'</span></button>'+
     '<div class="nav-section">Equipes</div>'+
     '<button class="nav-item" onclick="nv(this,\'m-ag\')"><span class="nav-icon">&#9733;</span>Agents commerciaux<span class="nav-badge nav-badge-blue">4</span></button>'+
     '<button class="nav-item" onclick="nv(this,\'m-ac\')"><span class="nav-icon">&#9744;</span>Agents acheteurs<span class="nav-badge nav-badge-teal">3</span></button>'+
@@ -631,28 +631,33 @@ function mDb(){
 
   var heroHtml=
     '<div class="hero-stats" style="margin-bottom:1.3rem;">'+
-    '<div class="hero-stat" style="--c1:#1e3a8a;--c2:#2563eb;--ico:\'1880\'">'+
-      '<div class="hs-label">References totales</div>'+
-      '<div class="hs-value">'+s.total.toLocaleString('fr')+'</div>'+
-      '<div class="hs-sub">'+s.suppliers+' fournisseurs actifs</div>'+
+    '<div class="hero-stat" style="--c1:#1e3a8a;--c2:#2563eb;--ico:\'SKU\'">'+
+      '<div class="hs-label">SKUs actifs (filtres)</div>'+
+      '<div class="hs-value">'+(s.active||s.total).toLocaleString('fr')+'</div>'+
+      '<div class="hs-sub">'+s.suppliers+' fournisseurs | '+s.total+' refs brutes</div>'+
     '</div>'+
     '<div class="hero-stat" style="--c1:#991b1b;--c2:#dc2626;--ico:\'OOS\'">'+
-      '<div class="hs-label">En rupture de stock</div>'+
-      '<div class="hs-value">'+s.oos.toLocaleString('fr')+'</div>'+
-      '<div class="hs-sub">'+((s.oos/s.total)*100).toFixed(1)+'% du catalogue — Action urgente</div>'+
+      '<div class="hs-label">Ruptures reelles (stock=0)</div>'+
+      '<div class="hs-value">'+(s.realOos||s.oos).toLocaleString('fr')+'</div>'+
+      '<div class="hs-sub">'+(((s.realOos||s.oos)/(s.active||s.total))*100).toFixed(1)+'% des SKUs actifs</div>'+
     '</div>'+
-    '<div class="hero-stat" style="--c1:#92400e;--c2:#d97706;--ico:\'451\'">'+
-      '<div class="hs-label">A reapprovisionner</div>'+
-      '<div class="hs-value">'+s.toOrder+'</div>'+
-      '<div class="hs-sub">Qty: '+s.totalQty.toLocaleString('fr')+' u — ML optimise</div>'+
+    '<div class="hero-stat" style="--c1:#7c2d12;--c2:#ea580c;--ico:\'NOW\'">'+
+      '<div class="hs-label">ORDER NOW (urgent)</div>'+
+      '<div class="hs-value">'+(s.orderNow||0).toLocaleString('fr')+'</div>'+
+      '<div class="hs-sub">Couverture &lt; Lead Time + 3j</div>'+
+    '</div>'+
+    '<div class="hero-stat" style="--c1:#92400e;--c2:#d97706;--ico:\'ML\'">'+
+      '<div class="hs-label">A risque ML</div>'+
+      '<div class="hs-value">'+(s.mlRisk||s.soon).toLocaleString('fr')+'</div>'+
+      '<div class="hs-sub">Random Forest 88% precision</div>'+
     '</div></div>';
 
   var kpiHtml=
     '<div class="kpi-grid">'+
-    kc('Ruptures actives',s.oos.toLocaleString('fr'),((s.oos/s.total)*100).toFixed(1)+'% du catalogue','down','cr','oos')+
-    kc('Ruptures imminentes',s.soon,'Horizon 7-30 jours','down','ca','soon')+
-    kc('Stock satisfaisant',s.ok,((s.ok/s.total)*100).toFixed(1)+'% — Objectif 80%','up','cg','ok')+
-    kc('Refs a commander',s.toOrder,'Qty totale: '+s.totalQty.toLocaleString('fr'),'neutral','cb','refs')+
+    kc('ORDER NOW',s.orderNow||0,(((s.orderNow||0)/(s.active||s.total))*100).toFixed(1)+'% des SKUs actifs','down','cr','orderNow')+
+    kc('Rupture imminente ML',s.mlRisk||s.soon,'Predicted Stockout = True','down','ca','mlRisk')+
+    kc('ORDER NOT URGENT',s.orderNotUrgent||0,'Couverture faible','neutral','cb','notUrgent')+
+    kc('NO NEED (stock OK)',s.noNeed||s.ok,(((s.noNeed||s.ok)/(s.active||s.total))*100).toFixed(1)+'% — Objectif 80%','up','cg','noNeed')+
     '</div>';
 
   var drawerHtml='<div class="detail-drawer" id="mDraw"><div class="drawer-header"><div class="drawer-title" id="dT">-</div><button class="drawer-close" onclick="cD()">Fermer</button></div><div id="dC"></div></div>';
@@ -664,8 +669,8 @@ function mDb(){
 
   // Donut chart
   var segs=[
-    {v:s.oos,c:'#dc2626'},{v:s.soon,c:'#d97706'},
-    {v:s.orderSoon,c:'#2563eb'},{v:s.ok,c:'#16a34a'}
+    {v:s.orderNow||s.oos,c:'#dc2626'},{v:s.mlRisk||s.soon,c:'#ea580c'},
+    {v:s.orderNotUrgent||s.orderSoon,c:'#2563eb'},{v:s.noNeed||s.ok,c:'#16a34a'}
   ];
   var donutSvg='<svg viewBox="0 0 120 120" width="115" height="115">'+
     svgDonut(segs,60,60,38,s.total)+
@@ -677,10 +682,10 @@ function mDb(){
     '<div class="card-title">Repartition statuts</div><div class="card-sub" style="margin-bottom:.9rem">'+s.total.toLocaleString('fr')+' references</div>'+
     '<div class="donut-wrap">'+donutSvg+
     '<div class="leg-list">'+
-      '<div class="leg-row"><div class="leg-dot" style="background:#dc2626"></div>En rupture<span class="leg-num">'+s.oos.toLocaleString('fr')+'</span></div>'+
-      '<div class="leg-row"><div class="leg-dot" style="background:#d97706"></div>Rupture imminente<span class="leg-num">'+s.soon+'</span></div>'+
-      '<div class="leg-row"><div class="leg-dot" style="background:#2563eb"></div>A commander<span class="leg-num">'+s.orderSoon+'</span></div>'+
-      '<div class="leg-row"><div class="leg-dot" style="background:#16a34a"></div>Stock OK<span class="leg-num">'+s.ok+'</span></div>'+
+      '<div class="leg-row"><div class="leg-dot" style="background:#dc2626"></div>ORDER NOW<span class="leg-num">'+(s.orderNow||s.oos).toLocaleString('fr')+'</span></div>'+
+      '<div class="leg-row"><div class="leg-dot" style="background:#ea580c"></div>Rupture ML<span class="leg-num">'+(s.mlRisk||s.soon)+'</span></div>'+
+      '<div class="leg-row"><div class="leg-dot" style="background:#2563eb"></div>ORDER NOT URGENT<span class="leg-num">'+(s.orderNotUrgent||s.orderSoon)+'</span></div>'+
+      '<div class="leg-row"><div class="leg-dot" style="background:#16a34a"></div>NO NEED<span class="leg-num">'+(s.noNeed||s.ok)+'</span></div>'+
     '</div></div></div></div>';
 
   // Supplier stacked bar
@@ -787,12 +792,15 @@ function mAl(){
     return '<div class="card" style="margin-bottom:1rem;border-left:4px solid var(--'+colorClass+')"><div class="card-body">'+
       '<div class="card-title" style="color:var(--'+colorClass+');margin-bottom:.8rem">'+title+' ('+items.length+')</div>'+
       '<div class="tbl-wrap"><table class="data-table">'+
-      '<thead><tr><th>Reference</th><th>Fournisseur</th><th>Classe</th><th>Stock actuel</th><th>Ventes/jour</th><th>Couverture</th><th>Acheteur</th><th>Action</th></tr></thead><tbody>'+
+      '<thead><tr><th>Reference</th><th>Fournisseur</th><th>Classe</th><th>Urgence</th><th>Stock actuel</th><th>Ventes/jour</th><th>Couverture</th><th>Acheteur</th><th>Action</th></tr></thead><tbody>'+
       items.map(function(a){
         var cov=a.vj>0?(a.st/a.vj).toFixed(1):'-';
         var rclass=strip==='danger'?'alert-row-critical':strip==='warning'?'alert-row-warning':'';
+        var urg=a.urg||'ORDER NOW';
+        var urgBadge=urg==='ORDER NOW'?bdg('ORDER NOW','br'):urg==='ORDER NOT URGENT'?bdg('NOT URGENT','ba'):bdg('NO NEED','bg');
         return '<tr class="'+rclass+'"><td><strong>'+a.ref+'</strong></td>'+
           '<td>'+a.sup+'</td><td>'+bdg(a.cat,a.cat[0]==='A'?'br':'ba')+'</td>'+
+          '<td>'+urgBadge+'</td>'+
           '<td style="color:var(--red);font-weight:800">'+a.st+'</td>'+
           '<td>'+a.vj+'</td>'+
           '<td style="color:'+(parseFloat(cov)<3?'var(--red)':'var(--amber)')+';font-weight:700">'+cov+' j</td>'+
@@ -801,10 +809,10 @@ function mAl(){
       }).join('')+'</tbody></table></div></div></div>';
   }
 
-  return phd('Alertes ruptures',s.oos.toLocaleString('fr')+' refs en rupture — '+s.soon+' imminentes',
+  return phd('Alertes ruptures',(s.realOos||s.oos).toLocaleString('fr')+' ruptures reelles — '+(s.orderNow||0)+' ORDER NOW',
     '<button class="btn btn-primary btn-sm" onclick="rnd(\'m-po\')">Suivi PO</button>')+
-  as('danger','<strong>'+s.oos.toLocaleString('fr')+' references en rupture</strong> — Impact direct sur le chiffre d\'affaires. Les classes A+ et AX sont prioritaires.')+
-  as('warning','<strong>'+s.soon+' ruptures imminentes</strong> dans les 7-30 jours selon le modele ML (Random Forest, precision 94%).')+
+  as('danger','<strong>'+(s.realOos||s.oos).toLocaleString('fr')+' references a stock zero</strong> — Impact direct CA. ORDER NOW: '+(s.orderNow||0)+' refs (couverture &lt; LT+3j).')+
+  as('warning','<strong>'+(s.mlRisk||s.soon)+' ruptures predites ML</strong> — Random Forest 88% precision. ORDER NOT URGENT: '+(s.orderNotUrgent||0)+' refs.')+
   summary+
   alertTable(critiques,'Ruptures CRITIQUES — Classe AX (fort volume, forte valeur)','red','danger')+
   alertTable(urgents,'Ruptures URGENTES — Horizon 0-7 jours','amber','warning')+
@@ -1096,6 +1104,7 @@ function cCm(){
   return phd('Catalogue produits',a.r+' refs — '+a.sups.join(', '),'<button class="btn btn-primary btn-sm" onclick="rnd(\'c-np\')">+ Nouveau BC</button>')+
   '<div style="display:flex;gap:.6rem;margin-bottom:1rem;flex-wrap:wrap">'+
     '<button class="btn btn-ghost btn-sm" id="fAll" onclick="fltPr(\'all\')">Tous ('+a.prods.length+')</button>'+
+    '<button class="btn btn-sm" id="fNow" onclick="fltPr(\'now\')" style="background:#fee2e2;color:#dc2626;border:1px solid #fecaca;font-weight:800">ORDER NOW ('+a.prods.filter(function(p){return p.urg===\'ORDER NOW\';}).length+')</button>'+
     '<button class="btn btn-sm" id="fUr" onclick="fltPr(\'ur\')" style="background:var(--red-light);color:var(--red);border:1px solid #fecaca">Rupture imminente ('+urgents.length+')</button>'+
     '<button class="btn btn-sm" id="fCm" onclick="fltPr(\'cm\')" style="background:var(--blue-light);color:var(--blue);border:1px solid #bfdbfe">A commander ('+cmd.length+')</button>'+
     a.sups.map(function(s,i){
@@ -1107,7 +1116,7 @@ function cCm(){
   '<div class="tbl-wrap" style="max-height:500px"><table class="data-table" id="prodTbl">'+
   '<thead><tr>'+
     '<th>Produit</th><th>Fournisseur</th><th>Classe</th>'+
-    '<th>Statut OS</th><th>Stock actuel</th><th>Qty commandee</th>'+
+    '<th>Statut OS</th><th>Urgence</th><th>Stock actuel</th><th>Qty commandee</th>'+
     '<th>Couverture</th><th>MOQ</th><th>Qty ML a commander</th><th>Lead Time</th>'+
     '<th></th>'+
   '</tr></thead><tbody id="prodTbody">'+
@@ -1116,11 +1125,12 @@ function cCm(){
     var covN=parseFloat(cov);
     var osLabel=p.st<=0?'Rupture':p.sts==='Predicted Stockout Soon'?'Rupture imminente':'A commander';
     var osClass=p.st<=0?'br':p.sts==='Predicted Stockout Soon'?'ba':'bb';
-    return '<tr data-cat="'+p.s+'" data-sts="'+(p.sts==='Predicted Stockout Soon'||p.st<=0?'ur':'cm')+'">'+
+    return '<tr data-cat="'+p.s+'" data-sts="'+(p.sts==='Predicted Stockout Soon'||p.st<=0?'ur':'cm')+'" data-urg="'+(p.urg||'ORDER NOW')+'">'+
       '<td style="max-width:200px"><strong style="font-size:.77rem">'+p.n+'</strong></td>'+
       '<td style="white-space:nowrap">'+p.s+'</td>'+
       '<td>'+bdg(p.c,'bz')+'</td>'+
       '<td>'+bdg(osLabel,osClass)+'</td>'+
+      '<td>'+(p.urg==='ORDER NOW'?bdg('ORDER NOW','br'):p.urg==='ORDER NOT URGENT'?bdg('NOT URGENT','ba'):bdg('NO NEED','bg'))+'</td>'+
       '<td style="font-weight:800;color:'+(p.st<=0?'var(--red)':p.st<20?'var(--amber)':'inherit')+'">'+p.st+'</td>'+
       '<td style="color:'+(p.qo>0?'var(--blue)':'var(--text-muted)')+';font-weight:'+(p.qo>0?700:400)+'">'+p.qo+'</td>'+
       '<td style="font-weight:700;color:'+(covN<3?'var(--red)':covN<10?'var(--amber)':'inherit')+'">'+cov+' j</td>'+
@@ -1138,6 +1148,7 @@ function fltSupPr(i){
 function fltPr(f){
   d('#prodTbody tr').forEach(function(r){
     if(f==='all')r.style.display='';
+    else if(f==='now')r.style.display=r.dataset.urg==='ORDER NOW'?'':'none';
     else if(f==='ur')r.style.display=r.dataset.sts==='ur'?'':'none';
     else if(f==='cm')r.style.display=r.dataset.sts==='cm'?'':'none';
   });
@@ -1848,6 +1859,8 @@ function loadCSV(){
         oos_r:parseFloat(cols[8])||0,
         cov:parseFloat(cols[9])||0,
         sts:sts,
+        predicted:cols[10]==='True',
+        rop:parseFloat(cols[6])||0,
         q:parseFloat(cols[12])||0,
         vj:parseFloat(cols[13])||0
       });
@@ -1855,13 +1868,33 @@ function loadCSV(){
     if(prods.length<100){console.warn('[SCM] CSV trop court, données demo conservées');return;}
 
     // ── STATS GLOBALES ──
-    var stats={total:prods.length,oos:0,soon:0,orderSoon:0,ok:0,suppliers:0,toOrder:0,totalQty:0};
+    var stats={total:prods.length,oos:0,soon:0,orderSoon:0,ok:0,suppliers:0,toOrder:0,totalQty:0,active:0,realOos:0,mlRisk:0,orderNow:0,orderNotUrgent:0,noNeed:0};
     var supMap={},catMap={};
+    // Mots-clés exclusion produits inactifs (comme Python ETL)
+    var EXCL=['cadeau','frais de livraison','frais de transport','rubyx','cfa - cash'];
     prods.forEach(function(p){
+      var nm=p.n.toLowerCase();
+      p.excluded=EXCL.some(function(kw){return nm.indexOf(kw)>=0;});
+      // Urgence selon formule doc: mcd vs alt+3 vs alt+optimal_days
+      var mcd=p.cov||0;
+      var alt=p.lt||0;
+      var ads=p.vj||0.1;
+      var rop=p.rop||0;
+      var optimal_days=ads>0?rop/ads:0;
+      if(p.st<=0)p.urg='ORDER NOW';
+      else if(mcd<=alt+3)p.urg='ORDER NOW';
+      else if(mcd<alt+optimal_days)p.urg='ORDER NOT URGENT';
+      else p.urg='NO NEED';
       if(p.sts==='Out of Stock')stats.oos++;
       else if(p.sts==='Predicted Stockout Soon')stats.soon++;
       else if(p.sts==='Order Soon')stats.orderSoon++;
       else stats.ok++;
+      if(!p.excluded)stats.active++;
+      if(p.st<=0)stats.realOos++;
+      if(p.predicted)stats.mlRisk++;
+      if(p.urg==='ORDER NOW')stats.orderNow++;
+      else if(p.urg==='ORDER NOT URGENT')stats.orderNotUrgent++;
+      else stats.noNeed++;
       if(p.q>0)stats.toOrder++;
       stats.totalQty+=p.st;
       if(!supMap[p.s])supMap[p.s]={n:p.s,r:0,ok:0,s:0,o:0,x:0,p:0};
@@ -1899,7 +1932,7 @@ function loadCSV(){
       var ag='';
       D.ach.forEach(function(a){if(a.sups.indexOf(p.s)>=0)ag=a.nm;});
       D.agents.forEach(function(a){if(a.sups.indexOf(p.s)>=0&&!ag)ag=a.nm;});
-      return {ref:p.n,sup:p.s,cat:p.cat,st:Math.round(p.st),vj:p.vj,pri:pri,ag:ag,sts:p.sts};
+      return {ref:p.n,sup:p.s,cat:p.cat,st:Math.round(p.st),vj:p.vj,pri:pri,ag:ag,sts:p.sts,urg:p.urg};
     });
 
     // ── MISE À JOUR PRODUITS ACHETEURS ──
@@ -1913,6 +1946,7 @@ function loadCSV(){
           pr.st=Math.round(live.st);pr.sts=live.sts;
           pr.q=Math.round(live.q);pr.vj=live.vj;
           pr.lt=live.lt;pr.cov=Math.round(live.cov*10)/10;
+          pr.urg=live.urg;pr.rop=live.rop;
         }
         if(pr.sts==='Out of Stock')oos++;
         else if(pr.sts==='Predicted Stockout Soon')soon++;

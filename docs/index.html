@@ -1104,7 +1104,7 @@ function cCm(){
   return phd('Catalogue produits',a.r+' refs — '+a.sups.join(', '),'<button class="btn btn-primary btn-sm" onclick="rnd(\'c-np\')">+ Nouveau BC</button>')+
   '<div style="display:flex;gap:.6rem;margin-bottom:1rem;flex-wrap:wrap">'+
     '<button class="btn btn-ghost btn-sm" id="fAll" onclick="fltPr(\'all\')">Tous ('+a.prods.length+')</button>'+
-    '<button class="btn btn-sm" id="fNow" onclick="fltPr(\'now\')" style="background:#fee2e2;color:#dc2626;border:1px solid #fecaca;font-weight:800">ORDER NOW ('+a.prods.filter(function(p){return p.urg===\'ORDER NOW\';}).length+')</button>'+
+    '<button class="btn btn-sm" id="fNow" onclick="fltPr(\'now\')" style="background:#fee2e2;color:#dc2626;border:1px solid #fecaca;font-weight:800">ORDER NOW ('+a.prods.filter(function(p){return p.urg==="ORDER NOW";}).length+')</button>'+
     '<button class="btn btn-sm" id="fUr" onclick="fltPr(\'ur\')" style="background:var(--red-light);color:var(--red);border:1px solid #fecaca">Rupture imminente ('+urgents.length+')</button>'+
     '<button class="btn btn-sm" id="fCm" onclick="fltPr(\'cm\')" style="background:var(--blue-light);color:var(--blue);border:1px solid #bfdbfe">A commander ('+cmd.length+')</button>'+
     a.sups.map(function(s,i){
